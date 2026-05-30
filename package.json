@@ -1,0 +1,25 @@
+{
+  "name": "wc-game",
+  "private": true,
+  "version": "0.1.0",
+  "description": "FIFA World Cup 2026 prediction game — monorepo (Next.js web + NestJS worker + Prisma)",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "pnpm install && pnpm db:generate && pnpm --filter @wc/db run build",
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm --filter @wc/db run build && pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "db:generate": "pnpm --filter @wc/db run prisma:generate",
+    "db:migrate": "pnpm --filter @wc/db run prisma:migrate",
+    "db:studio": "pnpm --filter @wc/db run prisma:studio",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.7.0"
+  }
+}

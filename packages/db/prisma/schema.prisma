@@ -1,0 +1,466 @@
+// WC2026 Prediction Game — Prisma schema
+// Dịch từ DDL trong docs/solution-design (Prediction/Auth/Data/Supporting Service Design).
+// Lưu ý: schema này là SOURCE OF TRUTH; DDL trong tài liệu là SQL minh hoạ.
+// Tiền (point) dùng BigInt (khớp BIGINT) → khi trả JSON cần serialize BigInt (xem README).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── ENUMS ───────────────────────────
+enum Role { USER MOD ADMIN OPS SUPER }
+enum UserStatus { ACTIVE BANNED SUSPENDED }
+enum ContextType { GLOBAL LOBBY }
+enum LedgerType { SIGNUP DAILY STAKE SETTLE VOID BORROW REFERRAL PURCHASE ADMIN_ADJ }
+enum Outcome { HOME DRAW AWAY } // map: HOME='1', DRAW='X', AWAY='2'
+enum PredictionStatus { OPEN LOCKED WON LOST VOID CANCELLED }
+enum MatchStatus { SCHEDULED LIVE FINISHED POSTPONED CANCELLED }
+enum MatchRound { GROUP R32 R16 QF SF THIRD FINAL }
+enum SettlementStatus { DONE PENDING_REVIEW VOID }
+enum OddsSource { API AI ADMIN LOBBY }
+enum LobbyScope { ALL GROUP R32 R16 QF SF FINAL MATCH }
+enum LobbyRole { OWNER MEMBER }
+enum BorrowStatus { PENDING APPROVED DENIED }
+enum NewsStatus { PENDING PUBLISHED REJECTED UNPUBLISHED }
+enum ReferralStatus { PENDING ACTIVATED REJECTED }
+enum FutureMarket { CHAMPION GOLDEN_BOOT GOLDEN_BALL FINALIST }
+enum DuelStatus { PENDING ACTIVE DONE }
+enum MessageKind { TEXT SYSTEM REACTION }
+
+// ─────────────────────────── AUTH & ACCOUNT ───────────────────────────
+model User {
+  id           BigInt     @id @default(autoincrement())
+  email        String     @unique
+  username     String?    @unique
+  passwordHash String
+  displayName  String?
+  avatarUrl    String?
+  role         Role       @default(USER)
+  status       UserStatus @default(ACTIVE)
+  tier         String?
+  createdAt    DateTime   @default(now())
+
+  sessions    AuthSession[]
+  wallets     Wallet[]
+  predictions Prediction[]
+  memberships LobbyMembership[]
+}
+
+model AuthSession {
+  id               BigInt    @id @default(autoincrement())
+  userId           BigInt
+  refreshTokenHash String
+  ip               String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actorType String // USER | ADMIN | SYSTEM
+  actorId   BigInt?
+  action    String
+  target    String?
+  ip        String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorType, actorId, createdAt])
+  @@index([ip])
+}
+
+model ReferralCode {
+  userId BigInt @id
+  code   String @unique
+}
+
+model Referral {
+  id         BigInt         @id @default(autoincrement())
+  referrerId BigInt
+  refereeId  BigInt         @unique
+  status     ReferralStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+
+  @@index([referrerId])
+}
+
+// ─────────────────────────── WALLET & LEDGER (Prediction SD §6) ───────────────────────────
+model Wallet {
+  id          BigInt      @id @default(autoincrement())
+  userId      BigInt
+  contextType ContextType
+  contextId   BigInt? // null nếu GLOBAL
+  balance     BigInt      @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, contextType, contextId])
+}
+
+model PointLedger {
+  id           BigInt      @id @default(autoincrement())
+  userId       BigInt
+  contextType  ContextType
+  contextId    BigInt?
+  type         LedgerType
+  amount       BigInt // +/-
+  balanceAfter BigInt
+  refType      String?
+  refId        BigInt?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId, contextType, contextId, createdAt])
+  @@index([refType, refId])
+}
+
+// ─────────────────────────── PREDICTION & SCORING ───────────────────────────
+model Prediction {
+  id           BigInt           @id @default(autoincrement())
+  userId       BigInt
+  contextType  ContextType
+  contextId    BigInt?
+  matchId      BigInt
+  market       String           @default("1X2")
+  outcome      Outcome
+  stake        BigInt
+  oddsSnapshot Decimal          @db.Decimal(6, 2)
+  exactHome    Int?
+  exactAway    Int?
+  status       PredictionStatus @default(OPEN)
+  payout       BigInt           @default(0)
+  settledAt    DateTime?
+  createdAt    DateTime         @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  match Match @relation(fields: [matchId], references: [id])
+
+  // 1 kèo 1X2 / trận / context
+  @@unique([userId, contextType, contextId, matchId, market])
+  @@index([matchId, status])
+  @@index([userId, contextType, contextId, createdAt])
+}
+
+model Settlement {
+  matchId   BigInt           @id
+  status    SettlementStatus
+  result90  Outcome?
+  settledAt DateTime?
+  settledBy String           @default("SYSTEM")
+}
+
+// Aggregate cho leaderboard ROI — CHỈ tổng hợp kèo context=GLOBAL (kèo lobby KHÔNG ghi vào đây).
+model PredictionUserStats {
+  userId        BigInt @id
+  totalStaked   BigInt @default(0)
+  totalReturned BigInt @default(0)
+  settledCount  Int    @default(0)
+  winCount      Int    @default(0)
+}
+
+model Bracket {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt    @unique
+  picks     Json // {"R16":[teamIds],...,"CHAMPION":teamId}
+  lockedAt  DateTime?
+  score     Int       @default(0)
+  updatedAt DateTime  @updatedAt
+}
+
+model FuturePick {
+  id           BigInt           @id @default(autoincrement())
+  userId       BigInt
+  market       FutureMarket
+  selectionId  BigInt
+  stake        BigInt
+  oddsSnapshot Decimal          @db.Decimal(6, 2)
+  status       PredictionStatus @default(OPEN)
+  payout       BigInt           @default(0)
+  createdAt    DateTime         @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── TOURNAMENT DATA (Data SD §7) ───────────────────────────
+model Group {
+  id    BigInt @id @default(autoincrement())
+  name  String @unique // A..L
+  teams Team[]
+}
+
+model Team {
+  id      BigInt   @id @default(autoincrement())
+  name    String
+  code    String?
+  flagUrl String?
+  fifaRank Int?
+  groupId BigInt?
+
+  group   Group?   @relation(fields: [groupId], references: [id])
+  players Player[]
+}
+
+model Venue {
+  id      BigInt @id @default(autoincrement())
+  name    String
+  city    String?
+  country String?
+}
+
+model Player {
+  id       BigInt  @id @default(autoincrement())
+  teamId   BigInt
+  name     String
+  position String?
+  number   Int?
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@index([teamId])
+}
+
+model Match {
+  id          BigInt      @id @default(autoincrement())
+  round       MatchRound
+  groupId     BigInt?
+  homeTeamId  BigInt
+  awayTeamId  BigInt
+  venueId     BigInt?
+  kickoffAt   DateTime
+  status      MatchStatus @default(SCHEDULED)
+  scoreHome90 Int?
+  scoreAway90 Int?
+  result90    Outcome?
+  source      OddsSource?
+  updatedAt   DateTime    @updatedAt
+
+  odds        MatchOdds?
+  predictions Prediction[]
+
+  @@index([kickoffAt])
+  @@index([status])
+}
+
+model MatchOdds {
+  matchId   BigInt     @id
+  mHome     Decimal    @db.Decimal(6, 2)
+  mDraw     Decimal    @db.Decimal(6, 2)
+  mAway     Decimal    @db.Decimal(6, 2)
+  source    OddsSource @default(API)
+  updatedAt DateTime   @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id])
+}
+
+// ─────────────────────────── NEWS & AI ───────────────────────────
+model NewsArticle {
+  id          BigInt     @id @default(autoincrement())
+  title       String
+  body        String?
+  tags        String[]
+  sourceUrl   String?
+  aiJobId     BigInt?
+  status      NewsStatus @default(PENDING)
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([status, publishedAt])
+}
+
+model AiJob {
+  id           BigInt   @id @default(autoincrement())
+  type         String // ingest | news | odds | preview
+  providerUsed String? // claude | openai
+  status       String
+  tokens       Int?
+  cost         Decimal? @db.Decimal(10, 4)
+  latencyMs    Int?
+  error        String?
+  createdAt    DateTime @default(now())
+}
+
+model AiPreview {
+  matchId     BigInt   @id
+  content     Json
+  provider    String?
+  generatedAt DateTime @default(now())
+}
+
+// ─────────────────────────── LOBBY ───────────────────────────
+model Lobby {
+  id            BigInt     @id @default(autoincrement())
+  ownerId       BigInt
+  name          String?
+  passwordHash  String?
+  inviteToken   String     @unique
+  scope         LobbyScope
+  scopeRefId    BigInt? // matchId nếu scope=MATCH
+  defaultPoints BigInt
+  allowBorrow   Boolean    @default(true)
+  manualOdds    Boolean    @default(false)
+  status        String     @default("OPEN")
+  createdAt     DateTime   @default(now())
+
+  memberships LobbyMembership[]
+  messages    LobbyMessage[]
+}
+
+model LobbyMembership {
+  id            BigInt    @id @default(autoincrement())
+  lobbyId       BigInt
+  userId        BigInt
+  role          LobbyRole @default(MEMBER)
+  defaultPoints BigInt
+  borrowed      BigInt    @default(0)
+  joinedAt      DateTime  @default(now())
+
+  lobby Lobby @relation(fields: [lobbyId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([lobbyId, userId])
+}
+
+model BorrowRequest {
+  id           BigInt       @id @default(autoincrement())
+  lobbyId      BigInt
+  membershipId BigInt
+  amount       BigInt
+  status       BorrowStatus @default(PENDING)
+  decidedBy    BigInt?
+  decidedAt    DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@index([lobbyId])
+}
+
+model LobbyMessage {
+  id        BigInt      @id @default(autoincrement())
+  lobbyId   BigInt
+  userId    BigInt
+  body      String
+  kind      MessageKind @default(TEXT)
+  createdAt DateTime    @default(now())
+
+  lobby Lobby @relation(fields: [lobbyId], references: [id])
+
+  @@index([lobbyId, createdAt])
+}
+
+// ─────────────────────────── ENGAGEMENT ───────────────────────────
+model Streak {
+  userId        BigInt    @id
+  checkinStreak Int       @default(0)
+  winStreak     Int       @default(0)
+  lastCheckinDate DateTime?
+}
+
+model Mission {
+  id     BigInt @id @default(autoincrement())
+  code   String @unique
+  rule   Json
+  reward BigInt
+}
+
+model MissionProgress {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt
+  missionId BigInt
+  date      DateTime @db.Date
+  progress  Int      @default(0)
+  claimed   Boolean  @default(false)
+
+  @@unique([userId, missionId, date])
+}
+
+model Achievement {
+  id        BigInt @id @default(autoincrement())
+  code      String @unique
+  condition Json
+}
+
+model UserAchievement {
+  id            BigInt   @id @default(autoincrement())
+  userId        BigInt
+  achievementId BigInt
+  earnedAt      DateTime @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model Notification {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt
+  type      String
+  channel   String // PUSH | EMAIL
+  payload   Json
+  status    String    @default("PENDING")
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model NotificationPref {
+  id      BigInt  @id @default(autoincrement())
+  userId  BigInt
+  type    String
+  channel String
+  enabled Boolean @default(true)
+
+  @@unique([userId, type, channel])
+}
+
+// ─────────────────────────── SOCIAL ───────────────────────────
+model Duel {
+  id           BigInt     @id @default(autoincrement())
+  challengerId BigInt
+  opponentId   BigInt
+  scope        String
+  status       DuelStatus @default(PENDING)
+  winnerId     BigInt?
+  createdAt    DateTime   @default(now())
+}
+
+// ─────────────────────────── ADMIN & RISK ───────────────────────────
+model RiskFlag {
+  id         BigInt   @id @default(autoincrement())
+  targetType String // USER | LOBBY
+  targetId   BigInt
+  rule       String
+  severity   String
+  status     String   @default("OPEN")
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId])
+}
+
+model ModerationAction {
+  id         BigInt   @id @default(autoincrement())
+  adminId    BigInt
+  targetType String
+  targetId   BigInt
+  action     String
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+model CaseFile {
+  id          BigInt   @id @default(autoincrement())
+  subject     String
+  evidenceRef String?
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+}

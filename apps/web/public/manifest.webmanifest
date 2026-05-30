@@ -1,0 +1,10 @@
+{
+  "name": "WC2026 Prediction Game",
+  "short_name": "WC2026",
+  "description": "Game dự đoán FIFA World Cup 2026",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b6e4f",
+  "theme_color": "#0b6e4f",
+  "icons": []
+}

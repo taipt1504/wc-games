@@ -6,8 +6,22 @@
 .env.*
 !.env.example
 
-# Dependencies / build (cho code sau này)
+# Dependencies / build
 node_modules/
 dist/
 build/
 *.log
+
+# Next.js
+.next/
+out/
+
+# Monorepo / TS
+.turbo/
+*.tsbuildinfo
+
+# Prisma generated client
+packages/db/generated/
+
+# Test
+coverage/
