@@ -13,24 +13,137 @@ datasource db {
 }
 
 // ─────────────────────────── ENUMS ───────────────────────────
-enum Role { USER MOD ADMIN OPS SUPER }
-enum UserStatus { ACTIVE BANNED SUSPENDED }
-enum ContextType { GLOBAL LOBBY }
-enum LedgerType { SIGNUP DAILY STAKE SETTLE VOID BORROW REFERRAL PURCHASE ADMIN_ADJ }
-enum Outcome { HOME DRAW AWAY } // map: HOME='1', DRAW='X', AWAY='2'
-enum PredictionStatus { OPEN LOCKED WON LOST VOID CANCELLED }
-enum MatchStatus { SCHEDULED LIVE FINISHED POSTPONED CANCELLED }
-enum MatchRound { GROUP R32 R16 QF SF THIRD FINAL }
-enum SettlementStatus { DONE PENDING_REVIEW VOID }
-enum OddsSource { API AI ADMIN LOBBY }
-enum LobbyScope { ALL GROUP R32 R16 QF SF FINAL MATCH }
-enum LobbyRole { OWNER MEMBER }
-enum BorrowStatus { PENDING APPROVED DENIED }
-enum NewsStatus { PENDING PUBLISHED REJECTED UNPUBLISHED }
-enum ReferralStatus { PENDING ACTIVATED REJECTED }
-enum FutureMarket { CHAMPION GOLDEN_BOOT GOLDEN_BALL FINALIST }
-enum DuelStatus { PENDING ACTIVE DONE }
-enum MessageKind { TEXT SYSTEM REACTION }
+enum Role {
+  USER
+  MOD
+  ADMIN
+  OPS
+  SUPER
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+  SUSPENDED
+}
+
+enum ContextType {
+  GLOBAL
+  LOBBY
+}
+
+enum LedgerType {
+  SIGNUP
+  DAILY
+  STAKE
+  SETTLE
+  VOID
+  BORROW
+  REFERRAL
+  PURCHASE
+  ADMIN_ADJ
+}
+
+// Outcome map: HOME='1', DRAW='X', AWAY='2'
+enum Outcome {
+  HOME
+  DRAW
+  AWAY
+}
+
+enum PredictionStatus {
+  OPEN
+  LOCKED
+  WON
+  LOST
+  VOID
+  CANCELLED
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  POSTPONED
+  CANCELLED
+}
+
+enum MatchRound {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  THIRD
+  FINAL
+}
+
+enum SettlementStatus {
+  DONE
+  PENDING_REVIEW
+  VOID
+}
+
+enum OddsSource {
+  API
+  AI
+  ADMIN
+  LOBBY
+}
+
+enum LobbyScope {
+  ALL
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  FINAL
+  MATCH
+}
+
+enum LobbyRole {
+  OWNER
+  MEMBER
+}
+
+enum BorrowStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum NewsStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+  UNPUBLISHED
+}
+
+enum ReferralStatus {
+  PENDING
+  ACTIVATED
+  REJECTED
+}
+
+enum FutureMarket {
+  CHAMPION
+  GOLDEN_BOOT
+  GOLDEN_BALL
+  FINALIST
+}
+
+enum DuelStatus {
+  PENDING
+  ACTIVE
+  DONE
+}
+
+enum MessageKind {
+  TEXT
+  SYSTEM
+  REACTION
+}
 
 // ─────────────────────────── AUTH & ACCOUNT ───────────────────────────
 model User {
