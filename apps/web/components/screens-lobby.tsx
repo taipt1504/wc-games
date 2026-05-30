@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — Lobbies · Create · Lobby view · Borrow modal (ported from design screens-lobby.jsx) */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WC, type Match, type Lobby, type Pick1X2, type Odds } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead } from '@/components/ui';
@@ -56,9 +56,16 @@ function LobbyCard({ l, s, joined }: { l: Lobby; s: ScreenProps['s']; joined?: b
 export function Lobbies({ s }: ScreenProps) {
   const [q, setQ] = useState('');
   const [code, setCode] = useState('');
+  const [allLobbies, setAllLobbies] = useState<Lobby[]>(WC.lobbies);
+  useEffect(() => {
+    fetch('/api/v1/lobbies')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setAllLobbies(j.data); })
+      .catch(() => { /* fall back to seed display */ });
+  }, []);
   const match = (l: Lobby) => (l.name + l.owner + l.scope).toLowerCase().includes(q.toLowerCase());
-  const joined = WC.lobbies.filter(l => l.joined && match(l));
-  const discover = WC.lobbies.filter(l => !l.joined && match(l));
+  const joined = allLobbies.filter(l => l.joined && match(l));
+  const discover = allLobbies.filter(l => !l.joined && match(l));
 
   return (
     <div className="page fade-up">
@@ -105,6 +112,21 @@ export function LobbyCreate({ s }: ScreenProps) {
   const pool = [...WC.live, ...WC.upcoming].slice(0, 20);
   const [sel, setSel] = useState<Set<number>>(() => new Set(pool.slice(0, 6).map(m => m.id)));
   const [scope, setScope] = useState('custom');
+  const [name, setName] = useState('The Lads 🍻');
+
+  const create = async () => {
+    try {
+      const res = await fetch('/api/v1/lobbies', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, scope: scope === 'whole' ? 'all' : scope, defaultPoints: def }),
+      });
+      if (res.ok) { s.toastMsg('Lobby created — invite link copied!', 'check'); s.go('lobbies'); }
+      else {
+        const j = await res.json().catch(() => ({}));
+        s.toastMsg(j?.error?.code === 'UNAUTHORIZED' ? 'Sign in to create a lobby' : 'Could not create lobby', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
 
   const toggle = (id: number) => {
     setScope('custom');
@@ -148,7 +170,7 @@ export function LobbyCreate({ s }: ScreenProps) {
       <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back</button>
       <SecHead title="Create a lobby" sub="Set the rules, pick the matches, invite your crew" />
       <div className="card card-pad-lg stack gap-18">
-        <div className="field"><label className="label">Lobby name</label><input className="input" placeholder="Office League · ABC Corp" defaultValue="The Lads 🍻" /></div>
+        <div className="field"><label className="label">Lobby name</label><input className="input" placeholder="Office League · ABC Corp" value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div className="field"><label className="label">Password <span className="muted tiny">(optional)</span></label><input className="input" placeholder="Set a join password" type="password" defaultValue="goal2026" /></div>
 
         {/* SCOPE = stage presets + match picker */}
@@ -213,7 +235,7 @@ export function LobbyCreate({ s }: ScreenProps) {
           <span>This lobby is its own isolated game: separate wallet, {future ? `every ${activeStage?.label} tie` : `its own ${count} matches`}, and odds you can fine-tune as host. <span className="mono nowrap">score = winnings + default − borrowed</span>.</span>
         </div>
 
-        <Btn variant="primary" size="lg" className="btn-block" disabled={!count && !future} onClick={() => { s.toastMsg('Lobby created — invite link copied!', 'check'); s.go('lobby', { id: 2 }); }}>Create lobby &amp; get invite link</Btn>
+        <Btn variant="primary" size="lg" className="btn-block" disabled={!count && !future} onClick={create}>Create lobby &amp; get invite link</Btn>
       </div>
     </div>
   );

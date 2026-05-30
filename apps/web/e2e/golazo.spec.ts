@@ -106,4 +106,17 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
     // ranked user appears in both the podium card and the table row -> .first()
     await expect(page.getByText(handle).first()).toBeVisible();
   });
+
+  test('register -> create a private lobby -> appears in Your lobbies (live)', async ({ page }) => {
+    await registerNewUser(page, 'lobby');
+    await expect(page.getByText("Today's matches")).toBeVisible();
+    await page.locator('.rail').getByText('Lobbies').click();
+    await page.getByRole('button', { name: /^Create lobby$/i }).click();
+    await expect(page.getByText('Create a lobby')).toBeVisible();
+    const lobbyName = `Crew ${Date.now()}`;
+    await page.getByPlaceholder('Office League · ABC Corp').fill(lobbyName);
+    await page.getByRole('button', { name: /Create lobby & get invite link/i }).click();
+    // back on the Lobbies list -> the new lobby (POST /api/v1/lobbies) is listed
+    await expect(page.getByText(lobbyName)).toBeVisible();
+  });
 });

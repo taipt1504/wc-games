@@ -16,6 +16,7 @@
     "@wc/core": "workspace:*",
     "@wc/db": "workspace:*",
     "@wc/fixtures": "workspace:*",
+    "@wc/lobby": "workspace:*",
     "@wc/prediction": "workspace:*",
     "jose": "^5.9.0",
     "next": "^15.0.0",

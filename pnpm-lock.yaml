@@ -29,6 +29,9 @@ importers:
       '@wc/fixtures':
         specifier: workspace:*
         version: link:../../packages/fixtures
+      '@wc/lobby':
+        specifier: workspace:*
+        version: link:../../packages/lobby
       '@wc/prediction':
         specifier: workspace:*
         version: link:../../packages/prediction
