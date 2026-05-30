@@ -56,6 +56,7 @@ pnpm dev
 - **Prisma schema** (`packages/db/prisma/schema.prisma`) = source of truth, dịch từ DDL trong service design (30 model). DDL trong tài liệu là SQL minh hoạ.
 - **BigInt**: point amount + id dùng `BigInt` (khớp BIGINT). Đã patch `BigInt.prototype.toJSON` ở `apps/web/lib/db.ts` để serialize JSON. Khi thêm chỗ trả JSON khác, nhớ import qua `@/lib/db` hoặc tự patch.
 - **9router**: `LlmGateway` (worker) gọi qua OpenAI SDK trỏ `LLM_GATEWAY_BASE_URL`. 9router đã self-host (ADR-0005); chỉ cần điền env.
+- **Một `.env` duy nhất ở root** được nạp bởi cả 3: web (`next.config.mjs` → dotenv), worker (`main.ts` → dotenv), Prisma (`@wc/db` scripts → `dotenv-cli -e ../../.env`). Không cần `.env` riêng từng app.
 - **`@wc/db` build trước**: web & worker import từ `dist` → chạy `pnpm setup` (hoặc `pnpm --filter @wc/db build`) trước `pnpm dev`. Có thể chạy `pnpm --filter @wc/db dev` (tsc watch) song song khi sửa schema.
 - **Prisma + Next**: `@prisma/client` để `serverExternalPackages`. Nếu build standalone thiếu query engine, xem docs Prisma deploy.
 - **Chưa có**: realtime gateway (Socket.io), service worker PWA, icon manifest, lint config, tests — thêm theo ưu tiên P0→P2 ([roadmap](./docs/prd/18-roadmap-milestones.md)).
