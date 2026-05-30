@@ -200,10 +200,10 @@ export function Wallet({ s }: ScreenProps) {
 
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Transaction history</div>
       <div className="card" style={{ overflow: 'hidden' }}>
-        {WC.ledger.map((tx, i) => {
+        {(s.ledger && s.ledger.length ? s.ledger : WC.ledger).map((tx, i, arr) => {
           const [icon, color] = ICON[tx.type] || ['dollar', 'var(--text-2)'];
           return (
-            <div key={i} className="row between" style={{ padding: '14px 18px', borderBottom: i < WC.ledger.length - 1 ? '1px solid var(--line)' : 0 }}>
+            <div key={i} className="row between" style={{ padding: '14px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : 0 }}>
               <div className="row gap-12" style={{ minWidth: 0 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
                   <Icon name={icon} size={17} style={{ color }} />

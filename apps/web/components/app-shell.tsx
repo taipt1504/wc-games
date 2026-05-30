@@ -4,7 +4,7 @@
    ============================================================ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WC, type Match, type Bet, type Pick1X2 } from '@/lib/wc';
-import type { Store, BetSlipState } from '@/lib/store';
+import type { Store, BetSlipState, LedgerEntry } from '@/lib/store';
 import { Btn, Icon, Avatar, Pundit, Toast, type ToastData } from '@/components/ui';
 import { Landing, Auth, Home } from '@/components/screens-core';
 import { Schedule, MatchDetail, BetSlip } from '@/components/screens-match';
@@ -47,6 +47,7 @@ export default function AppShell() {
   const authedRef = useRef(false);
   const [points, setPoints] = useState(WC.me.points);
   const [bets, setBets] = useState<Bet[]>(WC.myBets.map((b) => ({ ...b })));
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [streak, setStreak] = useState(WC.me.streak);
   const [checkedIn, setCheckedIn] = useState(false);
   const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
@@ -81,9 +82,20 @@ export default function AppShell() {
     });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const [meR, betsR, ledR] = await Promise.all([
+        fetch('/api/v1/me'), fetch('/api/v1/me/predictions'), fetch('/api/v1/me/ledger'),
+      ]);
+      if (meR.ok) { const j = await meR.json(); setPoints(Number(j.data.balance)); }
+      if (betsR.ok) { const j = await betsR.json(); setBets(j.data as Bet[]); }
+      if (ledR.ok) { const j = await ledR.json(); setLedger(j.data as LedgerEntry[]); }
+    } catch { /* keep current state on network error */ }
+  }, []);
+
   const store: Store = {
-    route, param, points, bets, streak, checkedIn, betSlip, borrowOpen, toast, authed,
-    go, back, toastMsg,
+    route, param, points, bets, ledger, streak, checkedIn, betSlip, borrowOpen, toast, authed,
+    go, back, toastMsg, refreshUser,
     login: async (email?: string, password?: string, mode?: string) => {
       const endpoint = mode === 'login' ? 'login' : 'register';
       try {
@@ -102,7 +114,7 @@ export default function AppShell() {
           );
           return;
         }
-        authedRef.current = true; setAuthed(true); setStack([]); setRoute('home'); setParam({});
+        authedRef.current = true; setAuthed(true); setStack([]); setRoute('home'); setParam({}); void refreshUser();
         toastMsg(endpoint === 'register' ? 'Welcome! +1,000 points added 🎉' : 'Welcome back!', 'star', 'var(--gold)');
       } catch {
         toastMsg('Network error — try again', 'alert', 'var(--danger)');
@@ -154,6 +166,7 @@ export default function AppShell() {
       });
       setBetSlip(null);
       toastMsg(`Bet placed · ${stake} pts on ${pick}`, 'check', 'var(--green)');
+      void refreshUser(); // sync balance + bets + ledger from the DB
     },
     openBorrow: () => setBorrowOpen(true),
     closeBorrow: () => setBorrowOpen(false),

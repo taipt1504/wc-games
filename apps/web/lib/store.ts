@@ -7,12 +7,21 @@ export interface BetSlipState {
   odds: number;
 }
 
+export interface LedgerEntry {
+  type: string;
+  label: string;
+  delta: number;
+  when: string;
+  bal: number;
+}
+
 /** Global app store passed as `s` to every screen (ported from design app.jsx). */
 export interface Store {
   route: string;
   param: Record<string, unknown>;
   points: number;
   bets: Bet[];
+  ledger: LedgerEntry[];
   streak: number;
   checkedIn: boolean;
   betSlip: BetSlipState | null;
@@ -24,6 +33,7 @@ export interface Store {
   toastMsg: (msg: string, icon?: string, color?: string) => void;
   login: (email?: string, password?: string, mode?: string) => void;
   logout: () => void;
+  refreshUser: () => void;
   checkin: () => void;
   claimMission: (id: number) => void;
   pickFor: (mid: number) => string | undefined;
