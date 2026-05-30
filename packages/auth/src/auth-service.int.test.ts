@@ -5,7 +5,11 @@ import { registerUser, verifyLogin, dailyCheckin } from './auth-service';
 const prisma = new PrismaClient();
 
 async function clean() {
+  // FK-safe order: clear predictions (-> user FK) before users on the shared test DB
   await prisma.pointLedger.deleteMany();
+  await prisma.prediction.deleteMany();
+  await prisma.settlement.deleteMany();
+  await prisma.predictionUserStats.deleteMany();
   await prisma.streak.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();

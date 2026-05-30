@@ -7,6 +7,9 @@ const prisma = new PrismaClient();
 async function clean() {
   await prisma.borrowRequest.deleteMany();
   await prisma.pointLedger.deleteMany();
+  await prisma.prediction.deleteMany();
+  await prisma.settlement.deleteMany();
+  await prisma.predictionUserStats.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.lobbyMembership.deleteMany();
   await prisma.lobby.deleteMany();
