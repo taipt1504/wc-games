@@ -1,4 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { PrismaClient } from '@wc/db';
+import { settleMatch } from '@wc/prediction';
+
+const TEST_DB = 'postgresql://wc:wc@localhost:5433/wc_game';
+async function withDb<T>(fn: (p: PrismaClient) => Promise<T>): Promise<T> {
+  const prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
+  try {
+    return await fn(prisma);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
 test.describe('GOLAZO — guest browse', () => {
   test('landing renders hero + primary CTA', async ({ page }) => {
@@ -60,5 +72,38 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
     await page.locator('.rail').getByText('Wallet').click();
     await expect(page.getByText('Welcome bonus')).toBeVisible();
     await expect(page.getByText('Stake placed')).toBeVisible();
+  });
+
+  test('full journey: register -> bet -> settle -> ranked on the live leaderboard', async ({ page }) => {
+    // fresh slate so this user is the only ranked predictor and match 27 is unsettled
+    await withDb(async (p) => {
+      await p.pointLedger.deleteMany();
+      await p.prediction.deleteMany();
+      await p.settlement.deleteMany();
+      await p.predictionUserStats.deleteMany();
+      await p.wallet.deleteMany();
+      await p.user.deleteMany();
+    });
+
+    const handle = `journey${Date.now()}`;
+    await page.goto('/');
+    await page.getByRole('button', { name: /Claim your 1,000 points/i }).click();
+    await page.getByPlaceholder('you@email.com').fill(`${handle}@golazo.test`);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.getByRole('button', { name: /Claim 1,000 points & play/i }).click();
+    await expect(page.getByText("Today's matches")).toBeVisible();
+
+    // bet HOME on the first scheduled match (match 27)
+    await page.locator('.odds:not([disabled])').first().click();
+    await page.getByRole('button', { name: /Confirm bet/i }).click();
+    await expect(page.getByText(/Bet placed/i)).toBeVisible();
+
+    // settle that match (HOME win) — simulates the settlement worker
+    await withDb((p) => settleMatch(p, 27n, { home: 2, away: 1 }));
+
+    // the live leaderboard (GET /api/v1/leaderboard) now ranks this user
+    await page.locator('.rail').getByText('Leaderboard').click();
+    // ranked user appears in both the podium card and the table row -> .first()
+    await expect(page.getByText(handle).first()).toBeVisible();
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — Leaderboard · My Bets · Wallet · Profile (ported from design screens-compete.jsx) */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead, TierPill, TIER_C } from '@/components/ui';
@@ -23,6 +23,13 @@ function Toggle({ on: init }: { on: boolean }) {
 export function Leaderboard({ s }: ScreenProps) {
   const [scope, setScope] = useState('global');
   const guest = !s.authed;
+  const [rows, setRows] = useState(WC.leaderboard);
+  useEffect(() => {
+    fetch('/api/v1/leaderboard')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setRows(j.data); })
+      .catch(() => { /* fall back to seed display */ });
+  }, []);
   const scopes: [string, string][] = guest
     ? [['global', 'Global'], ['week', 'This week']]
     : [['global', 'Global'], ['week', 'This week'], ['tier', 'My tier · Gold']];
@@ -67,7 +74,7 @@ export function Leaderboard({ s }: ScreenProps) {
 
       {/* top 3 podium */}
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 18 }}>
-        {WC.leaderboard.slice(0, 3).map((p, i) => (
+        {rows.slice(0, 3).map((p, i) => (
           <div key={p.rank} className="card card-pad" style={{ textAlign: 'center', order: i === 0 ? 2 : i === 1 ? 1 : 3, transform: i === 0 ? 'scale(1.04)' : 'none', borderColor: i === 0 ? 'rgba(255,200,61,.4)' : 'var(--line)' }}>
             <div className="display" style={{ fontSize: 22, color: ['#FFC83D', '#AEB8D0', '#c08457'][i] }}>{['🥇', '🥈', '🥉'][i]}</div>
             <Avatar initials={p.name.slice(0, 2).toUpperCase()} size={48} color={TIER_C[p.tier]} ring={TIER_C[p.tier]} />
@@ -93,7 +100,7 @@ export function Leaderboard({ s }: ScreenProps) {
               </tr>
             </thead>
             <tbody>
-              {WC.leaderboard.map((p) => (
+              {rows.map((p) => (
                 <tr key={p.rank}>
                   <td className="tnum muted">{p.rank}</td>
                   <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span style={{ fontWeight: 600 }}>{p.name}</span></div></td>
