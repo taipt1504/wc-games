@@ -169,6 +169,25 @@ importers:
         specifier: ^6.1.0
         version: 6.19.3(typescript@5.9.3)
 
+  packages/lobby:
+    dependencies:
+      '@wc/core':
+        specifier: workspace:*
+        version: link:../core
+      '@wc/db':
+        specifier: workspace:*
+        version: link:../db
+    devDependencies:
+      dotenv-cli:
+        specifier: ^7.4.0
+        version: 7.4.4
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.19)(jsdom@25.0.1)(terser@5.48.0)
+
   packages/prediction:
     dependencies:
       '@wc/core':
