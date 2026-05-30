@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@wc/db';
 import { settleMatch } from '@wc/prediction';
+import { registerUser } from '@wc/auth';
 
 const TEST_DB = 'postgresql://wc:wc@localhost:5433/wc_game';
 async function withDb<T>(fn: (p: PrismaClient) => Promise<T>): Promise<T> {
@@ -118,5 +119,48 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
     await page.getByRole('button', { name: /Create lobby & get invite link/i }).click();
     // back on the Lobbies list -> the new lobby (POST /api/v1/lobbies) is listed
     await expect(page.getByText(lobbyName)).toBeVisible();
+  });
+});
+
+test.describe('GOLAZO — admin console (live API + Postgres)', () => {
+  test('admin logs in, reads real users, bans a victim (read + write paths)', async ({ page }) => {
+    const stamp = Date.now();
+    const adminEmail = `admin_${stamp}@golazo.test`;
+    const victimEmail = `victim_${stamp}@golazo.test`;
+    // Seed an ADMIN + a victim USER right before login. The journey test wipes the
+    // users table mid-run, so a global-setup admin would be gone — seed per-test.
+    await withDb(async (p) => {
+      await registerUser(p, { email: adminEmail, username: `admin${stamp}`, password: 'password123' });
+      await p.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+      await registerUser(p, { email: victimEmail, username: `victim${stamp}`, password: 'password123' });
+    });
+
+    // log in through the real auth UI as the admin
+    await page.goto('/');
+    await page.getByRole('button', { name: /I have an account/i }).click();
+    await expect(page.getByText('Welcome back')).toBeVisible();
+    await page.getByPlaceholder('you@email.com').fill(adminEmail);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.getByRole('button', { name: 'Log in' }).last().click();
+    await expect(page.getByText("Today's matches")).toBeVisible();
+
+    // role-gated Admin nav appears only for admins (GET /me -> role) -> open the console
+    await page.locator('.rail').getByText('Admin').click();
+    await expect(page.getByText('Admin Console')).toBeVisible();
+
+    // Users tab: real DB users are listed (read-side, GET /api/v1/admin/users)
+    await page.getByRole('button', { name: 'Users', exact: true }).click();
+    await expect(page.getByText('User management')).toBeVisible();
+    await expect(page.getByText(victimEmail)).toBeVisible();
+
+    // open the victim -> Ban (write-side, POST /admin/users/:id/ban) -> status flips
+    await page.getByText(victimEmail).click();
+    await expect(page.getByRole('button', { name: /Ban user/i })).toBeVisible();
+    await page.getByRole('button', { name: /Ban user/i }).click();
+    await expect(page.getByText('banned').first()).toBeVisible();
+
+    // and it's persisted: the user row is BANNED in Postgres
+    const banned = await withDb((p) => p.user.findUnique({ where: { email: victimEmail } }));
+    expect(banned?.status).toBe('BANNED');
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — Admin console (ported from screens-admin.jsx) */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead } from '@/components/ui';
@@ -34,6 +34,13 @@ function JobDot({ st }: { st: string }) {
 export function Admin({ s }: ScreenProps) {
   const [tab, setTab] = useState('overview');
   const [detail, setDetail] = useState<Detail>(null);
+  const [users, setUsers] = useState<AdminUser[]>(WC.adminUsers);
+  const loadUsers = () =>
+    fetch('/api/v1/admin/users')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setUsers(j.data); })
+      .catch(() => {});
+  useEffect(() => { void loadUsers(); }, []);
 
   const open = (kind: DetailKind, id: number) => { setDetail({ kind, id }); window.scrollTo(0, 0); };
   const closeDetail = () => setDetail(null);
@@ -84,14 +91,14 @@ export function Admin({ s }: ScreenProps) {
         </div>
 
         <div className="page fade-up" key={detail ? detail.kind + detail.id : tab}>
-          {detail?.kind === 'user' && <AdmUserDetail id={detail.id} onBack={closeDetail} s={s} />}
+          {detail?.kind === 'user' && <AdmUserDetail id={detail.id} users={users} reload={loadUsers} onBack={closeDetail} s={s} />}
           {detail?.kind === 'risk' && <AdmRiskDetail id={detail.id} onBack={closeDetail} s={s} />}
           {detail?.kind === 'match' && <AdmMatchDetail id={detail.id} onBack={closeDetail} s={s} />}
           {detail?.kind === 'team' && <AdmTeamDetail id={detail.id} onBack={closeDetail} s={s} />}
           {detail?.kind === 'news' && <AdmNewsDetail id={detail.id} onBack={closeDetail} s={s} />}
           {!detail && tab === 'overview' && <AdmOverview s={s} setTab={goTab} open={open} />}
           {!detail && tab === 'tourney' && <AdmTourney s={s} open={open} />}
-          {!detail && tab === 'users' && <AdmUsers open={open} />}
+          {!detail && tab === 'users' && <AdmUsers users={users} open={open} />}
           {!detail && tab === 'risk' && <AdmRisk open={open} />}
           {!detail && tab === 'review' && <AdmReview open={open} />}
           {!detail && tab === 'pipeline' && <AdmPipeline />}
@@ -392,7 +399,7 @@ function AdmTeams({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind, i
 }
 
 /* ===================== USERS (list) ===================== */
-function AdmUsers({ open }: { open: (kind: DetailKind, id: number) => void }) {
+function AdmUsers({ users, open }: { users: AdminUser[]; open: (kind: DetailKind, id: number) => void }) {
   return (
     <div>
       <SecHead title="User management" sub="Search, inspect sessions, ban abusers" />
@@ -414,7 +421,7 @@ function AdmUsers({ open }: { open: (kind: DetailKind, id: number) => void }) {
               </tr>
             </thead>
             <tbody>
-              {WC.adminUsers.map((u, i) => (
+              {users.map((u, i) => (
                 <tr key={i} style={{ cursor: 'pointer' }} onClick={() => open('user', i)}>
                   <td>
                     <div className="row gap-10">
@@ -446,12 +453,14 @@ function AdmUsers({ open }: { open: (kind: DetailKind, id: number) => void }) {
 }
 
 /* ===================== USER DETAIL ===================== */
-function AdmUserDetail({ id, onBack, s }: { id: number; onBack: () => void; s: ScreenProps['s'] }) {
-  const u = WC.adminUsers[id];
+function AdmUserDetail({ id, users, reload, onBack, s }: { id: number; users: AdminUser[]; reload: () => void | Promise<void>; onBack: () => void; s: ScreenProps['s'] }) {
+  const u = users[id] ?? WC.adminUsers[0];
   const [status, setStatus] = useState(u.status);
   const flagged = u.flags > 0;
-  const cluster = WC.adminUsers.filter((x, i) => i !== id && x.ip === u.ip);
+  // Real users carry no captured IP yet ('—'); only cluster on a concrete shared IP.
+  const cluster = u.ip && u.ip !== '—' ? users.filter((x, i) => i !== id && x.ip === u.ip) : [];
   const initials = u.name.slice(0, 2).toUpperCase();
+  const realId = (u as { id?: number }).id;
 
   const ledger = [
     { l: 'Daily check-in', d: +200, w: 'today 08:12' },
@@ -466,6 +475,14 @@ function AdmUserDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
   ];
 
   const act = (msg: string, icon: string, color: string) => s.toastMsg(msg, icon, color);
+  const banUser = async () => {
+    if (realId != null) {
+      try { await fetch(`/api/v1/admin/users/${realId}/ban`, { method: 'POST' }); await reload(); }
+      catch { /* keep optimistic state */ }
+    }
+    setStatus('banned');
+    act(`${u.name} banned`, 'ban', 'var(--danger)');
+  };
 
   return (
     <div>
@@ -499,7 +516,7 @@ function AdmUserDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
             <Btn variant="ghost" size="sm" icon="alert" onClick={() => act(`Warning sent to ${u.name}`, 'check', 'var(--gold)')}>Warn</Btn>
             {status === 'banned'
               ? <Btn variant="primary" size="sm" icon="refresh" onClick={() => { setStatus('active'); act('User reinstated', 'check', 'var(--green)'); }}>Unban</Btn>
-              : <Btn variant="danger" size="sm" icon="ban" onClick={() => { setStatus('banned'); act(`${u.name} banned`, 'ban', 'var(--danger)'); }}>Ban user</Btn>}
+              : <Btn variant="danger" size="sm" icon="ban" onClick={banUser}>Ban user</Btn>}
           </div>
         </div>
       </div>
@@ -570,17 +587,35 @@ function AdmUserDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
 
 /* ===================== LOBBY RISK (list) ===================== */
 function AdmRisk({ open }: { open: (kind: DetailKind, id: number) => void }) {
+  const [flags, setFlags] = useState<RiskLobby[]>(WC.riskLobbies);
+  const [scanning, setScanning] = useState(false);
+  const loadFlags = () =>
+    fetch('/api/v1/admin/risk-flags')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setFlags(j.data); })
+      .catch(() => {});
+  useEffect(() => { void loadFlags(); }, []);
+  const runScan = async () => {
+    setScanning(true);
+    try { await fetch('/api/v1/admin/risk/scan', { method: 'POST' }); await loadFlags(); }
+    catch { /* keep current flags */ }
+    finally { setScanning(false); }
+  };
   return (
     <div>
-      <SecHead title="Lobby risk queue" sub="Lobbies auto-flagged by the abuse detector · tap to investigate" />
+      <SecHead
+        title="Lobby risk queue"
+        sub="Lobbies auto-flagged by the abuse detector · tap to investigate"
+        action={<Btn variant="ghost" size="sm" icon="search" onClick={runScan} disabled={scanning}>{scanning ? 'Scanning…' : 'Run scan'}</Btn>}
+      />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', marginBottom: 18 }}>
-        <KPI v={WC.riskLobbies.length} l="Open cases" c="var(--danger)" />
-        <KPI v={WC.riskLobbies.filter(r => r.risk === 'High').length} l="High priority" c="var(--danger)" />
+        <KPI v={flags.length} l="Open cases" c="var(--danger)" />
+        <KPI v={flags.filter(r => r.risk === 'High').length} l="High priority" c="var(--danger)" />
         <KPI v="14" l="Resolved (7d)" c="var(--green)" />
         <KPI v="2.1%" l="Flag rate" c="var(--sky)" />
       </div>
       <div className="stack gap-10">
-        {WC.riskLobbies.map(r => <RiskRow key={r.id} r={r} open={open} />)}
+        {flags.map(r => <RiskRow key={r.id} r={r} open={open} />)}
       </div>
     </div>
   );

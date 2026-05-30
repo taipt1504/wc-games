@@ -12,6 +12,8 @@
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm --filter @wc/db run build && pnpm -r run build",
     "lint": "pnpm -r run lint",
+    "test": "pnpm -r --workspace-concurrency=1 run test",
+    "test:e2e": "pnpm --filter @wc/web exec playwright test",
     "db:generate": "pnpm --filter @wc/db run prisma:generate",
     "db:migrate": "pnpm --filter @wc/db run prisma:migrate",
     "db:studio": "pnpm --filter @wc/db run prisma:studio",

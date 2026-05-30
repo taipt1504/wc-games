@@ -46,3 +46,10 @@ export async function clearSession(): Promise<void> {
   const jar = await cookies();
   jar.delete(COOKIE);
 }
+
+/** Returns the session user only if they hold an operator role, else null (PRD §16 RBAC). */
+export async function requireAdmin(): Promise<SessionUser | null> {
+  const u = await getSessionUser();
+  if (!u || !['ADMIN', 'SUPER', 'MOD'].includes(u.role)) return null;
+  return u;
+}

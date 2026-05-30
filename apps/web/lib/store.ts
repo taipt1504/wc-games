@@ -20,6 +20,7 @@ export interface Store {
   route: string;
   param: Record<string, unknown>;
   points: number;
+  role: string;
   bets: Bet[];
   ledger: LedgerEntry[];
   streak: number;

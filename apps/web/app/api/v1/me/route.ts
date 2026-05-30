@@ -13,6 +13,7 @@ export async function GET() {
     data: {
       id: user.id,
       email: user.email,
+      role: user.role,
       balance: wallet ? Number(wallet.balance) : 0,
       settled: stats?.settledCount ?? 0,
       won: stats?.winCount ?? 0,

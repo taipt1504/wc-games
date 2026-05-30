@@ -46,6 +46,7 @@ export default function AppShell() {
   const [authed, setAuthed] = useState(false);
   const authedRef = useRef(false);
   const [points, setPoints] = useState(WC.me.points);
+  const [role, setRole] = useState<string>('USER');
   const [bets, setBets] = useState<Bet[]>(WC.myBets.map((b) => ({ ...b })));
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [streak, setStreak] = useState(WC.me.streak);
@@ -87,14 +88,14 @@ export default function AppShell() {
       const [meR, betsR, ledR] = await Promise.all([
         fetch('/api/v1/me'), fetch('/api/v1/me/predictions'), fetch('/api/v1/me/ledger'),
       ]);
-      if (meR.ok) { const j = await meR.json(); setPoints(Number(j.data.balance)); }
+      if (meR.ok) { const j = await meR.json(); setPoints(Number(j.data.balance)); setRole(j.data.role ?? 'USER'); }
       if (betsR.ok) { const j = await betsR.json(); setBets(j.data as Bet[]); }
       if (ledR.ok) { const j = await ledR.json(); setLedger(j.data as LedgerEntry[]); }
     } catch { /* keep current state on network error */ }
   }, []);
 
   const store: Store = {
-    route, param, points, bets, ledger, streak, checkedIn, betSlip, borrowOpen, toast, authed,
+    route, param, points, role, bets, ledger, streak, checkedIn, betSlip, borrowOpen, toast, authed,
     go, back, toastMsg, refreshUser,
     login: async (email?: string, password?: string, mode?: string) => {
       const endpoint = mode === 'login' ? 'login' : 'register';
@@ -120,7 +121,7 @@ export default function AppShell() {
         toastMsg('Network error — try again', 'alert', 'var(--danger)');
       }
     },
-    logout: () => { void fetch('/api/v1/auth/logout', { method: 'POST' }); authedRef.current = false; setAuthed(false); setStack([]); setRoute('landing'); setParam({}); },
+    logout: () => { void fetch('/api/v1/auth/logout', { method: 'POST' }); authedRef.current = false; setAuthed(false); setRole('USER'); setStack([]); setRoute('landing'); setParam({}); },
     checkin: async () => {
       if (checkedIn) return;
       try {
@@ -236,7 +237,9 @@ export default function AppShell() {
             </div>
           ))}
         </div>
-        <button className="nav-i" onClick={() => go('admin')} style={{ marginTop: 8 }}><Icon name="shield" size={19} />Admin</button>
+        {['ADMIN', 'SUPER', 'MOD'].includes(role) && (
+          <button className="nav-i" onClick={() => go('admin')} style={{ marginTop: 8 }}><Icon name="shield" size={19} />Admin</button>
+        )}
         <div className="card card-pad row gap-10" style={{ marginTop: 8 }}>
           <Avatar initials="AR" size={34} color="var(--gold)" />
           <div style={{ minWidth: 0 }}><div className="small ellip" style={{ fontWeight: 700 }}>{WC.me.name}</div><div className="tiny text-gold tnum">{points.toLocaleString()} pts</div></div>

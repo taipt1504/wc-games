@@ -35,6 +35,9 @@ importers:
       '@wc/prediction':
         specifier: workspace:*
         version: link:../../packages/prediction
+      '@wc/risk':
+        specifier: workspace:*
+        version: link:../../packages/risk
       jose:
         specifier: ^5.9.0
         version: 5.10.0
