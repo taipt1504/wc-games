@@ -1,0 +1,216 @@
+'use client';
+/* ============================================================
+   GOLAZO — App shell · client router · global store (ported from app.jsx)
+   ============================================================ */
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { WC, type Match, type Bet, type Pick1X2 } from '@/lib/wc';
+import type { Store, BetSlipState } from '@/lib/store';
+import { Btn, Icon, Avatar, Pundit, Toast, type ToastData } from '@/components/ui';
+import { Landing, Auth, Home } from '@/components/screens-core';
+import { Schedule, MatchDetail, BetSlip } from '@/components/screens-match';
+import { Leaderboard, MyBets, Wallet, Profile } from '@/components/screens-compete';
+import { Teams, TeamDetail, Groups, Bracket } from '@/components/screens-tournament';
+import { Lobbies, LobbyCreate, LobbyView, BorrowModal } from '@/components/screens-lobby';
+import { News, Article } from '@/components/screens-news';
+import { Admin } from '@/components/screens-admin';
+
+const ROUTES: Record<string, React.ComponentType<{ s: Store }>> = {
+  landing: Landing, auth: Auth, home: Home, schedule: Schedule, match: MatchDetail,
+  leaderboard: Leaderboard, mybets: MyBets, wallet: Wallet, profile: Profile,
+  teams: Teams, team: TeamDetail, groups: Groups, bracket: Bracket,
+  lobbies: Lobbies, 'lobby-create': LobbyCreate, lobby: LobbyView,
+  news: News, article: Article, admin: Admin,
+};
+const FULLBLEED = ['auth', 'admin'];
+const GATED = ['home', 'mybets', 'wallet', 'profile', 'lobbies', 'lobby', 'lobby-create', 'admin'];
+const PUB_NAV: [string, string][] = [['schedule', 'Matches'], ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['groups', 'Groups'], ['bracket', 'Bracket'], ['news', 'News']];
+const RAIL: { sec: string | null; items: [string, string, string][] }[] = [
+  { sec: null, items: [['home', 'Home', 'home'], ['schedule', 'Matches', 'calendar'], ['leaderboard', 'Leaderboard', 'trophy'], ['lobbies', 'Lobbies', 'users']] },
+  { sec: 'Tournament', items: [['teams', 'Teams', 'flag'], ['groups', 'Groups', 'grid'], ['bracket', 'Bracket', 'bracket'], ['news', 'News', 'news']] },
+  { sec: 'Account', items: [['mybets', 'My bets', 'target'], ['wallet', 'Wallet', 'wallet'], ['profile', 'Profile', 'user']] },
+];
+const TABS: [string, string, string][] = [['home', 'Home', 'home'], ['schedule', 'Matches', 'calendar'], ['leaderboard', 'Board', 'trophy'], ['lobbies', 'Lobbies', 'users'], ['profile', 'You', 'user']];
+
+function navKey(r: string): string {
+  if (['schedule', 'match'].includes(r)) return 'schedule';
+  if (['teams', 'team', 'groups', 'bracket'].includes(r)) return r === 'team' ? 'teams' : r;
+  if (['lobbies', 'lobby', 'lobby-create'].includes(r)) return 'lobbies';
+  if (['news', 'article'].includes(r)) return 'news';
+  return r;
+}
+
+export default function AppShell() {
+  const [route, setRoute] = useState('landing');
+  const [param, setParam] = useState<Record<string, unknown>>({});
+  const [, setStack] = useState<{ route: string; param: Record<string, unknown> }[]>([]);
+  const [authed, setAuthed] = useState(false);
+  const authedRef = useRef(false);
+  const [points, setPoints] = useState(WC.me.points);
+  const [bets, setBets] = useState<Bet[]>(WC.myBets.map((b) => ({ ...b })));
+  const [streak, setStreak] = useState(WC.me.streak);
+  const [checkedIn, setCheckedIn] = useState(false);
+  const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
+  const [borrowOpen, setBorrowOpen] = useState(false);
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [route, param]);
+
+  const toastMsg = useCallback((msg: string, icon?: string, color?: string) => {
+    setToast({ msg, icon, color });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2400);
+  }, []);
+
+  const go = useCallback((r: string, p: Record<string, unknown> = {}) => {
+    if (!authedRef.current && GATED.includes(r)) {
+      setStack((st) => [...st, { route, param }]);
+      setRoute('auth'); setParam({ mode: 'signup' });
+      return;
+    }
+    setStack((st) => [...st, { route, param }]);
+    setRoute(r); setParam(p);
+  }, [route, param]);
+
+  const back = useCallback(() => {
+    setStack((st) => {
+      if (!st.length) { setRoute('home'); setParam({}); return st; }
+      const prev = st[st.length - 1];
+      setRoute(prev.route); setParam(prev.param);
+      return st.slice(0, -1);
+    });
+  }, []);
+
+  const store: Store = {
+    route, param, points, bets, streak, checkedIn, betSlip, borrowOpen, toast, authed,
+    go, back, toastMsg,
+    login: () => { authedRef.current = true; setAuthed(true); setStack([]); setRoute('home'); setParam({}); toastMsg('Welcome! +1,000 points added 🎉', 'star', 'var(--gold)'); },
+    logout: () => { authedRef.current = false; setAuthed(false); setStack([]); setRoute('landing'); setParam({}); },
+    checkin: () => { if (checkedIn) return; setPoints((p) => p + 300); setStreak((s) => s + 1); setCheckedIn(true); toastMsg('Checked in! +300 points', 'fire', 'var(--gold)'); },
+    claimMission: (id: number) => { const m = WC.missions.find((x) => x.id === id); if (!m || m.claimed) return; m.claimed = true; setPoints((p) => p + m.reward); toastMsg(`Mission complete! +${m.reward}`, 'target', 'var(--purple)'); },
+    pickFor: (mid: number) => bets.find((x) => x.mid === mid && x.status === 'OPEN')?.pick,
+    openBet: (match: Match, pick: Pick1X2, odds: number) => {
+      if (!authedRef.current) { toastMsg('Sign up free to place a bet', 'lock', 'var(--gold)'); go('auth', { mode: 'signup' }); return; }
+      setBetSlip({ match, pick, odds });
+    },
+    setSlipPick: (pick: Pick1X2, odds: number) => setBetSlip((b) => (b ? { ...b, pick, odds } : b)),
+    closeBet: () => setBetSlip(null),
+    confirmBet: (stake: number) => {
+      if (!betSlip) return;
+      const { match, pick, odds } = betSlip;
+      setPoints((p) => p - stake);
+      setBets((bs) => {
+        const ex = bs.findIndex((b) => b.mid === match.id && b.status === 'OPEN');
+        const nb: Bet = { mid: match.id, pick, stake, odds, status: 'OPEN' };
+        if (ex >= 0) { const cp = bs.slice(); cp[ex] = nb; return cp; }
+        return [...bs, nb];
+      });
+      setBetSlip(null);
+      toastMsg(`Bet placed · ${stake} pts on ${pick}`, 'check', 'var(--green)');
+    },
+    openBorrow: () => setBorrowOpen(true),
+    closeBorrow: () => setBorrowOpen(false),
+  };
+
+  const Screen = ROUTES[route] || Home;
+  const full = FULLBLEED.includes(route);
+  const active = navKey(route);
+
+  if (full) {
+    return (<><Screen s={store} /><BetSlip s={store} /><Toast toast={toast} /></>);
+  }
+
+  if (!authed) {
+    return (
+      <div>
+        <header className="pubbar">
+          <div className="pubbar-inner">
+            <span className="rail-logo pointer" style={{ padding: 0, fontSize: 24 }} onClick={() => { setStack([]); setRoute('landing'); }}>GOLAZO</span>
+            <nav className="pub-nav">
+              {PUB_NAV.map(([k, l]) => <span key={k} className={`pub-link ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{l}</span>)}
+            </nav>
+            <div className="row gap-10">
+              <Btn variant="ghost" size="sm" onClick={() => go('auth', { mode: 'login' })}>Log in</Btn>
+              <Btn variant="primary" size="sm" onClick={() => go('auth', { mode: 'signup' })}>Sign up free</Btn>
+            </div>
+          </div>
+          <div className="pub-substrip">
+            {PUB_NAV.map(([k, l]) => <button key={k} className={`chip ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{l}</button>)}
+          </div>
+        </header>
+        {route !== 'landing' && <div style={{ height: 8 }} />}
+        <main><div key={route + JSON.stringify(param)}><Screen s={store} /></div></main>
+        {route !== 'landing' && (
+          <div className="wrap" style={{ paddingBottom: 48 }}>
+            <div className="panel card-pad-lg row between wrap gap-16" style={{ background: 'linear-gradient(120deg, var(--green-soft), transparent)' }}>
+              <div className="row gap-16">
+                <Pundit size={64} mood="happy" glow />
+                <div>
+                  <div className="h3">Like what you see?</div>
+                  <p className="t2 small mt-4">Create a free account to claim 1,000 points, place bets and climb the leaderboard.</p>
+                </div>
+              </div>
+              <Btn variant="primary" size="lg" onClick={() => go('auth', { mode: 'signup' })}>Claim 1,000 points →</Btn>
+            </div>
+          </div>
+        )}
+        <BetSlip s={store} />
+        <Toast toast={toast} />
+      </div>
+    );
+  }
+
+  const title = ({ home: 'Home', schedule: 'Matches', match: 'Match', leaderboard: 'Leaderboard', mybets: 'My bets', wallet: 'Wallet', profile: 'Profile', teams: 'Teams', team: 'Team', groups: 'Groups', bracket: 'Bracket', lobbies: 'Lobbies', lobby: 'Lobby', 'lobby-create': 'New lobby', news: 'News', article: 'Article' } as Record<string, string>)[route] || '';
+
+  return (
+    <div className="with-rail">
+      <aside className="rail">
+        <div className="rail-logo pointer" onClick={() => go('home')}>GOLAZO</div>
+        <div className="stack gap-2" style={{ overflowY: 'auto', flex: 1 }}>
+          {RAIL.map((grp, gi) => (
+            <div key={gi} style={{ marginTop: grp.sec ? 14 : 0 }}>
+              {grp.sec && <div className="eyebrow" style={{ padding: '0 12px 6px' }}>{grp.sec}</div>}
+              {grp.items.map(([k, l, ic]) => (
+                <button key={k} className={`nav-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={19} />{l}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <button className="nav-i" onClick={() => go('admin')} style={{ marginTop: 8 }}><Icon name="shield" size={19} />Admin</button>
+        <div className="card card-pad row gap-10" style={{ marginTop: 8 }}>
+          <Avatar initials="AR" size={34} color="var(--gold)" />
+          <div style={{ minWidth: 0 }}><div className="small ellip" style={{ fontWeight: 700 }}>{WC.me.name}</div><div className="tiny text-gold tnum">{points.toLocaleString()} pts</div></div>
+        </div>
+      </aside>
+
+      <div className="topbar">
+        <div className="row gap-12">
+          <span className="only-mobile rail-logo" style={{ padding: 0, fontSize: 22 }} onClick={() => go('home')}>GOLAZO</span>
+          <span className="h3 hide-mobile">{title}</span>
+        </div>
+        <div className="row gap-10">
+          <button className="points-pill" onClick={() => go('wallet')}>
+            <Icon name="wallet" size={16} style={{ color: 'var(--gold)' }} />
+            <span className="tnum" style={{ fontWeight: 700, color: 'var(--gold)' }}>{points.toLocaleString()}</span>
+          </button>
+          <button className="btn-icon btn-ghost rel" onClick={() => toastMsg('No new notifications', 'bell')}>
+            <Icon name="bell" size={18} />
+            <span className="abs" style={{ top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: 'var(--magenta)' }} />
+          </button>
+        </div>
+      </div>
+
+      <main className="main"><div key={route + JSON.stringify(param)}><Screen s={store} /></div></main>
+
+      <nav className="tabs">
+        {TABS.map(([k, l, ic]) => (
+          <button key={k} className={`tab-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={21} />{l}</button>
+        ))}
+      </nav>
+
+      <BetSlip s={store} />
+      <BorrowModal s={store} />
+      <Toast toast={toast} />
+    </div>
+  );
+}
