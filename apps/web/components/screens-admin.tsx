@@ -754,18 +754,30 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
 
 /* ===================== REVIEW QUEUE ===================== */
 function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
+  const [queue, setQueue] = useState<ReviewItem[]>(WC.reviewQueue);
+  const load = () =>
+    fetch('/api/v1/admin/news')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setQueue(j.data); })
+      .catch(() => {});
+  useEffect(() => { void load(); }, []);
+  const decide = async (id: number, action: 'approve' | 'reject') => {
+    try { await fetch(`/api/v1/admin/news/${id}/${action}`, { method: 'POST' }); await load(); }
+    catch { /* keep current queue */ }
+  };
+  const badge = (st: string) => (st === 'PUBLISHED' || st === 'APPROVED' ? 'green' : st === 'REJECTED' ? 'danger' : 'muted');
   return (
     <div>
       <SecHead title="News review queue" sub="Tap a story to read the full draft before approving" />
       <div className="stack gap-12">
-        {WC.reviewQueue.map((a: ReviewItem) => (
+        {queue.map((a: ReviewItem) => (
           <div key={a.id} className="card card-pad card-hover pointer" onClick={() => open('news', a.id)}>
             <div className="row between wrap gap-10">
               <div style={{ minWidth: 0 }}>
                 <div className="row gap-8">
                   <span className="badge badge-sky">{a.tag}</span>
                   {a.warn && <span className="badge badge-gold">⚠ Verify claims</span>}
-                  <span className={`badge badge-${a.status === 'APPROVED' ? 'green' : 'muted'}`}>{a.status}</span>
+                  <span className={`badge badge-${badge(a.status)}`}>{a.status}</span>
                 </div>
                 <div className="h3 mt-8" style={{ fontSize: 16 }}>{a.title}</div>
                 <div className="tiny muted mt-4">
@@ -775,7 +787,10 @@ function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
               </div>
               <div className="row gap-8" style={{ alignSelf: 'center' }}>
                 {a.status === 'PENDING' && (
-                  <Btn variant="primary" size="sm" icon="eye" onClick={(e) => { e.stopPropagation(); open('news', a.id); }}>Review</Btn>
+                  <>
+                    <Btn variant="primary" size="sm" icon="check" onClick={(e) => { e.stopPropagation(); void decide(a.id, 'approve'); }}>Approve</Btn>
+                    <Btn variant="ghost" size="sm" icon="ban" onClick={(e) => { e.stopPropagation(); void decide(a.id, 'reject'); }}>Reject</Btn>
+                  </>
                 )}
                 <Icon name="chevR" size={16} className="muted" />
               </div>

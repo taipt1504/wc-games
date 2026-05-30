@@ -163,4 +163,37 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
     const banned = await withDb((p) => p.user.findUnique({ where: { email: victimEmail } }));
     expect(banned?.status).toBe('BANNED');
   });
+
+  test('admin approves an AI news draft -> it appears on the public feed (human-in-the-loop)', async ({ page }) => {
+    const stamp = Date.now();
+    const adminEmail = `newsadmin_${stamp}@golazo.test`;
+    const SPAIN = 'Spain edge Germany in a tactical classic'; // seeded PENDING draft
+    await withDb(async (p) => {
+      await registerUser(p, { email: adminEmail, username: `newsadmin${stamp}`, password: 'password123' });
+      await p.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /I have an account/i }).click();
+    await page.getByPlaceholder('you@email.com').fill(adminEmail);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.getByRole('button', { name: 'Log in' }).last().click();
+    await expect(page.getByText("Today's matches")).toBeVisible();
+
+    // Admin -> Review queue -> the seeded draft is PENDING
+    await page.locator('.rail').getByText('Admin').click();
+    await page.getByRole('button', { name: 'Review queue' }).click();
+    const spainCard = page.locator('.card', { hasText: SPAIN });
+    await expect(spainCard).toBeVisible();
+    await expect(spainCard.getByText('PENDING')).toBeVisible();
+
+    // approve it (POST /admin/news/:id/approve) -> badge flips to PUBLISHED
+    await spainCard.getByRole('button', { name: 'Approve' }).click();
+    await expect(spainCard.getByText('PUBLISHED')).toBeVisible();
+
+    // public feed (GET /api/v1/news, PUBLISHED-only) now surfaces it
+    await page.getByRole('button', { name: /Back to app/i }).click();
+    await page.locator('.rail').getByText('News').click();
+    await expect(page.getByText(SPAIN).first()).toBeVisible();
+  });
 });

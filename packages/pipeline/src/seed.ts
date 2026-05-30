@@ -56,3 +56,33 @@ export async function seedTournament(prisma: PrismaClient): Promise<{ teams: num
 
   return { teams: teams.length, matches: matches.length };
 }
+
+// Deterministic AI-draft news for the review queue (ADMIN-05). In production these rows
+// are written by the worker's LlmGateway/news job; here they stand in as PENDING drafts so
+// the human-in-the-loop approve→PUBLISHED flow is exercisable. Idempotent: skips if any exist.
+const NEWS_DRAFTS = [
+  {
+    title: 'Spain edge Germany in a tactical classic',
+    body: 'A disciplined Spain side broke a stubborn Germany with a second-half goal, controlling midfield throughout. For entertainment only — not betting advice.',
+    tags: ['Result'],
+    sourceUrl: 'https://goalwire.example/spain-germany',
+  },
+  {
+    title: 'Brazil preview: Vinícius set to start against Nigeria',
+    body: 'Brazil are expected to field Vinícius from the first whistle as they chase top spot in the group. For entertainment only — not betting advice.',
+    tags: ['Match Preview'],
+    sourceUrl: 'https://goalwire.example/brazil-nigeria',
+  },
+  {
+    title: 'Transfer buzz: midfielder eyeing a summer switch',
+    body: 'Unconfirmed reports link a tournament standout with a move after the finals. Treat as rumour. For entertainment only — not betting advice.',
+    tags: ['Transfer Buzz'],
+    sourceUrl: 'https://mercato.example/buzz',
+  },
+];
+
+export async function seedNews(prisma: PrismaClient): Promise<number> {
+  if ((await prisma.newsArticle.count()) > 0) return 0; // status defaults to PENDING
+  await prisma.newsArticle.createMany({ data: NEWS_DRAFTS });
+  return NEWS_DRAFTS.length;
+}

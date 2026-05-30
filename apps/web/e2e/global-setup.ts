@@ -1,5 +1,5 @@
 import { PrismaClient } from '@wc/db';
-import { seedTournament } from '@wc/pipeline';
+import { seedTournament, seedNews } from '@wc/pipeline';
 
 const TEST_DB = 'postgresql://wc:wc@localhost:5433/wc_game';
 
@@ -10,8 +10,10 @@ export default async function globalSetup() {
   // so one CASCADE truncate clears it all (lobbies, predictions, ledger, …) while
   // leaving the seeded tournament intact. Keeps cross-run e2e deterministic.
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "User" CASCADE');
+  await prisma.newsArticle.deleteMany(); // fresh PENDING review queue each run (no FK to User)
   const r = await seedTournament(prisma);
+  const news = await seedNews(prisma);
   // eslint-disable-next-line no-console
-  console.log('[e2e] seeded test DB', r);
+  console.log('[e2e] seeded test DB', r, 'news drafts', news);
   await prisma.$disconnect();
 }

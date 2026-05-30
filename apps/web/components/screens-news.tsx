@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — News list · Article (ported from design screens-news.jsx) */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, SecHead } from '@/components/ui';
@@ -23,7 +23,14 @@ const TAGS = ['All', 'Match Preview', 'Squad News', 'Analysis', 'Transfer Buzz',
 /* ===================== NEWS ===================== */
 export function News({ s }: ScreenProps) {
   const [tag, setTag] = useState('All');
-  const list = news.filter(n => tag === 'All' || n.tag === tag);
+  const [items, setItems] = useState<NewsItem[]>(news);
+  useEffect(() => {
+    fetch('/api/v1/news')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setItems(j.data as NewsItem[]); })
+      .catch(() => {});
+  }, []);
+  const list = items.filter(n => tag === 'All' || n.tag === tag);
   const lead = list[0];
   return (
     <div className="page fade-up">
