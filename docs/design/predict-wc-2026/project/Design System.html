@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GOLAZO — Design System</title>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  .ds-wrap{ max-width:1100px; margin:0 auto; padding:48px 24px 120px; position:relative; z-index:1; }
+  .ds-sec{ margin-top:56px; }
+  .ds-sec > .eyebrow{ margin-bottom:18px; display:block; }
+  .swatch{ height:88px; border-radius:var(--r-md); border:1px solid var(--line); display:flex; align-items:flex-end; padding:10px; }
+  .sw-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .demo{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+  .specimen{ border-bottom:1px solid var(--line); padding:14px 0; }
+</style>
+</head>
+<body>
+<div class="app-bg"></div>
+<div class="ds-wrap">
+
+  <!-- Header -->
+  <div class="row gap-16">
+    <div class="display" style="font-size:44px; background:linear-gradient(100deg,var(--green),var(--sky)); -webkit-background-clip:text; background-clip:text; color:transparent;">GOLAZO</div>
+    <span class="badge badge-green">Design System</span>
+  </div>
+  <p class="lead" style="margin-top:10px; max-width:640px;">The visual language for the World Cup 2026 prediction game. Sporty, high-energy, dark-first — built for fast bets, big numbers, and bragging rights.</p>
+
+  <!-- Colors -->
+  <div class="ds-sec">
+    <span class="eyebrow">Color</span>
+    <div class="sw-grid">
+      <div class="swatch" style="background:var(--bg)"><span class="tiny mono">--bg</span></div>
+      <div class="swatch" style="background:var(--surface)"><span class="tiny mono">--surface</span></div>
+      <div class="swatch" style="background:var(--surface-2)"><span class="tiny mono">--surface-2</span></div>
+      <div class="swatch" style="background:var(--green); color:var(--on-accent)"><span class="tiny mono">--green</span></div>
+      <div class="swatch" style="background:var(--gold); color:#1a1400"><span class="tiny mono">--gold</span></div>
+      <div class="swatch" style="background:var(--sky); color:#04130b"><span class="tiny mono">--sky</span></div>
+      <div class="swatch" style="background:var(--magenta); color:#fff"><span class="tiny mono">--magenta</span></div>
+      <div class="swatch" style="background:var(--danger); color:#fff"><span class="tiny mono">--danger</span></div>
+    </div>
+    <p class="small muted mt-12">Green drives action & wins · Gold marks points, streaks & rewards · Sky is AI & info · Magenta flags live & hot · Red is loss & risk.</p>
+  </div>
+
+  <!-- Type -->
+  <div class="ds-sec">
+    <span class="eyebrow">Typography</span>
+    <div class="panel card-pad-lg">
+      <div class="specimen"><div class="muted tiny mono">Archivo 900 · Display</div><div class="display" style="font-size:46px">Goalazo Tonight</div></div>
+      <div class="specimen"><div class="muted tiny mono">Archivo 800 · H1 / H2</div><div class="h1">Predict every match</div></div>
+      <div class="specimen"><div class="muted tiny mono">Sora · Body & lead</div><p class="lead">Stake your virtual points, ride the odds, and climb the global leaderboard across all 104 matches.</p></div>
+      <div class="specimen" style="border:0"><div class="muted tiny mono">Space Mono · Odds, points, stats</div><div class="row gap-16 mt-8"><span class="tnum" style="font-size:28px; font-weight:700">2.40</span><span class="tnum text-green" style="font-size:28px; font-weight:700">+775</span><span class="tnum text-gold" style="font-size:28px; font-weight:700">2,840</span></div></div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="ds-sec">
+    <span class="eyebrow">Buttons</span>
+    <div class="row gap-12 wrap-w">
+      <button class="btn btn-primary">Place bet</button>
+      <button class="btn btn-gold">Claim +200</button>
+      <button class="btn btn-ghost">View match</button>
+      <button class="btn btn-outline">Filter</button>
+      <button class="btn btn-danger">Ban user</button>
+      <button class="btn btn-primary" disabled>Locked</button>
+    </div>
+  </div>
+
+  <!-- Chips & badges -->
+  <div class="ds-sec">
+    <span class="eyebrow">Chips · Badges · Tiers</span>
+    <div class="row gap-10 wrap-w" style="margin-bottom:14px">
+      <span class="chip active">All</span><span class="chip">Today</span><span class="chip">Group Stage</span><span class="chip">My Teams</span>
+    </div>
+    <div class="row gap-10 wrap-w">
+      <span class="badge badge-green">Won</span><span class="badge badge-gold">Streak ×6</span>
+      <span class="badge badge-sky">AI Pick</span><span class="badge badge-magenta"><span class="live-dot"></span>Live 67'</span>
+      <span class="badge badge-danger">Lost</span><span class="badge badge-muted">FT</span>
+    </div>
+    <div class="row gap-10 wrap-w mt-16" id="tiers"></div>
+  </div>
+
+  <!-- Odds + match card -->
+  <div class="ds-sec">
+    <span class="eyebrow">Match card · Odds selector</span>
+    <div class="demo" id="cards"></div>
+  </div>
+
+  <!-- Flags -->
+  <div class="ds-sec">
+    <span class="eyebrow">Team crests</span>
+    <div class="row gap-16 wrap-w" id="flags"></div>
+  </div>
+
+  <!-- Pundit -->
+  <div class="ds-sec">
+    <span class="eyebrow">AI Pundit · "Ora"</span>
+    <div class="panel card-pad-lg row gap-20 wrap-w">
+      <div class="row gap-16">
+        <div id="pu1"></div><div id="pu2"></div><div id="pu3"></div>
+      </div>
+      <div class="grow" style="min-width:240px">
+        <div class="h3">Meet Ora</div>
+        <p class="t2 small mt-8">Your AI broadcast owl. Reads real fixtures & form to serve match previews, a grounded "smart pick", and head-to-head context — always with a "for fun, not betting advice" disclaimer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat tiles -->
+  <div class="ds-sec">
+    <span class="eyebrow">Stat tiles</span>
+    <div class="row gap-16 wrap-w">
+      <div class="card card-pad stat"><span class="s-val text-gold tnum">2,840</span><span class="s-lbl">Point balance</span></div>
+      <div class="card card-pad stat"><span class="s-val text-green tnum">+18.4%</span><span class="s-lbl">ROI</span></div>
+      <div class="card card-pad stat"><span class="s-val tnum">#1,287</span><span class="s-lbl">Global rank</span></div>
+      <div class="card card-pad stat"><span class="s-val text-magenta tnum">🔥 6</span><span class="s-lbl">Day streak</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="data.js"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel">
+  const mk = (id, el) => ReactDOM.createRoot(document.getElementById(id)).render(el);
+  mk('tiers', <>{['Legend','Diamond','Platinum','Gold','Silver','Bronze'].map(t => <TierPill key={t} tier={t} />)}</>);
+  mk('cards', <>
+    <MatchCard m={WC.matchById(23)} />
+    <MatchCard m={WC.matchById(14)} />
+  </>);
+  mk('flags', <>{[12,16,20,24,28,8,0,4].map(i => <Flag key={i} team={i} size={44} showCode />)}</>);
+  mk('pu1', <Pundit size={64} mood="happy" glow />);
+  mk('pu2', <Pundit size={64} mood="idle" />);
+  mk('pu3', <Pundit size={64} mood="think" />);
+</script>
+</body>
+</html>
