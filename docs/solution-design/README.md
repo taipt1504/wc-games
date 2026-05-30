@@ -23,14 +23,14 @@ Thiết kế kiến trúc, dẫn xuất từ [PRD](../prd/README.md). Trạng th
 
 TypeScript · **Next.js** (FE SSR/PWA + API/BFF) · **Node/NestJS Worker** (BullMQ) · **Realtime Gateway** (Socket.io + Redis) · **PostgreSQL** (Prisma) · **Redis** · **Object Storage** (S3) · **9router** → Anthropic/OpenAI.
 
-## Service Design (kế hoạch — sau checkpoint)
+## Service Design
 
 | Ưu tiên | Service Design |
 |---|---|
-| **Full** ⭐ | Prediction & Scoring & Settlement (scoring 1X2 + bonus, settle idempotent, ROI leaderboard, bracket, futures) |
-| Medium | Auth & Account + Wallet/Ledger |
-| Medium | Tournament Data + AI/Pipeline (9router) |
-| Light | Lobby · Engagement · Social · Admin & Risk · News |
+| **Full** ⭐ | [Prediction & Scoring & Settlement](./2026-05-30-prediction-scoring-service-design.md) — scoring 1X2 + bonus, settle idempotent, ROI leaderboard, bracket, futures |
+| Medium | [Auth & Account + Wallet/Ledger](./2026-05-30-auth-account-service-design.md) |
+| Medium | [Tournament Data + AI/Pipeline (9router)](./2026-05-30-data-ai-pipeline-service-design.md) |
+| Light | [Supporting modules](./2026-05-30-supporting-modules-service-design.md) — Lobby · Engagement · Social · Admin & Risk · News |
 
 ## Liên kết PRD
 
