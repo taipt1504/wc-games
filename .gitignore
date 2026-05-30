@@ -1,0 +1,13 @@
+# OS
+.DS_Store
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies / build (cho code sau này)
+node_modules/
+dist/
+build/
+*.log
