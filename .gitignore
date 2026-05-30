@@ -25,3 +25,9 @@ packages/db/generated/
 
 # Test
 coverage/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
