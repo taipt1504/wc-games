@@ -1,36 +1,57 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { placeBet } from '@wc/prediction';
+import { prisma } from '@/lib/db';
+import { getSessionUser } from '@/lib/session';
 
-// Đặt kèo 1X2 — schema theo Prediction & Scoring Service Design (UC-04).
-const PlaceBetSchema = z.object({
-  matchId: z.coerce.bigint(),
-  context: z.object({
-    type: z.enum(['GLOBAL', 'LOBBY']),
-    id: z.coerce.bigint().optional(),
-  }),
-  outcome: z.enum(['HOME', 'DRAW', 'AWAY']), // map: HOME='1', DRAW='X', AWAY='2'
-  stake: z.coerce.bigint().positive(),
-  exactScore: z.object({ home: z.number().int().min(0), away: z.number().int().min(0) }).optional(),
+// Place a 1X2 bet (GLOBAL context). Source of truth: Prediction Service Design UC-04.
+const Schema = z.object({
+  matchId: z.coerce.number().int().positive(),
+  outcome: z.enum(['1', 'X', '2']),
+  stake: z.coerce.number().int().positive(),
 });
 
+const ERR_STATUS: Record<string, number> = {
+  MATCH_NOT_FOUND: 404,
+  BET_LOCKED: 409,
+  ODDS_UNAVAILABLE: 409,
+  INSUFFICIENT_BALANCE: 422,
+  INVALID_STAKE: 422,
+};
+
 export async function POST(req: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 });
+
   const body = await req.json().catch(() => null);
-  const parsed = PlaceBetSchema.safeParse(body);
+  const parsed = Schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: { code: 'VALIDATION_ERROR', message: 'Invalid body', details: parsed.error.issues } },
-      { status: 422 },
-    );
+    return NextResponse.json({ error: { code: 'VALIDATION_ERROR', details: parsed.error.issues } }, { status: 422 });
   }
 
-  // TODO (P0) — implement theo docs/solution-design Prediction&Scoring SD, UC-04:
-  //   1) lấy userId từ session (Auth)
-  //   2) DB tx: SELECT match (kickoff,status) + match_odds; SELECT wallet FOR UPDATE
-  //   3) check now < kickoff & stake <= balance & chưa có kèo (match,context)
-  //   4) wallet.balance -= stake; INSERT point_ledger(STAKE); INSERT prediction(OPEN, oddsSnapshot)
-  //   5) COMMIT; invalidate cache; trả 201 + potentialPayout
-  return NextResponse.json(
-    { error: { code: 'NOT_IMPLEMENTED', message: 'Stub — xem Prediction & Scoring Service Design (UC-04)' } },
-    { status: 501 },
-  );
+  try {
+    const pred = await placeBet(prisma, {
+      userId: user.id,
+      matchId: BigInt(parsed.data.matchId),
+      pick: parsed.data.outcome,
+      stake: BigInt(parsed.data.stake),
+    });
+    return NextResponse.json(
+      {
+        data: {
+          id: pred.id,
+          status: pred.status,
+          outcome: pred.outcome,
+          stake: pred.stake,
+          oddsSnapshot: pred.oddsSnapshot.toString(),
+        },
+      },
+      { status: 201 },
+    );
+  } catch (e) {
+    const code = (e as Error).message;
+    const status = ERR_STATUS[code];
+    if (status) return NextResponse.json({ error: { code } }, { status });
+    throw e;
+  }
 }
