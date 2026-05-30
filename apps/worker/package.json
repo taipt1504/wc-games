@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@wc/db": "workspace:*",
+    "@wc/prediction": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "bullmq": "^5.21.0",

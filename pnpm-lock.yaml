@@ -84,6 +84,9 @@ importers:
       '@wc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@wc/prediction':
+        specifier: workspace:*
+        version: link:../../packages/prediction
       bullmq:
         specifier: ^5.21.0
         version: 5.77.6
