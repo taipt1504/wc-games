@@ -84,9 +84,40 @@ export default function AppShell() {
   const store: Store = {
     route, param, points, bets, streak, checkedIn, betSlip, borrowOpen, toast, authed,
     go, back, toastMsg,
-    login: () => { authedRef.current = true; setAuthed(true); setStack([]); setRoute('home'); setParam({}); toastMsg('Welcome! +1,000 points added 🎉', 'star', 'var(--gold)'); },
-    logout: () => { authedRef.current = false; setAuthed(false); setStack([]); setRoute('landing'); setParam({}); },
-    checkin: () => { if (checkedIn) return; setPoints((p) => p + 300); setStreak((s) => s + 1); setCheckedIn(true); toastMsg('Checked in! +300 points', 'fire', 'var(--gold)'); },
+    login: async (email?: string, password?: string, mode?: string) => {
+      const endpoint = mode === 'login' ? 'login' : 'register';
+      try {
+        const res = await fetch(`/api/v1/auth/${endpoint}`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          const code = j?.error?.code;
+          toastMsg(
+            code === 'EMAIL_TAKEN' ? 'Email already registered — log in instead'
+              : code === 'INVALID_CREDENTIALS' ? 'Wrong email or password'
+                : 'Authentication failed',
+            'alert', 'var(--danger)',
+          );
+          return;
+        }
+        authedRef.current = true; setAuthed(true); setStack([]); setRoute('home'); setParam({});
+        toastMsg(endpoint === 'register' ? 'Welcome! +1,000 points added 🎉' : 'Welcome back!', 'star', 'var(--gold)');
+      } catch {
+        toastMsg('Network error — try again', 'alert', 'var(--danger)');
+      }
+    },
+    logout: () => { void fetch('/api/v1/auth/logout', { method: 'POST' }); authedRef.current = false; setAuthed(false); setStack([]); setRoute('landing'); setParam({}); },
+    checkin: async () => {
+      if (checkedIn) return;
+      try {
+        const res = await fetch('/api/v1/checkin', { method: 'POST' });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok) { setPoints(Number(j.data.balance)); setStreak((s) => s + 1); setCheckedIn(true); toastMsg(`Checked in! +${j.data.reward} points`, 'fire', 'var(--gold)'); }
+        else { setCheckedIn(true); toastMsg(j?.error?.code === 'ALREADY_CHECKED_IN' ? 'Already checked in today' : 'Check-in failed', 'alert', 'var(--gold)'); }
+      } catch { toastMsg('Network error', 'alert', 'var(--danger)'); }
+    },
     claimMission: (id: number) => { const m = WC.missions.find((x) => x.id === id); if (!m || m.claimed) return; m.claimed = true; setPoints((p) => p + m.reward); toastMsg(`Mission complete! +${m.reward}`, 'target', 'var(--purple)'); },
     pickFor: (mid: number) => bets.find((x) => x.mid === mid && x.status === 'OPEN')?.pick,
     openBet: (match: Match, pick: Pick1X2, odds: number) => {
@@ -95,9 +126,25 @@ export default function AppShell() {
     },
     setSlipPick: (pick: Pick1X2, odds: number) => setBetSlip((b) => (b ? { ...b, pick, odds } : b)),
     closeBet: () => setBetSlip(null),
-    confirmBet: (stake: number) => {
+    confirmBet: async (stake: number) => {
       if (!betSlip) return;
       const { match, pick, odds } = betSlip;
+      try {
+        const res = await fetch('/api/v1/predictions', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ matchId: match.id, outcome: pick, stake }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          setBetSlip(null);
+          toastMsg(j?.error?.code ? `Bet failed: ${j.error.code}` : 'Bet failed', 'alert', 'var(--danger)');
+          return;
+        }
+      } catch {
+        setBetSlip(null);
+        toastMsg('Network error — bet not placed', 'alert', 'var(--danger)');
+        return;
+      }
       setPoints((p) => p - stake);
       setBets((bs) => {
         const ex = bs.findIndex((b) => b.mid === match.id && b.status === 'OPEN');

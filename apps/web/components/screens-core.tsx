@@ -98,6 +98,8 @@ export function Landing({ s }: ScreenProps) {
 export function Auth({ s }: ScreenProps) {
   const [mode, setMode] = useState<string>((s.param?.mode as string) || 'signup');
   const signup = mode === 'signup';
+  const [email, setEmail] = useState('alex@email.com');
+  const [password, setPassword] = useState('password');
   return (
     <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr', placeItems: 'center', padding: 20 }}>
       <div className="row" style={{ width: '100%', maxWidth: 920, gap: 0, borderRadius: 'var(--r-xl)', overflow: 'hidden', boxShadow: 'var(--sh-3)' }}>
@@ -122,12 +124,12 @@ export function Auth({ s }: ScreenProps) {
           <p className="small muted mt-4">{signup ? 'It takes 30 seconds. 1,000 points are waiting.' : 'Pick up your streak where you left off.'}</p>
           <div className="stack gap-16" style={{ marginTop: 24 }}>
             {signup && <div className="field"><label className="label">Username</label><input className="input" placeholder="midfield_maestro" defaultValue="alexr" /></div>}
-            <div className="field"><label className="label">Email</label><input className="input" placeholder="you@email.com" defaultValue="alex@email.com" /></div>
-            <div className="field"><label className="label">Password</label><input className="input" type="password" defaultValue="password" /></div>
+            <div className="field"><label className="label">Email</label><input className="input" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+            <div className="field"><label className="label">Password</label><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
             {!signup && <div className="row between"><label className="row gap-8 small t2"><input type="checkbox" defaultChecked /> Remember me</label><a className="small text-sky">Forgot password?</a></div>}
-            <Btn variant="primary" size="lg" className="btn-block" onClick={() => s.login()}>{signup ? 'Claim 1,000 points & play' : 'Log in'}</Btn>
+            <Btn variant="primary" size="lg" className="btn-block" onClick={() => s.login(email, password, mode)}>{signup ? 'Claim 1,000 points & play' : 'Log in'}</Btn>
             <div className="row center gap-12"><div className="hr grow" /><span className="tiny muted">OR</span><div className="hr grow" /></div>
-            <Btn variant="ghost" className="btn-block" onClick={() => s.login()}>Continue with Google</Btn>
+            <Btn variant="ghost" className="btn-block" onClick={() => s.toastMsg('Social login coming soon', 'alert', 'var(--sky)')}>Continue with Google</Btn>
             <p className="tiny muted" style={{ textAlign: 'center' }}>By continuing you agree these are virtual points for entertainment, with no cash value.</p>
           </div>
         </div>

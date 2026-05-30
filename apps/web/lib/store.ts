@@ -22,7 +22,7 @@ export interface Store {
   go: (r: string, p?: Record<string, unknown>) => void;
   back: () => void;
   toastMsg: (msg: string, icon?: string, color?: string) => void;
-  login: () => void;
+  login: (email?: string, password?: string, mode?: string) => void;
   logout: () => void;
   checkin: () => void;
   claimMission: (id: number) => void;
