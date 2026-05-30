@@ -82,7 +82,7 @@ Quản lý toàn bộ vòng đời dự đoán & điểm: đặt kèo (escrow), 
 | 1 | Nhận event `match.finished` → enqueue job `settle:{matchId}` |
 | 2 | Worker acquire **advisory lock** `matchId`; kiểm tra `settlement(matchId)` chưa `DONE` (idempotent guard) |
 | 3 | Tính `result_90 ∈ {1,X,2}` từ score 90' |
-| 4 | Lặp batch prediction `LOCKED` của trận: tính payout (§ scoring); set `WON/LOST`; tx: `wallet+=payout` + `ledger(SETTLE,+payout)` + cập nhật `prediction_user_stats` (total_staked/returned/settled_count/win) |
+| 4 | Lặp batch prediction `LOCKED` của trận (cả global + lobby): tính payout (§ scoring); set `WON/LOST`; tx: `wallet+=payout` + `ledger(SETTLE,+payout)`. **Chỉ cập nhật `prediction_user_stats` cho kèo `context=GLOBAL`** (kèo lobby KHÔNG tính vào ROI global — lobby xếp hạng bằng `score_lobby`) |
 | 5 | Nếu knockout: enqueue `bracket.score` + settle market futures liên quan |
 | 6 | Đánh dấu `settlement(matchId)=DONE`; enqueue `leaderboard.recompute`; publish `settled` (pub/sub) |
 
@@ -163,7 +163,7 @@ sequenceDiagram
     alt Chưa settle và tỉ số hợp lệ
         W->>DB: result_90 = f(score90)
         loop batch prediction LOCKED của match
-            W->>DB: tx: set WON/LOST + wallet+=payout + ledger SETTLE + update user_stats
+            W->>DB: tx: set WON/LOST + wallet+=payout + ledger SETTLE + update user_stats (chỉ GLOBAL)
         end
         W->>DB: settlement=DONE
         W->>Q: enqueue leaderboard.recompute + bracket.score (nếu knockout)
@@ -267,7 +267,8 @@ CREATE TABLE settlement (
     settled_by   VARCHAR(16) NOT NULL DEFAULT 'SYSTEM'
 );
 
--- Aggregate cho leaderboard ROI (global).
+-- Aggregate cho leaderboard ROI — CHỈ tổng hợp kèo context=GLOBAL.
+-- (Kèo lobby KHÔNG ghi vào đây; lobby xếp hạng bằng score_lobby.) Do đó key chỉ cần user_id.
 CREATE TABLE prediction_user_stats (
     user_id        BIGINT PRIMARY KEY,
     total_staked   BIGINT NOT NULL DEFAULT 0,
