@@ -16,7 +16,9 @@
     "test:e2e": "pnpm --filter @wc/web exec playwright test",
     "db:generate": "pnpm --filter @wc/db run prisma:generate",
     "db:migrate": "pnpm --filter @wc/db run prisma:migrate",
+    "db:deploy": "pnpm --filter @wc/db run prisma:deploy",
     "db:studio": "pnpm --filter @wc/db run prisma:studio",
+    "seed": "pnpm --filter @wc/pipeline run seed",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },

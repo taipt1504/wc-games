@@ -202,7 +202,7 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
     await expect(page.getByText("Today's matches")).toBeVisible();
 
     // role-gated Admin nav appears only for admins (GET /me -> role) -> open the console
-    await page.locator('.rail').getByText('Admin').click();
+    await page.locator('.rail').getByRole('button', { name: 'Admin', exact: true }).click();
     await expect(page.getByText('Admin Console')).toBeVisible();
 
     // Users tab: real DB users are listed (read-side, GET /api/v1/admin/users)
@@ -238,7 +238,7 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
     await expect(page.getByText("Today's matches")).toBeVisible();
 
     // Admin -> Review queue -> the seeded draft is PENDING
-    await page.locator('.rail').getByText('Admin').click();
+    await page.locator('.rail').getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: 'Review queue' }).click();
     const spainCard = page.locator('.card', { hasText: SPAIN });
     await expect(spainCard).toBeVisible();
@@ -250,7 +250,7 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
 
     // public feed (GET /api/v1/news, PUBLISHED-only) now surfaces it
     await page.getByRole('button', { name: /Back to app/i }).click();
-    await page.locator('.rail').getByText('News').click();
+    await page.locator('.rail').getByRole('button', { name: 'News', exact: true }).click();
     await expect(page.getByText(SPAIN).first()).toBeVisible();
   });
 
@@ -277,7 +277,7 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
     expect(loginEntry).toBeTruthy();
 
     // and the admin audit view (GET /api/v1/admin/audit) surfaces LOGIN actions
-    await page.locator('.rail').getByText('Admin').click();
+    await page.locator('.rail').getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: 'Audit log' }).click();
     await expect(page.getByText('LOGIN').first()).toBeVisible();
   });

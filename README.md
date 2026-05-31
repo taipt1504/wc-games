@@ -105,6 +105,23 @@ pnpm test          # unit + integration (serial)
 pnpm test:e2e      # Playwright
 ```
 
+## Production deploy
+
+App chạy trên **real data**, không có mock UI: tournament = fixtures seed vào DB; user/social/admin = đọc từ live API/DB. Mock arrays đã gỡ (`lib/wc.ts` chỉ còn fixtures + neutral guest default cho first-paint).
+
+```bash
+cp .env.example .env          # điền DATABASE_URL / REDIS_URL / JWT_SECRET thật (xem ⚠️ trong file)
+pnpm install && pnpm db:generate && pnpm build
+pnpm db:deploy                # prisma migrate deploy — áp baseline migration 0_init
+pnpm seed                     # seed dữ liệu giải thật (48 đội, 72 trận, odds) vào prod DB
+pnpm --filter @wc/web start   # Next production server (sau next build)
+pnpm --filter @wc/worker start  # NestJS worker (settle/news/auto-publish) — cần Redis
+```
+
+- **Migrations**: `packages/db/prisma/migrations/0_init` là baseline (44 bảng). Schema mới → `pnpm db:migrate` (tạo migration dev) rồi commit; prod chạy `pnpm db:deploy`.
+- **Catalogs** (missions, cosmetics) tự seed lazily lần truy cập đầu — không cần seed thủ công. `seed` chỉ nạp dữ liệu giải (reference data).
+- **Seed admin**: tạo user rồi set role trong DB (`UPDATE "User" SET role='ADMIN' WHERE email=…`) — chưa có CLI tạo admin.
+
 ## Ghi chú kỹ thuật
 - **BigInt**: point amount + id dùng `BigInt`. `BigInt.prototype.toJSON` đã patch ở `apps/web/lib/db.ts`; trả JSON luôn `Number(...)` hoặc import qua `@/lib/db`.
 - **Settle resettle-safe**: mọi bonus (exact/underdog/power-up) là **derived** từ field của Prediction → `resettleMatch` đảo + tính lại đúng; win-streak là **cached-derived** recompute từ dữ liệu settled.
