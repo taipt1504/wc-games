@@ -59,26 +59,24 @@ export async function GET(
   }
   const latencyMs = Date.now() - t0;
 
-  // Persist (fire-and-forget; never breaks the response)
-  void (async () => {
-    try {
-      await prisma.aiPreview.upsert({
-        where: { matchId: id },
-        create: { matchId: id, content: preview.content, provider: preview.provider },
-        update: { content: preview.content, provider: preview.provider },
-      });
-      await prisma.aiJob.create({
-        data: {
-          type: 'preview',
-          providerUsed: preview.provider ?? 'rule-based',
-          status: 'ok',
-          latencyMs,
-        },
-      });
-    } catch {
-      // persistence failure must not break the API response
-    }
-  })();
+  // Persist — awaited so cache and AiJob rows land reliably; failure never breaks the response
+  try {
+    await prisma.aiPreview.upsert({
+      where: { matchId: id },
+      create: { matchId: id, content: preview.content, provider: preview.provider },
+      update: { content: preview.content, provider: preview.provider },
+    });
+    await prisma.aiJob.create({
+      data: {
+        type: 'preview',
+        providerUsed: preview.provider ?? 'rule-based',
+        status: 'ok',
+        latencyMs,
+      },
+    });
+  } catch {
+    // persistence failure must not break the API response
+  }
 
   return NextResponse.json({
     data: {
