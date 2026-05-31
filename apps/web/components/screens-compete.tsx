@@ -231,6 +231,89 @@ export function Wallet({ s }: ScreenProps) {
   );
 }
 
+/* ===================== COSMETIC SHOP (AIMETA-02) ===================== */
+
+interface ShopItem {
+  id: number | string;
+  code: string;
+  name: string;
+  kind: string;
+  price: number | string;
+  owned: boolean;
+  equipped: boolean;
+}
+
+const KIND_ICON: Record<string, string> = { avatar: 'star', frame: 'shield', theme: 'target' };
+
+function CosmeticShop({ s }: ScreenProps) {
+  const [items, setItems] = React.useState<ShopItem[]>([]);
+
+  function fetchShop() {
+    fetch('/api/v1/shop')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data?.length) setItems(j.data); })
+      .catch(() => { /* mock-empty fallback */ });
+  }
+
+  useEffect(() => { if (s.authed) fetchShop(); }, [s.authed]);
+
+  async function handleBuy(code: string) {
+    const res = await fetch('/api/v1/shop/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (res.ok) {
+      s.refreshUser();
+      fetchShop();
+    } else {
+      const j = await res.json().catch(() => ({}));
+      const code2 = j?.error?.code;
+      if (code2 === 'INSUFFICIENT_BALANCE') s.toastMsg('Not enough points', 'alert', 'var(--danger)');
+      else if (code2 === 'ALREADY_OWNED')   s.toastMsg('Already owned', 'alert', 'var(--danger)');
+      else                                  s.toastMsg('Purchase failed', 'alert', 'var(--danger)');
+    }
+  }
+
+  async function handleEquip(id: number | string) {
+    const res = await fetch('/api/v1/shop/equip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: String(id) }),
+    });
+    if (res.ok) fetchShop();
+  }
+
+  if (!s.authed) return null;
+
+  return (
+    <div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Cosmetic shop</div>
+      <div className="stack gap-8">
+        {items.length === 0 && <div className="card card-pad"><span className="tiny muted">Loading items…</span></div>}
+        {items.map((item) => (
+          <div key={item.code} className="card card-pad row between wrap gap-12">
+            <div className="row gap-10">
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
+                <Icon name={KIND_ICON[item.kind] ?? 'star'} size={18} style={{ color: 'var(--gold)' }} />
+              </div>
+              <div>
+                <div className="small" style={{ fontWeight: 700 }}>{item.name}</div>
+                <div className="tiny muted">{item.kind} · <span className="tnum">{Number(item.price)} pts</span></div>
+              </div>
+            </div>
+            <div className="row gap-8">
+              {item.owned
+                ? <Btn variant={item.equipped ? 'primary' : 'ghost'} size="sm" onClick={() => handleEquip(item.id)}>{item.equipped ? 'Equipped' : 'Equip'}</Btn>
+                : <Btn variant="gold" size="sm" onClick={() => handleBuy(item.code)}>Buy</Btn>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ===================== PROFILE ===================== */
 type AchievementDisplay = { name: string; desc: string; icon: string; unlocked: boolean; prog?: string };
 
@@ -451,6 +534,9 @@ export function Profile({ s }: ScreenProps) {
           <Btn variant="primary" size="sm" disabled={pwLoading || !currentPw || !newPw} onClick={handleChangePassword}>{pwLoading ? 'Saving…' : 'Update password'}</Btn>
         </div>
       </div>
+
+      {/* cosmetic shop */}
+      <CosmeticShop s={s} />
 
       <Btn variant="ghost" className="btn-block mt-24" icon="logout" onClick={() => s.logout()}>Log out</Btn>
       <Btn variant="outline" className="btn-block mt-12" icon="shield" onClick={() => s.go('admin')}>Open admin console</Btn>
