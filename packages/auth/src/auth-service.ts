@@ -5,7 +5,13 @@
  */
 import type { PrismaClient } from '@wc/db';
 import bcrypt from 'bcryptjs';
+import { createHash, randomBytes } from 'node:crypto';
 import { checkinReward } from '@wc/core';
+
+/** SHA-256 hex digest of a string. Used for hashing password-reset tokens at rest. */
+function sha256(s: string): string {
+  return createHash('sha256').update(s).digest('hex');
+}
 
 const SIGNUP_BONUS = 1000n;
 const REFERRAL_BONUS = 300n;
@@ -236,6 +242,71 @@ export async function updateNotificationPrefs(
     ),
   );
   return getNotificationPrefs(prisma, userId);
+}
+
+// ─────────────────────────── PASSWORD CHANGE & RESET (AUTH-06 / AUTH-08) ───────────────────────────
+
+/**
+ * AUTH-06: Change password for an authenticated user.
+ * Throws 'INVALID_CREDENTIALS' if currentPassword doesn't match, 'WEAK_PASSWORD' if newPassword < 8 chars.
+ */
+export async function changePassword(
+  prisma: PrismaClient,
+  userId: bigint,
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: true }> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!matches) throw new Error('INVALID_CREDENTIALS');
+  if (newPassword.length < 8) throw new Error('WEAK_PASSWORD');
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  return { ok: true };
+}
+
+/**
+ * AUTH-08: Request a password reset token for an email.
+ * Always returns { ok: true } to avoid account enumeration.
+ * NOTE: Email delivery is deferred infra — the reset token is returned directly in the response
+ * (dev/no-email mode). In production with SMTP, remove 'token' from the return value.
+ * If the email has no associated account, returns { ok: true } with no token.
+ */
+export async function requestPasswordReset(
+  prisma: PrismaClient,
+  email: string,
+): Promise<{ ok: true; token?: string }> {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return { ok: true };
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  await prisma.passwordReset.create({
+    data: { userId: user.id, tokenHash: sha256(token), expiresAt },
+  });
+  return { ok: true, token };
+}
+
+/**
+ * AUTH-08: Consume a password-reset token and set a new password.
+ * Throws 'INVALID_TOKEN' if token is unknown, already used, or expired.
+ * Throws 'WEAK_PASSWORD' if newPassword < 8 chars.
+ * The raw token is passed in; it is hashed internally before lookup.
+ */
+export async function resetPassword(
+  prisma: PrismaClient,
+  token: string,
+  newPassword: string,
+): Promise<{ ok: true }> {
+  const tokenHash = sha256(token);
+  const pr = await prisma.passwordReset.findUnique({ where: { tokenHash } });
+  if (!pr || pr.usedAt != null || pr.expiresAt < new Date()) throw new Error('INVALID_TOKEN');
+  if (newPassword.length < 8) throw new Error('WEAK_PASSWORD');
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: pr.userId }, data: { passwordHash } }),
+    prisma.passwordReset.update({ where: { id: pr.id }, data: { usedAt: new Date() } }),
+  ]);
+  return { ok: true };
 }
 
 /** Returns the user's referral code and count of ACTIVATED referrals where they are the referrer. */

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@wc/db';
-import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats, getNotificationPrefs, updateNotificationPrefs, NOTIFICATION_TYPES } from './auth-service';
+import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats, getNotificationPrefs, updateNotificationPrefs, NOTIFICATION_TYPES, changePassword, requestPasswordReset, resetPassword } from './auth-service';
 
 const prisma = new PrismaClient();
 
@@ -14,6 +14,7 @@ async function clean() {
   await prisma.referral.deleteMany();
   await prisma.referralCode.deleteMany();
   await prisma.notificationPref.deleteMany();
+  await prisma.passwordReset.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();
 }
@@ -188,5 +189,78 @@ describe('notification prefs (integration · Postgres)', () => {
     expect(updated.streakAtRisk).toBe(false);
     expect(updated.results).toBe(true);
     expect(updated.lobbyAlerts).toBe(true);
+  });
+});
+
+describe('changePassword (integration · Postgres)', () => {
+  let userId: bigint;
+  const initPassword = 'initPass99';
+
+  it('setup: create user for changePassword tests', async () => {
+    const u = await registerUser(prisma, { email: 'changepw@test.io', password: initPassword });
+    userId = u.id;
+  });
+
+  it('wrong current password throws INVALID_CREDENTIALS', async () => {
+    await expect(changePassword(prisma, userId, 'wrongPass', 'newPass99')).rejects.toThrow('INVALID_CREDENTIALS');
+  });
+
+  it('new password shorter than 8 chars throws WEAK_PASSWORD', async () => {
+    await expect(changePassword(prisma, userId, initPassword, 'short')).rejects.toThrow('WEAK_PASSWORD');
+  });
+
+  it('correct current password and valid new password succeeds', async () => {
+    const result = await changePassword(prisma, userId, initPassword, 'newSecure99');
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('verifyLogin works with new password after change', async () => {
+    const u = await verifyLogin(prisma, { email: 'changepw@test.io', password: 'newSecure99' });
+    expect(u.email).toBe('changepw@test.io');
+  });
+
+  it('verifyLogin fails with old password after change', async () => {
+    await expect(verifyLogin(prisma, { email: 'changepw@test.io', password: initPassword })).rejects.toThrow('INVALID_CREDENTIALS');
+  });
+});
+
+describe('password reset flow (integration · Postgres)', () => {
+  let resetToken: string;
+
+  it('setup: create user for reset tests', async () => {
+    await registerUser(prisma, { email: 'resetpw@test.io', password: 'oldPass99' });
+  });
+
+  it('requestPasswordReset returns a token for a known email', async () => {
+    const result = await requestPasswordReset(prisma, 'resetpw@test.io');
+    expect(result.ok).toBe(true);
+    expect(typeof result.token).toBe('string');
+    expect(result.token!.length).toBeGreaterThan(0);
+    resetToken = result.token!;
+  });
+
+  it('requestPasswordReset returns ok:true with no token for an unknown email (no enumeration)', async () => {
+    const result = await requestPasswordReset(prisma, 'nobody@nowhere.io');
+    expect(result.ok).toBe(true);
+    expect(result.token).toBeUndefined();
+  });
+
+  it('resetPassword succeeds and verifyLogin works with new password', async () => {
+    const result = await resetPassword(prisma, resetToken, 'brandNew99');
+    expect(result).toEqual({ ok: true });
+    const u = await verifyLogin(prisma, { email: 'resetpw@test.io', password: 'brandNew99' });
+    expect(u.email).toBe('resetpw@test.io');
+  });
+
+  it('verifyLogin fails with old password after reset', async () => {
+    await expect(verifyLogin(prisma, { email: 'resetpw@test.io', password: 'oldPass99' })).rejects.toThrow('INVALID_CREDENTIALS');
+  });
+
+  it('reusing the same token throws INVALID_TOKEN (token is single-use)', async () => {
+    await expect(resetPassword(prisma, resetToken, 'anotherPass99')).rejects.toThrow('INVALID_TOKEN');
+  });
+
+  it('unknown token throws INVALID_TOKEN', async () => {
+    await expect(resetPassword(prisma, 'deadbeef'.repeat(8), 'anotherPass99')).rejects.toThrow('INVALID_TOKEN');
   });
 });

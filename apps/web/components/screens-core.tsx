@@ -101,6 +101,63 @@ export function Auth({ s }: ScreenProps) {
   const signup = mode === 'signup';
   const [email, setEmail] = useState('alex@email.com');
   const [password, setPassword] = useState('password');
+
+  // Forgot-password inline flow state
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+
+  async function handleForgot() {
+    setForgotLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const json = await res.json();
+      // In dev/no-email mode the token is returned in the response
+      setResetToken(json?.data?.resetToken ?? null);
+    } catch {
+      s.toastMsg('Network error', 'alert', 'var(--danger)');
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  async function handleReset() {
+    if (!resetToken) return;
+    setResetLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, newPassword }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const code = json?.error?.code;
+        if (code === 'INVALID_TOKEN') s.toastMsg('Reset link is invalid or expired', 'alert', 'var(--danger)');
+        else if (code === 'WEAK_PASSWORD') s.toastMsg('Password must be at least 8 characters', 'alert', 'var(--danger)');
+        else s.toastMsg('Password reset failed', 'alert', 'var(--danger)');
+      } else {
+        s.toastMsg('Password reset! Please log in.', 'check', 'var(--green)');
+        setForgotOpen(false);
+        setResetToken(null);
+        setNewPassword('');
+        setForgotEmail('');
+        setMode('login');
+      }
+    } catch {
+      s.toastMsg('Network error', 'alert', 'var(--danger)');
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr', placeItems: 'center', padding: 20 }}>
       <div className="row" style={{ width: '100%', maxWidth: 920, gap: 0, borderRadius: 'var(--r-xl)', overflow: 'hidden', boxShadow: 'var(--sh-3)' }}>
@@ -118,8 +175,8 @@ export function Auth({ s }: ScreenProps) {
         </div>
         <div style={{ flex: 1, background: 'var(--surface)', padding: 'clamp(28px,5vw,44px)', alignSelf: 'stretch' }}>
           <div className="row gap-8" style={{ marginBottom: 24 }}>
-            <button className={`chip ${signup ? 'active' : ''}`} onClick={() => setMode('signup')}>Sign up</button>
-            <button className={`chip ${!signup ? 'active' : ''}`} onClick={() => setMode('login')}>Log in</button>
+            <button className={`chip ${signup ? 'active' : ''}`} onClick={() => { setMode('signup'); setForgotOpen(false); }}>Sign up</button>
+            <button className={`chip ${!signup ? 'active' : ''}`} onClick={() => { setMode('login'); setForgotOpen(false); }}>Log in</button>
           </div>
           <h2 className="h2">{signup ? 'Create your account' : 'Welcome back'}</h2>
           <p className="small muted mt-4">{signup ? 'It takes 30 seconds. 1,000 points are waiting.' : 'Pick up your streak where you left off.'}</p>
@@ -127,7 +184,30 @@ export function Auth({ s }: ScreenProps) {
             {signup && <div className="field"><label className="label">Username</label><input className="input" placeholder="midfield_maestro" defaultValue="alexr" /></div>}
             <div className="field"><label className="label">Email</label><input className="input" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
             <div className="field"><label className="label">Password</label><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-            {!signup && <div className="row between"><label className="row gap-8 small t2"><input type="checkbox" defaultChecked /> Remember me</label><a className="small text-sky">Forgot password?</a></div>}
+            {!signup && (
+              <div className="row between">
+                <label className="row gap-8 small t2"><input type="checkbox" defaultChecked /> Remember me</label>
+                <button className="small text-sky" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => setForgotOpen((v) => !v)}>Forgot password?</button>
+              </div>
+            )}
+            {/* Inline forgot-password flow (dev mode: token returned in response; wire to email in prod) */}
+            {!signup && forgotOpen && (
+              <div className="card card-pad stack gap-12" style={{ background: 'var(--surface-2)' }}>
+                {!resetToken ? (
+                  <>
+                    <p className="small t2">Enter your email and we&apos;ll send a reset link.</p>
+                    <div className="field"><label className="label">Your email</label><input className="input" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@email.com" /></div>
+                    <Btn variant="primary" size="sm" disabled={forgotLoading || !forgotEmail} onClick={handleForgot}>{forgotLoading ? 'Sending…' : 'Send reset link'}</Btn>
+                  </>
+                ) : (
+                  <>
+                    <p className="small t2">Reset link sent! Enter your new password below.</p>
+                    <div className="field"><label className="label">New password</label><input className="input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" /></div>
+                    <Btn variant="primary" size="sm" disabled={resetLoading || !newPassword} onClick={handleReset}>{resetLoading ? 'Resetting…' : 'Reset password'}</Btn>
+                  </>
+                )}
+              </div>
+            )}
             <Btn variant="primary" size="lg" className="btn-block" onClick={() => s.login(email, password, mode)}>{signup ? 'Claim 1,000 points & play' : 'Log in'}</Btn>
             <div className="row center gap-12"><div className="hr grow" /><span className="tiny muted">OR</span><div className="hr grow" /></div>
             <Btn variant="ghost" className="btn-block" onClick={() => s.toastMsg('Social login coming soon', 'alert', 'var(--sky)')}>Continue with Google</Btn>

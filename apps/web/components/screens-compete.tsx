@@ -254,6 +254,9 @@ export function Profile({ s }: ScreenProps) {
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
   const [achievements, setAchievements] = React.useState<AchievementDisplay[]>(WC.achievements);
   const [notifPrefs, setNotifPrefs] = React.useState<NotifPrefs>(defaultNotifPrefs());
+  const [currentPw, setCurrentPw] = React.useState('');
+  const [newPw, setNewPw] = React.useState('');
+  const [pwLoading, setPwLoading] = React.useState(false);
 
   useEffect(() => {
     fetch('/api/v1/me/referral')
@@ -284,6 +287,32 @@ export function Profile({ s }: ScreenProps) {
       .then((j) => { if (j?.data) setNotifPrefs(j.data); })
       .catch(() => { /* fall back to defaults */ });
   }, []);
+
+  async function handleChangePassword() {
+    setPwLoading(true);
+    try {
+      const res = await fetch('/api/v1/me/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const code = json?.error?.code;
+        if (code === 'INVALID_CREDENTIALS') s.toastMsg('Current password is incorrect', 'alert', 'var(--danger)');
+        else if (code === 'WEAK_PASSWORD') s.toastMsg('New password must be at least 8 characters', 'alert', 'var(--danger)');
+        else s.toastMsg('Failed to change password', 'alert', 'var(--danger)');
+      } else {
+        s.toastMsg('Password changed successfully', 'check', 'var(--green)');
+        setCurrentPw('');
+        setNewPw('');
+      }
+    } catch {
+      s.toastMsg('Network error', 'alert', 'var(--danger)');
+    } finally {
+      setPwLoading(false);
+    }
+  }
 
   function handleNotifToggle(key: string, value: boolean) {
     // Optimistic update
@@ -366,6 +395,17 @@ export function Profile({ s }: ScreenProps) {
             <Toggle on={notifPrefs[key] ?? false} onChange={(v) => handleNotifToggle(key, v)} />
           </div>
         ))}
+      </div>
+
+      {/* change password */}
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Security</div>
+      <div className="card card-pad">
+        <div className="row gap-8" style={{ marginBottom: 16 }}><Icon name="shield" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Change password</span></div>
+        <div className="stack gap-12">
+          <div className="field"><label className="label">Current password</label><input className="input" type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="Enter current password" /></div>
+          <div className="field"><label className="label">New password</label><input className="input" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" /></div>
+          <Btn variant="primary" size="sm" disabled={pwLoading || !currentPw || !newPw} onClick={handleChangePassword}>{pwLoading ? 'Saving…' : 'Update password'}</Btn>
+        </div>
       </div>
 
       <Btn variant="ghost" className="btn-block mt-24" icon="logout" onClick={() => s.logout()}>Log out</Btn>
