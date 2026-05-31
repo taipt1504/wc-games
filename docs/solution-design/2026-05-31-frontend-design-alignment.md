@@ -5,6 +5,20 @@
 
 Tài liệu này là **checklist build** cho phần implement. Brand: **GOLAZO**.
 
+### Design provenance & verification (2026-05-31)
+- **Nguồn:** Claude Design share `https://api.anthropic.com/v1/design/h/a0eo169Wls0sIZWdRxlYsw`. Re-fetch hôm nay trả **404 (share link đã hết hạn)** — bản trích xuất verbatim của chính URL đó đã lưu tại [`docs/design/predict-wc-2026/`](../design/predict-wc-2026/) (README + `chats/chat1.md` + `project/*`) là bản gốc dùng để build.
+- **Đã đọc lại** README + toàn bộ `chats/chat1.md` (8 vòng iterate của user). **Final state của design** đã được verify hiện diện trong code port:
+
+| Design feature (chốt trong chat) | Ported |
+|---|---|
+| 7 màn + design system (styles→globals.css, components→ui, app→app-shell, data→lib/wc) | ✅ 1:1 |
+| Formation-pitch lineups | ✅ `LineupsPanel` (screens-match) |
+| Host borrow-request approval queue (Approve-all, Frequent-borrower flag, isHost) | ✅ `LobbyRequests` (screens-lobby) |
+| Lobby: search + join code/link, Your-lobbies vs Discover, isolated workspace, host odds/trận | ✅ screens-lobby |
+| Scope presets (Whole/Group/R32/R16/QF/SF/Final + custom picker) | ✅ screens-lobby |
+| Public guest shell + sign-up wall + public leaderboard | ✅ `pubbar`/`GATED`/`FULLBLEED` (app-shell), Leaderboard guest-aware |
+| Admin detail views: user / lobby-risk / match / team / news-review | ✅ `AdmUserDetail`/`AdmRiskDetail`/`AdmMatchDetail`/`AdmTeamDetail`/`AdmNewsDetail` |
+
 ## 1. Design system GOLAZO (đã port → `apps/web/app/globals.css`)
 Dark, sporty, high-energy. Tokens & component-classes lấy **verbatim** từ `docs/design/.../styles.css`:
 - **Màu:** green `#2BE08A` (action/win), gold `#FFC83D` (point/streak), sky `#3FC0F0` (AI/info), magenta `#FF4D8D` (live), danger `#FF5A65` (loss), purple `#9B7DFF`. Surfaces `#070B16→#20304F`.
