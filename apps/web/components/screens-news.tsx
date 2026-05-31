@@ -16,22 +16,20 @@ type NewsItem = {
   match?: number;
 };
 
-const news = WC.news as NewsItem[];
-
 const TAGS = ['All', 'Match Preview', 'Squad News', 'Analysis', 'Transfer Buzz', 'Result', 'Off-pitch'];
 
 /* ===================== NEWS ===================== */
 export function News({ s }: ScreenProps) {
   const [tag, setTag] = useState('All');
-  const [items, setItems] = useState<NewsItem[]>(news);
+  const [items, setItems] = useState<NewsItem[]>(WC.news as NewsItem[]);
   useEffect(() => {
     fetch('/api/v1/news')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setItems(j.data as NewsItem[]); })
+      .then((j) => { if (j?.data) setItems(j.data as NewsItem[]); })
       .catch(() => {});
   }, []);
   const list = items.filter(n => tag === 'All' || n.tag === tag);
-  const lead = list[0];
+  const lead = list[0] ?? null;
   return (
     <div className="page fade-up">
       <SecHead title="World Cup wire" sub="AI-assisted coverage, reviewed by editors before publishing" />
@@ -40,6 +38,10 @@ export function News({ s }: ScreenProps) {
           <button key={t} className={`chip ${tag === t ? 'active' : ''}`} onClick={() => setTag(t)}>{t}</button>
         ))}
       </div>
+
+      {list.length === 0 && (
+        <p className="muted" style={{ margin: '32px 0' }}>No news yet — check back soon.</p>
+      )}
 
       {lead && (
         <div
@@ -86,7 +88,19 @@ export function Article({ s }: ScreenProps) {
       .catch(() => {});
   }, []);
   const id = s.param.id as number;
-  const n = live.find(x => x.id === id) ?? news.find(x => x.id === id) ?? news[0];
+  const n = live.find(x => x.id === id) ?? (WC.news as NewsItem[]).find(x => x.id === id) ?? null;
+
+  if (!n) {
+    return (
+      <div className="page page-narrow fade-up">
+        <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}>
+          <Icon name="chevL" size={14} /> Back to wire
+        </button>
+        <p className="muted">Article not found.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="page page-narrow fade-up">
       <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}>
