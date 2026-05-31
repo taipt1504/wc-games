@@ -7,11 +7,10 @@ import { Btn, Icon, Flag, Avatar, SecHead, TierPill, TIER_C } from '@/components
 
 /* ===================== LOCAL SUB-COMPONENTS ===================== */
 
-function Toggle({ on: init }: { on: boolean }) {
-  const [on, setOn] = useState(init);
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
-      onClick={() => setOn(!on)}
+      onClick={() => onChange(!on)}
       style={{ width: 44, height: 26, borderRadius: 999, background: on ? 'var(--green)' : 'var(--surface-3)', position: 'relative', transition: '.2s' }}
     >
       <span style={{ position: 'absolute', top: 3, left: on ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '.2s' }} />
@@ -235,17 +234,27 @@ export function Wallet({ s }: ScreenProps) {
 /* ===================== PROFILE ===================== */
 type AchievementDisplay = { name: string; desc: string; icon: string; unlocked: boolean; prog?: string };
 
+// Notification rows: [label, api-type-key, default]
+const NOTIF_ROWS: [string, string, boolean][] = [
+  ['Bet lock reminders', 'betLock', true],
+  ['Bet results', 'results', true],
+  ['Streak at risk', 'streakAtRisk', true],
+  ['Lobby & borrow alerts', 'lobbyAlerts', false],
+  ['Hot news', 'news', false],
+];
+
+type NotifPrefs = Record<string, boolean>;
+
+function defaultNotifPrefs(): NotifPrefs {
+  return Object.fromEntries(NOTIF_ROWS.map(([, k, d]) => [k, d]));
+}
+
 export function Profile({ s }: ScreenProps) {
   const me = WC.me;
-  const notifs: [string, boolean][] = [
-    ['Bet lock reminders', true],
-    ['Bet results', true],
-    ['Streak at risk', true],
-    ['Lobby & borrow alerts', false],
-    ['Hot news', false],
-  ];
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
   const [achievements, setAchievements] = React.useState<AchievementDisplay[]>(WC.achievements);
+  const [notifPrefs, setNotifPrefs] = React.useState<NotifPrefs>(defaultNotifPrefs());
+
   useEffect(() => {
     fetch('/api/v1/me/referral')
       .then((r) => (r.ok ? r.json() : null))
@@ -269,6 +278,25 @@ export function Profile({ s }: ScreenProps) {
       })
       .catch(() => { /* fall back to mock */ });
   }, []);
+  useEffect(() => {
+    fetch('/api/v1/me/notifications')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setNotifPrefs(j.data); })
+      .catch(() => { /* fall back to defaults */ });
+  }, []);
+
+  function handleNotifToggle(key: string, value: boolean) {
+    // Optimistic update
+    setNotifPrefs((prev) => ({ ...prev, [key]: value }));
+    fetch('/api/v1/me/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setNotifPrefs(j.data); })
+      .catch(() => { /* optimistic value stays */ });
+  }
 
   return (
     <div className="page page-narrow fade-up">
@@ -332,9 +360,10 @@ export function Profile({ s }: ScreenProps) {
       {/* notifications */}
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Notifications</div>
       <div className="card" style={{ overflow: 'hidden' }}>
-        {notifs.map(([l, on], i) => (
-          <div key={l} className="row between" style={{ padding: '14px 18px', borderBottom: i < notifs.length - 1 ? '1px solid var(--line)' : 0 }}>
-            <span className="small">{l}</span><Toggle on={on} />
+        {NOTIF_ROWS.map(([label, key], i) => (
+          <div key={key} className="row between" style={{ padding: '14px 18px', borderBottom: i < NOTIF_ROWS.length - 1 ? '1px solid var(--line)' : 0 }}>
+            <span className="small">{label}</span>
+            <Toggle on={notifPrefs[key] ?? false} onChange={(v) => handleNotifToggle(key, v)} />
           </div>
         ))}
       </div>

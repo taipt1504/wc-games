@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@wc/db';
-import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats } from './auth-service';
+import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats, getNotificationPrefs, updateNotificationPrefs, NOTIFICATION_TYPES } from './auth-service';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +13,7 @@ async function clean() {
   await prisma.streak.deleteMany();
   await prisma.referral.deleteMany();
   await prisma.referralCode.deleteMany();
+  await prisma.notificationPref.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();
 }
@@ -137,5 +138,55 @@ describe('referral (integration · Postgres)', () => {
   it('redeemReferral: self-referral returns {awarded:false}', async () => {
     const result = await redeemReferral(prisma, referrerId, code);
     expect(result.awarded).toBe(false);
+  });
+});
+
+describe('notification prefs (integration · Postgres)', () => {
+  let userId: bigint;
+
+  it('setup: create a fresh user', async () => {
+    const u = await registerUser(prisma, { email: 'notifpref@test.io', password: 'pw123456' });
+    userId = u.id;
+  });
+
+  it('getNotificationPrefs: creates all defaults (all enabled) for a new user', async () => {
+    const prefs = await getNotificationPrefs(prisma, userId);
+    for (const type of NOTIFICATION_TYPES) {
+      expect(prefs[type]).toBe(true);
+    }
+    // All types are present
+    expect(Object.keys(prefs).sort()).toEqual([...NOTIFICATION_TYPES].sort());
+    // Verify rows were actually persisted in DB
+    const rows = await prisma.notificationPref.findMany({ where: { userId } });
+    expect(rows).toHaveLength(NOTIFICATION_TYPES.length);
+  });
+
+  it('getNotificationPrefs: idempotent — second call returns same defaults', async () => {
+    const prefs = await getNotificationPrefs(prisma, userId);
+    for (const type of NOTIFICATION_TYPES) {
+      expect(prefs[type]).toBe(true);
+    }
+  });
+
+  it('updateNotificationPrefs: flips a flag and persists', async () => {
+    const updated = await updateNotificationPrefs(prisma, userId, { news: false });
+    expect(updated.news).toBe(false);
+    // Other flags unchanged
+    expect(updated.betLock).toBe(true);
+    expect(updated.results).toBe(true);
+  });
+
+  it('getNotificationPrefs: reflects the persisted flip', async () => {
+    const prefs = await getNotificationPrefs(prisma, userId);
+    expect(prefs.news).toBe(false);
+    expect(prefs.betLock).toBe(true);
+  });
+
+  it('updateNotificationPrefs: patch multiple flags at once', async () => {
+    const updated = await updateNotificationPrefs(prisma, userId, { betLock: false, streakAtRisk: false });
+    expect(updated.betLock).toBe(false);
+    expect(updated.streakAtRisk).toBe(false);
+    expect(updated.results).toBe(true);
+    expect(updated.lobbyAlerts).toBe(true);
   });
 });

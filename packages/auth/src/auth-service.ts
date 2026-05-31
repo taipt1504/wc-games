@@ -169,6 +169,75 @@ export async function redeemReferral(
   return { awarded: true };
 }
 
+// ─────────────────────────── NOTIFICATION PREFERENCES ───────────────────────────
+
+/** All notification types the UI exposes. Delivery (PUSH/email) is intentionally deferred. */
+export const NOTIFICATION_TYPES = ['betLock', 'results', 'streakAtRisk', 'lobbyAlerts', 'news'] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+export type NotificationPrefs = Record<NotificationType, boolean>;
+
+/** The single channel stored per type (delivery infra deferred). */
+const CHANNEL = 'PUSH';
+
+/** Build a full-on defaults map. */
+function defaultPrefs(): NotificationPrefs {
+  return Object.fromEntries(NOTIFICATION_TYPES.map((t) => [t, true])) as NotificationPrefs;
+}
+
+/**
+ * Returns the user's notification preference map, creating missing rows
+ * (all enabled by default) if absent.
+ */
+export async function getNotificationPrefs(
+  prisma: PrismaClient,
+  userId: bigint,
+): Promise<NotificationPrefs> {
+  // Upsert any missing rows with default enabled=true
+  await Promise.all(
+    NOTIFICATION_TYPES.map((type) =>
+      prisma.notificationPref.upsert({
+        where: { userId_type_channel: { userId, type, channel: CHANNEL } },
+        create: { userId, type, channel: CHANNEL, enabled: true },
+        update: {}, // don't overwrite if already present
+      }),
+    ),
+  );
+  const rows = await prisma.notificationPref.findMany({
+    where: { userId, channel: CHANNEL },
+  });
+  const prefs = defaultPrefs();
+  for (const row of rows) {
+    if (NOTIFICATION_TYPES.includes(row.type as NotificationType)) {
+      prefs[row.type as NotificationType] = row.enabled;
+    }
+  }
+  return prefs;
+}
+
+/**
+ * Updates the user's notification preferences, patching only the provided flags.
+ * Returns the full updated preference map.
+ */
+export async function updateNotificationPrefs(
+  prisma: PrismaClient,
+  userId: bigint,
+  patch: Partial<NotificationPrefs>,
+): Promise<NotificationPrefs> {
+  const updates = (Object.entries(patch) as [NotificationType, boolean][]).filter(([type]) =>
+    NOTIFICATION_TYPES.includes(type),
+  );
+  await Promise.all(
+    updates.map(([type, enabled]) =>
+      prisma.notificationPref.upsert({
+        where: { userId_type_channel: { userId, type, channel: CHANNEL } },
+        create: { userId, type, channel: CHANNEL, enabled },
+        update: { enabled },
+      }),
+    ),
+  );
+  return getNotificationPrefs(prisma, userId);
+}
+
 /** Returns the user's referral code and count of ACTIVATED referrals where they are the referrer. */
 export async function referralStats(
   prisma: PrismaClient,
