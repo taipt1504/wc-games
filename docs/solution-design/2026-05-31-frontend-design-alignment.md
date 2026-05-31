@@ -54,3 +54,19 @@ Shell: desktop **rail** (Home/Matches/Leaderboard/Lobbies · Tournament: Teams/G
 3. **Prove 1 screen E2E** (Landing trong guest shell) + render test xanh.
 4. **Fan-out (agents/Workflow):** 1 agent/screen theo primitives đã freeze (+ render test); 1 agent/service-design backend (scoring→auth→prediction/settle→...) TDD. Barrier dedup/integration sau mỗi batch.
 5. Integration + E2E happy paths → xanh 100% → ship slice.
+
+## 7. Implementation status — Admin & Ops (PRD §09)
+
+> Cập nhật alignment sau khi build admin console. **Live** = wired tới API + Postgres + có test; **Mock** = UI port từ design nhưng còn đọc `lib/wc.ts`. Test gate hiện tại: **136 unit/integration + 12 E2E = 148, pass 100%** (`pnpm test` serial + Playwright). Static gate = `tsc` qua `next build` (xanh). ESLint chưa được cấu hình trong scaffold (pre-existing) → không nằm trong gate.
+
+| Req | Mức | Trạng thái | API / service | Test |
+|---|---|---|---|---|
+| **ADMIN-01** Quản lý user | MVP | **Live (core)** — list user thật, **ban + AuditLog**, role-gated nav (ẩn Admin với non-admin). *Còn mock:* search filter, session IP/UA trong profile, lock/unlock, point clawback | `GET /admin/users`, `POST /admin/users/:id/ban`, `requireAdmin()` | e2e "bans a victim → BANNED in Postgres" |
+| **ADMIN-02** ⭐ Risk lobby | v1 | **Live (engine+queue)** — `scanLobbyRisk` heuristics, RiskFlag queue, "Run scan". *Còn mock:* trang điều tra (point-flow/chat/IP) | `@wc/risk` `scanLobbyRisk`, `GET /admin/risk-flags`, `POST /admin/risk/scan` | risk-engine int (2), e2e risk read |
+| **ADMIN-03** Xử lý vi phạm | v1 | **Partial** — ban (live). *Chưa build:* case-file/export, đóng lobby, escalation | — | — |
+| **ADMIN-04** Data + re-settle | MVP | **Live** — `resettleMatch` (reverse settlement → re-apply, net-idempotent) + score override + audit. *Còn mock:* CRUD đội/lịch/odds đầy đủ | `resettleMatch`, `POST /admin/matches/:id/resettle` | prediction int (resettle+idempotent), e2e "score correction flips bet" |
+| **ADMIN-05** News review | MVP | **Live** — queue PENDING, approve/reject → PUBLISHED/REJECTED + audit, public feed chỉ hiện PUBLISHED (human-in-the-loop) | `GET /admin/news`, `POST /admin/news/:id/{approve,reject}`, `GET /api/v1/news`, `seedNews` | e2e "approve → appears on public feed" |
+| **ADMIN-06** Audit log | MVP | **Live** — login ghi IP/UA vào AuditLog (bất biến), admin audit view (filter action/actor) | `GET /admin/audit`, login route capture | e2e "login captured + visible to admin" |
+| **ADMIN-07** Pipeline dashboard | v1 | **Mock** — KPI/jobs đọc `lib/wc.ts`; chưa wire AIJob/9router metrics thật | — | — |
+
+**Còn lại (post-MVP / v1):** ADMIN-02 investigation detail, ADMIN-03 case-file/export + escalation, ADMIN-07 live AIJob/9router metrics; ADMIN-01 search/clawback/session-view; worker BullMQ AI-news job để sinh draft thật (hiện `seedNews` đứng thay); register-login audit (login đã có). Resettle UI (`ScoreEditModal → onSave → fetch`) đã compile + gọi đúng endpoint nhưng e2e drive qua `page.request` (chưa click nút).
