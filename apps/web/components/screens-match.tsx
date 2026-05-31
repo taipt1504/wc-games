@@ -73,6 +73,72 @@ export function Schedule({ s }: ScreenProps) {
 }
 
 /* ===================== MATCH DETAIL ===================== */
+
+const NEXT_GOAL_PICKS: { pick: string; label: string; odds: number }[] = [
+  { pick: 'HOME', label: 'Home', odds: 1.8 },
+  { pick: 'AWAY', label: 'Away', odds: 2.2 },
+  { pick: 'NONE', label: 'None', odds: 3.0 },
+];
+
+function MicroBetWidget({ matchId }: { matchId: number }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [stake, setStake] = useState(50);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+
+  function handleConfirm() {
+    if (!selected || sending) return;
+    setSending(true);
+    try {
+      fetch('/api/v1/micro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId, market: 'NEXT_GOAL', pick: selected, stake }),
+      })
+        .then(r => r.json())
+        .then((j: { data?: { id: string }; error?: { code: string } }) => {
+          if (j?.data?.id) setDone('Bet placed!');
+          else setDone(j?.error?.code ?? 'Error');
+        })
+        .catch(() => setDone('Error'))
+        .finally(() => setSending(false));
+    } catch {
+      setSending(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="card card-pad mt-16" style={{ borderColor: 'rgba(43,224,138,.4)' }}>
+        <div className="row gap-8"><Icon name="ball" size={16} style={{ color: 'var(--green)' }} /><span className="small" style={{ fontWeight: 700 }}>{done}</span></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card card-pad mt-16" style={{ borderColor: 'rgba(255,180,0,.3)' }}>
+      <div className="row between" style={{ marginBottom: 10 }}>
+        <span className="eyebrow">In-play · Next Goal</span>
+        <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
+      </div>
+      <div className="row gap-8 mt-4">
+        {NEXT_GOAL_PICKS.map(({ pick, label, odds }) => (
+          <button key={pick} className={`odds ${selected === pick ? 'sel' : ''}`} style={{ flex: 1 }} onClick={() => setSelected(pick)}>
+            <span className="o-label">{label}</span><span className="o-val">×{(1 + odds).toFixed(1)}</span>
+          </button>
+        ))}
+      </div>
+      <div className="field mt-10">
+        <div className="row between"><label className="label">Stake</label></div>
+        <input className="input input-mono" type="number" value={stake} min={1} onChange={e => setStake(Math.max(1, +e.target.value || 1))} />
+      </div>
+      <Btn variant="primary" className="btn-block mt-10" disabled={!selected || sending} onClick={handleConfirm}>
+        {sending ? 'Placing…' : 'Place in-play bet'}
+      </Btn>
+    </div>
+  );
+}
+
 export function MatchDetail({ s }: ScreenProps) {
   const [tab, setTab] = useState('preview');
   const liveScores = useLiveScores();
@@ -122,6 +188,14 @@ export function MatchDetail({ s }: ScreenProps) {
             </div>
           : open && <Btn variant="primary" className="btn-block mt-16" icon="ball" onClick={() => s.openBet(m, '1', m.odds.mh)}>Place a bet</Btn>}
       </div>
+
+      {/* in-play micro-bet widget (DEPTH-06) — LIVE + authed only */}
+      {live && s.authed && <MicroBetWidget matchId={m.id} />}
+      {live && !s.authed && (
+        <div className="card card-pad mt-16" style={{ textAlign: 'center' }}>
+          <p className="small muted">Sign in to place in-play bets on this match.</p>
+        </div>
+      )}
 
       {/* tabs */}
       <div className="row gap-8 mt-24" style={{ overflowX: 'auto' }}>
