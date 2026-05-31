@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@wc/db';
-import { createLobby, joinLobby, requestBorrow, decideBorrow, getLobbyStanding } from './lobby-service';
+import { createLobby, joinLobby, requestBorrow, decideBorrow, getLobbyStanding, transferHost, kickMember } from './lobby-service';
 
 const prisma = new PrismaClient();
 
@@ -74,5 +74,69 @@ describe('lobby-service (integration · Postgres)', () => {
     expect(decision.status).toBe('DENIED');
     const standing = await getLobbyStanding(prisma, lobbyId, memberId);
     expect(standing.borrowed).toBe(200n); // still 200
+  });
+});
+
+describe('transferHost + kickMember (integration · Postgres)', () => {
+  let lobbyId: bigint;
+  let ownerId: bigint;
+  let member1Id: bigint;
+  let member2Id: bigint;
+
+  beforeAll(async () => {
+    await clean();
+    const owner = await prisma.user.create({ data: { email: 'th-owner@lobby.io', passwordHash: 'x' } });
+    ownerId = owner.id;
+    const lobby = await createLobby(prisma, ownerId, { name: 'Transfer Test', scope: 'GROUP', defaultPoints: 500n, inviteToken: 'TXFER1' });
+    lobbyId = lobby.id;
+    const m1 = await prisma.user.create({ data: { email: 'th-member1@lobby.io', passwordHash: 'x' } });
+    member1Id = m1.id;
+    const m2 = await prisma.user.create({ data: { email: 'th-member2@lobby.io', passwordHash: 'x' } });
+    member2Id = m2.id;
+    await joinLobby(prisma, lobbyId, member1Id);
+    await joinLobby(prisma, lobbyId, member2Id);
+  });
+
+  afterAll(async () => { await clean(); await prisma.$disconnect(); });
+
+  it('transferHost: ownerId changes and roles swap', async () => {
+    const updated = await transferHost(prisma, lobbyId, ownerId, member1Id);
+    expect(updated.ownerId).toBe(member1Id);
+
+    const newOwnerMs = await prisma.lobbyMembership.findUniqueOrThrow({ where: { lobbyId_userId: { lobbyId, userId: member1Id } } });
+    expect(newOwnerMs.role).toBe('OWNER');
+
+    const oldOwnerMs = await prisma.lobbyMembership.findUniqueOrThrow({ where: { lobbyId_userId: { lobbyId, userId: ownerId } } });
+    expect(oldOwnerMs.role).toBe('MEMBER');
+
+    // transfer back so subsequent tests see member1Id as owner
+    await transferHost(prisma, lobbyId, member1Id, ownerId);
+  });
+
+  it('transferHost: non-owner calling throws NOT_OWNER', async () => {
+    await expect(transferHost(prisma, lobbyId, member1Id, member2Id)).rejects.toThrow('NOT_OWNER');
+  });
+
+  it('transferHost: non-member target throws NOT_A_MEMBER', async () => {
+    const stranger = await prisma.user.create({ data: { email: 'stranger@lobby.io', passwordHash: 'x' } });
+    await expect(transferHost(prisma, lobbyId, ownerId, stranger.id)).rejects.toThrow('NOT_A_MEMBER');
+  });
+
+  it('kickMember: removes the target membership', async () => {
+    await kickMember(prisma, lobbyId, ownerId, member2Id);
+    const ms = await prisma.lobbyMembership.findUnique({ where: { lobbyId_userId: { lobbyId, userId: member2Id } } });
+    expect(ms).toBeNull();
+  });
+
+  it('kickMember: non-owner calling throws NOT_OWNER', async () => {
+    await expect(kickMember(prisma, lobbyId, member1Id, ownerId)).rejects.toThrow('NOT_OWNER');
+  });
+
+  it('kickMember: kicking the owner themselves throws CANNOT_KICK_OWNER', async () => {
+    await expect(kickMember(prisma, lobbyId, ownerId, ownerId)).rejects.toThrow('CANNOT_KICK_OWNER');
+  });
+
+  it('kickMember: kicking a non-member throws NOT_A_MEMBER', async () => {
+    await expect(kickMember(prisma, lobbyId, ownerId, member2Id)).rejects.toThrow('NOT_A_MEMBER');
   });
 });

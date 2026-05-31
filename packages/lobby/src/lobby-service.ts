@@ -70,6 +70,51 @@ export async function decideBorrow(prisma: PrismaClient, requestId: bigint, appr
   });
 }
 
+/** Transfer lobby host: swap ownerId + role of old/new owner atomically. */
+export async function transferHost(
+  prisma: PrismaClient,
+  lobbyId: bigint,
+  currentOwnerId: bigint,
+  newOwnerUserId: bigint,
+) {
+  const lobby = await prisma.lobby.findUniqueOrThrow({ where: { id: lobbyId } });
+  if (lobby.ownerId !== currentOwnerId) throw new Error('NOT_OWNER');
+  const newOwnerMembership = await prisma.lobbyMembership.findUnique({
+    where: { lobbyId_userId: { lobbyId, userId: newOwnerUserId } },
+  });
+  if (!newOwnerMembership) throw new Error('NOT_A_MEMBER');
+  return prisma.$transaction(async (tx) => {
+    const updatedLobby = await tx.lobby.update({ where: { id: lobbyId }, data: { ownerId: newOwnerUserId } });
+    await tx.lobbyMembership.update({
+      where: { lobbyId_userId: { lobbyId, userId: newOwnerUserId } },
+      data: { role: 'OWNER' },
+    });
+    await tx.lobbyMembership.update({
+      where: { lobbyId_userId: { lobbyId, userId: currentOwnerId } },
+      data: { role: 'MEMBER' },
+    });
+    return updatedLobby;
+  });
+}
+
+/** Kick a member from a lobby. Only the owner may kick; the owner cannot kick themselves. */
+export async function kickMember(
+  prisma: PrismaClient,
+  lobbyId: bigint,
+  ownerId: bigint,
+  targetUserId: bigint,
+) {
+  const lobby = await prisma.lobby.findUniqueOrThrow({ where: { id: lobbyId } });
+  if (lobby.ownerId !== ownerId) throw new Error('NOT_OWNER');
+  if (targetUserId === ownerId) throw new Error('CANNOT_KICK_OWNER');
+  const membership = await prisma.lobbyMembership.findUnique({
+    where: { lobbyId_userId: { lobbyId, userId: targetUserId } },
+  });
+  if (!membership) throw new Error('NOT_A_MEMBER');
+  await prisma.lobbyMembership.delete({ where: { id: membership.id } });
+  return { ok: true };
+}
+
 export interface LobbyStanding {
   winnings: bigint; // net P&L from lobby bets (STAKE + SETTLE ledger)
   defaultPoints: bigint;

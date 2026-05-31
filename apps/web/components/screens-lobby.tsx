@@ -394,17 +394,53 @@ function LobbyChat() {
   );
 }
 
-function LobbyMembers({ l }: { l: Lobby }) {
+function LobbyMembers({ l, isHost, s }: { l: Lobby; isHost: boolean; s: ScreenProps['s'] }) {
+  const [members, setMembers] = useState(WC.lobbyBoard);
+
+  const handleKick = async (userId: number) => {
+    try {
+      const res = await fetch(`/api/v1/lobbies/${l.id}/kick`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        setMembers(ms => ms.filter(m => m.userId !== userId));
+        s.toastMsg('Member kicked', 'check', 'var(--green)');
+      } else {
+        const j = await res.json().catch(() => ({}));
+        s.toastMsg(j?.error?.code ?? 'Could not kick member', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  const handleMakeHost = async (userId: number) => {
+    try {
+      const res = await fetch(`/api/v1/lobbies/${l.id}/transfer`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ toUserId: userId }),
+      });
+      if (res.ok) {
+        s.toastMsg('Host transferred', 'check', 'var(--sky)');
+      } else {
+        const j = await res.json().catch(() => ({}));
+        s.toastMsg(j?.error?.code ?? 'Could not transfer host', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
   return (
     <div className="stack gap-10">
-      {WC.lobbyBoard.map(p => (
+      {members.map(p => (
         <div key={p.rank} className="card card-pad row between">
           <div className="row gap-12"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={36} color={p.you ? 'var(--gold)' : 'var(--sky)'} />
             <div><div style={{ fontWeight: 600 }}>{p.name}{p.you && <span className="badge badge-gold" style={{ marginLeft: 8 }}>You</span>}</div><div className="tiny muted tnum">Score {p.score} {p.borrowed ? `· borrowed ${p.borrowed}` : ''}</div></div>
           </div>
-          {l.owner === 'You' && !p.you
-            ? <div className="row gap-6"><Btn variant="ghost" size="sm">Set points</Btn><button className="btn-icon btn-ghost"><Icon name="x" size={15} /></button></div>
-            : p.borrowed > 0 && l.owner !== 'You' ? <span className="badge badge-muted">Owes {p.borrowed}</span> : null}
+          {isHost && !p.you
+            ? <div className="row gap-6">
+                <Btn variant="ghost" size="sm" onClick={() => handleMakeHost(p.userId)}>Make host</Btn>
+                <button className="btn-icon btn-ghost" onClick={() => handleKick(p.userId)}><Icon name="x" size={15} /></button>
+              </div>
+            : p.borrowed > 0 && !isHost ? <span className="badge badge-muted">Owes {p.borrowed}</span> : null}
         </div>
       ))}
     </div>
@@ -553,7 +589,7 @@ export function LobbyView({ s }: ScreenProps) {
         {tab === 'board' && <LobbyBoard />}
         {tab === 'chat' && <LobbyChat />}
         {tab === 'requests' && <LobbyRequests s={s} l={l} isHost={isHost} />}
-        {tab === 'members' && <LobbyMembers l={l} />}
+        {tab === 'members' && <LobbyMembers l={l} isHost={isHost} s={s} />}
       </div>
 
       {editM && <LobbyOddsModal m={editM} odds={odds[editM.id] || editM.odds} onClose={() => setEditM(null)} onSave={saveOdds} />}

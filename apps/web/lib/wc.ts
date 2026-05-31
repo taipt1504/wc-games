@@ -96,13 +96,13 @@ export function lobbyMatches(l: Lobby): Match[] {
   return (l.matchIds || []).map((id) => matches.find((m) => m.id === id)).filter(Boolean) as Match[];
 }
 export const lobbyBoard = [
-  { rank: 1, name: 'Khoa Nguyen', score: 2240, won: 1240, def: 1000, borrowed: 0, you: false },
-  { rank: 2, name: 'Trang Le', score: 1880, won: 880, def: 1000, borrowed: 0, you: false },
-  { rank: 3, name: 'You', score: 1410, won: 610, def: 1000, borrowed: 200, you: true },
-  { rank: 4, name: 'Sam Kim', score: 1150, won: 150, def: 1000, borrowed: 0, you: false },
-  { rank: 5, name: 'Minh Pham', score: 980, won: 180, def: 1000, borrowed: 200, you: false },
-  { rank: 6, name: 'Linh Tran', score: 760, won: -240, def: 1000, borrowed: 0, you: false },
-  { rank: 7, name: 'David Cole', score: 200, won: -600, def: 1000, borrowed: 200, you: false },
+  { rank: 1, userId: 101, name: 'Khoa Nguyen', score: 2240, won: 1240, def: 1000, borrowed: 0, you: false },
+  { rank: 2, userId: 102, name: 'Trang Le', score: 1880, won: 880, def: 1000, borrowed: 0, you: false },
+  { rank: 3, userId: 103, name: 'You', score: 1410, won: 610, def: 1000, borrowed: 200, you: true },
+  { rank: 4, userId: 104, name: 'Sam Kim', score: 1150, won: 150, def: 1000, borrowed: 0, you: false },
+  { rank: 5, userId: 105, name: 'Minh Pham', score: 980, won: 180, def: 1000, borrowed: 200, you: false },
+  { rank: 6, userId: 106, name: 'Linh Tran', score: 760, won: -240, def: 1000, borrowed: 0, you: false },
+  { rank: 7, userId: 107, name: 'David Cole', score: 200, won: -600, def: 1000, borrowed: 200, you: false },
 ];
 export const lobbyChat = [
   { who: 'Khoa Nguyen', text: 'Whoever takes Mexico to win is brave 😅', t: '14:02' },
