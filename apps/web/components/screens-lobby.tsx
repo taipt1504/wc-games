@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — Lobbies · Create · Lobby view · Borrow modal (ported from design screens-lobby.jsx) */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { WC, type Match, type Lobby, type Pick1X2, type Odds } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead } from '@/components/ui';
@@ -13,7 +13,7 @@ interface Scope {
   pick?: () => number[];
 }
 
-/* ---- Borrow request type (repeat is optional) ---- */
+/* ---- Borrow request type ---- */
 interface Req {
   id: number;
   who: string;
@@ -26,6 +26,21 @@ interface Req {
   state: string;
 }
 
+/* ---- Board row type ---- */
+interface BoardRow {
+  rank: number;
+  userId: number;
+  name: string;
+  score: number;
+  won: number;
+  def: number;
+  borrowed: number;
+  you: boolean;
+}
+
+/* ---- Chat message type ---- */
+interface ChatMsg { who: string; text: string; t: string }
+
 /* ===================== LOBBY CARD (helper) ===================== */
 function LobbyCard({ l, s, joined }: { l: Lobby; s: ScreenProps['s']; joined?: boolean }) {
   return (
@@ -36,7 +51,7 @@ function LobbyCard({ l, s, joined }: { l: Lobby; s: ScreenProps['s']; joined?: b
       </div>
       <div className="h3 mt-12">{l.name}</div>
       <div className="row gap-12 mt-8 small muted wrap-w">
-        <span className="row gap-4"><Icon name="calendar" size={14} />{(l.matchIds || []).length} matches</span>
+        <span className="row gap-4"><Icon name="calendar" size={14} />{(l.matchIds ?? []).length} matches</span>
         <span className="row gap-4"><Icon name="users" size={14} />{l.members}</span>
         <span className="row gap-4"><Icon name="wallet" size={14} />{l.def}</span>
         {l.pwd && <span className="row gap-4"><Icon name="lock" size={14} />Locked</span>}
@@ -56,12 +71,12 @@ function LobbyCard({ l, s, joined }: { l: Lobby; s: ScreenProps['s']; joined?: b
 export function Lobbies({ s }: ScreenProps) {
   const [q, setQ] = useState('');
   const [code, setCode] = useState('');
-  const [allLobbies, setAllLobbies] = useState<Lobby[]>(WC.lobbies);
+  const [allLobbies, setAllLobbies] = useState<Lobby[]>([]);
   useEffect(() => {
     fetch('/api/v1/lobbies')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setAllLobbies(j.data); })
-      .catch(() => { /* fall back to seed display */ });
+      .then((j) => { if (j?.data) setAllLobbies(j.data); })
+      .catch(() => { /* network error — remain empty */ });
   }, []);
   const match = (l: Lobby) => (l.name + l.owner + l.scope).toLowerCase().includes(q.toLowerCase());
   const joined = allLobbies.filter(l => l.joined && match(l));
@@ -91,7 +106,7 @@ export function Lobbies({ s }: ScreenProps) {
       </div>
       {joined.length
         ? <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>{joined.map(l => <LobbyCard key={l.id} l={l} s={s} joined />)}</div>
-        : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">You haven&apos;t joined any lobbies yet.</p></div>}
+        : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No lobbies yet — create one or join with a code.</p></div>}
 
       {/* discover */}
       <div className="row between" style={{ margin: '28px 0 12px' }}>
@@ -337,14 +352,14 @@ function LobbyMatches({ l, matches, isHost, odds, bets, onEdit, onBet }: {
   );
 }
 
-function LobbyBoard() {
+function LobbyBoard({ board }: { board: BoardRow[] }) {
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
         <table className="tbl">
           <thead><tr><th>#</th><th>Member</th><th style={{ textAlign: 'right' }} className="hide-mobile">Default</th><th style={{ textAlign: 'right' }} className="hide-mobile">Winnings</th><th style={{ textAlign: 'right' }} className="hide-mobile">Borrowed</th><th style={{ textAlign: 'right' }}>Score</th></tr></thead>
           <tbody>
-            {WC.lobbyBoard.map(p => (
+            {board.map(p => (
               <tr key={p.rank} className={p.you ? 'hl' : ''}>
                 <td className="tnum muted">{p.rank}</td>
                 <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={p.you ? 'var(--gold)' : 'var(--sky)'} /><span style={{ fontWeight: p.you ? 700 : 600 }}>{p.name}</span></div></td>
@@ -354,6 +369,9 @@ function LobbyBoard() {
                 <td className="tnum" style={{ textAlign: 'right', fontWeight: 700, color: p.score >= 0 ? 'var(--text)' : 'var(--danger)' }}>{p.score}</td>
               </tr>
             ))}
+            {!board.length && (
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24 }}><span className="muted">No members yet.</span></td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -362,17 +380,42 @@ function LobbyBoard() {
   );
 }
 
-function LobbyChat() {
-  const [msgs, setMsgs] = useState(WC.lobbyChat);
+function LobbyChat({ lobbyId }: { lobbyId: number }) {
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [text, setText] = useState('');
-  const send = () => {
+
+  useEffect(() => {
+    fetch(`/api/v1/lobbies/${lobbyId}/messages`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (j?.data) setMsgs(j.data); })
+      .catch(() => {});
+  }, [lobbyId]);
+
+  const send = async () => {
     if (!text.trim()) return;
-    setMsgs(m => [...m, { who: 'You', text: text.trim(), t: '14:24' }]);
+    const body = text.trim();
     setText('');
+    try {
+      const res = await fetch(`/api/v1/lobbies/${lobbyId}/messages`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: body }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        if (j?.data) setMsgs(m => [...m, j.data]);
+      } else {
+        // optimistic local append on failure
+        setMsgs(m => [...m, { who: 'You', text: body, t: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) }]);
+      }
+    } catch {
+      setMsgs(m => [...m, { who: 'You', text: body, t: '--:--' }]);
+    }
   };
+
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 460 }}>
       <div className="stack gap-12" style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
+        {msgs.length === 0 && <div className="row center"><span className="badge badge-muted" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>No messages yet.</span></div>}
         {msgs.map((m, i) => m.who === 'sys'
           ? <div key={i} className="row center"><span className="badge badge-muted" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{m.text}</span></div>
           : (
@@ -386,7 +429,7 @@ function LobbyChat() {
           ))}
       </div>
       <div className="row gap-8" style={{ padding: 12, borderTop: '1px solid var(--line)' }}>
-        <div className="row gap-6">{['👍', '😂', '😮', '💀'].map(e => <button key={e} className="chip chip-sm" onClick={() => setMsgs(m => [...m, { who: 'You', text: e, t: '14:24' }])} style={{ fontSize: 16, padding: '4px 8px' }}>{e}</button>)}</div>
+        <div className="row gap-6">{['👍', '😂', '😮', '💀'].map(e => <button key={e} className="chip chip-sm" onClick={() => { const t = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); setMsgs(m => [...m, { who: 'You', text: e, t }]); }} style={{ fontSize: 16, padding: '4px 8px' }}>{e}</button>)}</div>
         <input className="input grow" placeholder="Talk trash…" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
         <Btn variant="primary" className="btn-icon" onClick={send}><Icon name="send" size={18} /></Btn>
       </div>
@@ -394,8 +437,9 @@ function LobbyChat() {
   );
 }
 
-function LobbyMembers({ l, isHost, s }: { l: Lobby; isHost: boolean; s: ScreenProps['s'] }) {
-  const [members, setMembers] = useState(WC.lobbyBoard);
+function LobbyMembers({ l, isHost, s, board }: { l: Lobby; isHost: boolean; s: ScreenProps['s']; board: BoardRow[] }) {
+  const [members, setMembers] = useState<BoardRow[]>(board);
+  useEffect(() => { setMembers(board); }, [board]);
 
   const handleKick = async (userId: number) => {
     try {
@@ -444,21 +488,42 @@ function LobbyMembers({ l, isHost, s }: { l: Lobby; isHost: boolean; s: ScreenPr
             : p.borrowed > 0 && !isHost ? <span className="badge badge-muted">Owes {p.borrowed}</span> : null}
         </div>
       ))}
+      {!members.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No members yet.</p></div>}
     </div>
   );
 }
 
 /* ---- Host: pending borrow-request approval queue ---- */
-function LobbyRequests({ s, l, isHost }: { s: ScreenProps['s']; l: Lobby; isHost: boolean }) {
-  const [reqs, setReqs] = useState<Req[]>(WC.borrowRequests.map(r => ({ ...r, state: 'pending' })));
-  const resolve = (id: number, state: string, amt?: number) => {
-    setReqs(rs => rs.map(r => r.id === id ? { ...r, state } : r));
-    const r = reqs.find(x => x.id === id);
+function LobbyRequests({ s, l, isHost, reqs, onRefetch }: { s: ScreenProps['s']; l: Lobby; isHost: boolean; reqs: Req[]; onRefetch: () => void }) {
+  const [localReqs, setLocalReqs] = useState<Req[]>(reqs);
+  useEffect(() => { setLocalReqs(reqs); }, [reqs]);
+
+  const resolve = async (id: number, approve: boolean) => {
+    const r = localReqs.find(x => x.id === id);
     if (!r) return;
-    if (state === 'approved') s.toastMsg(`Approved ${amt} pts for ${r.who}`, 'check', 'var(--green)');
-    else s.toastMsg(`Declined ${r.who}'s request`, 'x', 'var(--danger)');
+    // Optimistic UI update
+    setLocalReqs(rs => rs.map(x => x.id === id ? { ...x, state: approve ? 'approved' : 'declined' } : x));
+    try {
+      const res = await fetch(`/api/v1/lobbies/${l.id}/borrow-requests?requestId=${id}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ approve }),
+      });
+      if (res.ok) {
+        if (approve) s.toastMsg(`Approved ${r.amount} pts for ${r.who}`, 'check', 'var(--green)');
+        else s.toastMsg(`Declined ${r.who}'s request`, 'x', 'var(--danger)');
+        onRefetch();
+      } else {
+        // Revert
+        setLocalReqs(rs => rs.map(x => x.id === id ? { ...x, state: 'pending' } : x));
+        s.toastMsg('Could not process request', 'alert', 'var(--danger)');
+      }
+    } catch {
+      setLocalReqs(rs => rs.map(x => x.id === id ? { ...x, state: 'pending' } : x));
+      s.toastMsg('Network error', 'alert', 'var(--danger)');
+    }
   };
-  const pending = reqs.filter(r => r.state === 'pending');
+
+  const pending = localReqs.filter(r => r.state === 'pending');
 
   return (
     <div className="stack gap-12">
@@ -471,10 +536,10 @@ function LobbyRequests({ s, l, isHost }: { s: ScreenProps['s']; l: Lobby; isHost
           </div>
         </div>
         {isHost && pending.length > 0 &&
-          <Btn variant="ghost" size="sm" onClick={() => { pending.forEach(r => resolve(r.id, 'approved', r.amount)); }}>Approve all</Btn>}
+          <Btn variant="ghost" size="sm" onClick={() => { pending.forEach(r => resolve(r.id, true)); }}>Approve all</Btn>}
       </div>
 
-      {reqs.map(r => {
+      {localReqs.map(r => {
         const decided = r.state !== 'pending';
         return (
           <div key={r.id} className="card card-pad" style={{ opacity: decided ? 0.6 : 1, borderColor: r.repeat && !decided ? 'rgba(255,200,61,.3)' : 'var(--line)' }}>
@@ -505,8 +570,8 @@ function LobbyRequests({ s, l, isHost }: { s: ScreenProps['s']; l: Lobby; isHost
                 ? <span className={`badge badge-${r.state === 'approved' ? 'green' : 'danger'}`}>{r.state === 'approved' ? '✓ Approved' : '✕ Declined'}</span>
                 : isHost
                   ? <div className="row gap-8">
-                      <Btn variant="ghost" size="sm" icon="x" onClick={() => resolve(r.id, 'declined')}>Decline</Btn>
-                      <Btn variant="gold" size="sm" icon="check" onClick={() => resolve(r.id, 'approved', r.amount)}>Approve {r.amount}</Btn>
+                      <Btn variant="ghost" size="sm" icon="x" onClick={() => resolve(r.id, false)}>Decline</Btn>
+                      <Btn variant="gold" size="sm" icon="check" onClick={() => resolve(r.id, true)}>Approve {r.amount}</Btn>
                     </div>
                   : <span className="badge badge-muted">Awaiting host</span>}
             </div>
@@ -514,7 +579,7 @@ function LobbyRequests({ s, l, isHost }: { s: ScreenProps['s']; l: Lobby; isHost
         );
       })}
 
-      {!reqs.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No pending borrow requests.</p></div>}
+      {!localReqs.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No pending requests.</p></div>}
     </div>
   );
 }
@@ -522,23 +587,66 @@ function LobbyRequests({ s, l, isHost }: { s: ScreenProps['s']; l: Lobby; isHost
 /* ===================== LOBBY DETAIL (isolated workspace) ===================== */
 export function LobbyView({ s }: ScreenProps) {
   const lid = typeof s.param.id === 'number' ? s.param.id : Number(s.param.id);
-  const l = WC.lobbies.find(x => x.id === lid) || WC.lobbies[0];
-  const isHost = l.owner === 'You';
+  const [l, setL] = useState<Lobby | null>(null);
+  const [isHost, setIsHost] = useState(false);
+  const [board, setBoard] = useState<BoardRow[]>([]);
+  const [reqs, setReqs] = useState<Req[]>([]);
   const [tab, setTab] = useState('matches');
-  const lobbyMatchList = WC.lobbyMatches(l);
-  const [odds, setOdds] = useState<Record<number, Odds>>(() => {
-    const o: Record<number, Odds> = {};
-    lobbyMatchList.forEach(m => { o[m.id] = { ...m.odds }; });
-    return o;
-  });
+  const [odds, setOdds] = useState<Record<number, Odds>>({});
   const [editM, setEditM] = useState<Match | null>(null);
   const [bets, setBets] = useState<Record<number, Pick1X2>>({});
+
+  // Fetch lobby detail
+  const fetchDetail = useCallback(() => {
+    fetch(`/api/v1/lobbies/${lid}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (j?.data) {
+          const d = j.data;
+          setL(d);
+          setIsHost(!!d.isHost);
+          setBoard(d.board ?? []);
+          // Init odds from matches
+          const lobbyM = WC.lobbyMatches(d);
+          setOdds(prev => {
+            const next = { ...prev };
+            lobbyM.forEach(m => { if (!next[m.id]) next[m.id] = { ...m.odds }; });
+            return next;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [lid]);
+
+  // Fetch borrow requests (host only)
+  const fetchReqs = useCallback(() => {
+    if (!isHost) return;
+    fetch(`/api/v1/lobbies/${lid}/borrow-requests`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (j?.data) setReqs(j.data.map((r: Omit<Req, 'state'>) => ({ ...r, state: 'pending' })));
+      })
+      .catch(() => {});
+  }, [lid, isHost]);
+
+  useEffect(() => { fetchDetail(); }, [fetchDetail]);
+  useEffect(() => { if (isHost) fetchReqs(); }, [isHost, fetchReqs]);
+
+  if (!l) {
+    return (
+      <div className="page fade-up">
+        <button className="chip" onClick={() => s.go('lobbies')} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> All lobbies</button>
+        <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">Loading lobby…</p></div>
+      </div>
+    );
+  }
+
+  const lobbyMatchList = WC.lobbyMatches(l);
 
   const saveOdds = (id: number, mh: number, md: number, ma: number) => {
     setOdds(p => ({ ...p, [id]: { mh, md, ma } }));
     setEditM(null);
     s.toastMsg('Lobby odds updated for this match', 'check', 'var(--sky)');
-    // POST to API and refetch overrides (guarded so jsdom tests are unaffected)
     fetch(`/api/v1/lobbies/${lid}/odds`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ matchId: id, mHome: mh, mDraw: md, mAway: ma }),
@@ -556,12 +664,12 @@ export function LobbyView({ s }: ScreenProps) {
           });
         }
       })
-      .catch(() => { /* network error — local state already updated */ });
+      .catch(() => {});
   };
+
   const placeBet = (m: Match, pick: Pick1X2) => {
     setBets(b => ({ ...b, [m.id]: pick }));
     s.toastMsg(`Lobby bet: ${pick} · uses your lobby wallet`, 'check', 'var(--green)');
-    // POST to API (guarded so jsdom tests are unaffected)
     const DEFAULT_STAKE = 100;
     fetch(`/api/v1/lobbies/${lid}/predictions`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -570,8 +678,10 @@ export function LobbyView({ s }: ScreenProps) {
       .then(r => {
         if (!r.ok) r.json().then(j => s.toastMsg(j?.error?.code ?? 'Bet failed', 'alert', 'var(--danger)')).catch(() => {});
       })
-      .catch(() => { /* network error — local state already updated */ });
+      .catch(() => {});
   };
+
+  const pendingCount = reqs.filter(r => r.state === 'pending').length;
 
   const tabs: [string, string][] = [
     ['matches', `Matches · ${lobbyMatchList.length}`],
@@ -580,6 +690,9 @@ export function LobbyView({ s }: ScreenProps) {
     ['requests', 'Requests'],
     ['members', 'Members'],
   ];
+
+  const myRank = board.find(r => r.you)?.rank ?? null;
+  const myScore = board.find(r => r.you)?.score ?? 0;
 
   return (
     <div className="page fade-up">
@@ -599,8 +712,8 @@ export function LobbyView({ s }: ScreenProps) {
         </div>
         {/* lobby wallet strip */}
         <div className="row gap-20 mt-16 wrap-w">
-          <div className="stat"><span className="s-val tnum text-gold" style={{ fontSize: 22 }}>1,410</span><span className="s-lbl">Lobby wallet</span></div>
-          <div className="stat"><span className="s-val tnum" style={{ fontSize: 22 }}>#3</span><span className="s-lbl">Your rank</span></div>
+          <div className="stat"><span className="s-val tnum text-gold" style={{ fontSize: 22 }}>{myScore.toLocaleString()}</span><span className="s-lbl">Lobby wallet</span></div>
+          <div className="stat"><span className="s-val tnum" style={{ fontSize: 22 }}>{myRank != null ? `#${myRank}` : '—'}</span><span className="s-lbl">Your rank</span></div>
           <div className="stat"><span className="s-val tnum text-sky" style={{ fontSize: 22 }}>{lobbyMatchList.length}</span><span className="s-lbl">Matches</span></div>
         </div>
       </div>
@@ -609,17 +722,17 @@ export function LobbyView({ s }: ScreenProps) {
         {tabs.map(([k, lbl]) =>
           <button key={k} className={`chip ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
             {lbl}
-            {k === 'requests' && isHost && WC.borrowRequests.length > 0 &&
-              <span className="badge badge-gold" style={{ padding: '1px 7px', marginLeft: 2 }}>{WC.borrowRequests.length}</span>}
+            {k === 'requests' && isHost && pendingCount > 0 &&
+              <span className="badge badge-gold" style={{ padding: '1px 7px', marginLeft: 2 }}>{pendingCount}</span>}
           </button>)}
       </div>
 
       <div className="mt-16">
         {tab === 'matches' && <LobbyMatches l={l} matches={lobbyMatchList} isHost={isHost} odds={odds} bets={bets} onEdit={setEditM} onBet={placeBet} />}
-        {tab === 'board' && <LobbyBoard />}
-        {tab === 'chat' && <LobbyChat />}
-        {tab === 'requests' && <LobbyRequests s={s} l={l} isHost={isHost} />}
-        {tab === 'members' && <LobbyMembers l={l} isHost={isHost} s={s} />}
+        {tab === 'board' && <LobbyBoard board={board} />}
+        {tab === 'chat' && <LobbyChat lobbyId={lid} />}
+        {tab === 'requests' && <LobbyRequests s={s} l={l} isHost={isHost} reqs={reqs} onRefetch={fetchReqs} />}
+        {tab === 'members' && <LobbyMembers l={l} isHost={isHost} s={s} board={board} />}
       </div>
 
       {editM && <LobbyOddsModal m={editM} odds={odds[editM.id] || editM.odds} onClose={() => setEditM(null)} onSave={saveOdds} />}
