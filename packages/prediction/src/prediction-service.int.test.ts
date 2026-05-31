@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@wc/db';
-import { placeBet, settleMatch } from './prediction-service';
+import { placeBet, settleMatch, resettleMatch } from './prediction-service';
 
 const prisma = new PrismaClient();
 
@@ -82,5 +82,35 @@ describe('prediction-service (integration · Postgres)', () => {
     expect(r2.alreadySettled).toBe(true);
     const wallet2 = await prisma.wallet.findFirstOrThrow({ where: { userId } });
     expect(wallet2.balance).toBe(1080n);
+  });
+
+  it('resettleMatch reverses the prior payout and re-applies a corrected score (ADMIN-04)', async () => {
+    // was HOME 2-1 (pick HOME won, +180). Admin corrects to AWAY 1-2 -> the HOME pick now loses.
+    const r = await resettleMatch(prisma, matchId, { home: 1, away: 2 });
+    expect(r.reversed).toBe(1);
+    expect(r.result).toBe('AWAY');
+
+    const wallet = await prisma.wallet.findFirstOrThrow({ where: { userId } });
+    expect(wallet.balance).toBe(900n); // 180 clawed back; losing pick pays nothing
+
+    const pred = await prisma.prediction.findFirstOrThrow({ where: { matchId } });
+    expect(pred.status).toBe('LOST');
+    expect(pred.payout).toBe(0n);
+
+    const stats = await prisma.predictionUserStats.findUniqueOrThrow({ where: { userId } });
+    expect(stats.settledCount).toBe(1); // reversed (-1) then re-settled (+1)
+    expect(stats.winCount).toBe(0);
+    expect(stats.totalReturned).toBe(0n);
+    expect(stats.totalStaked).toBe(100n);
+
+    // ledger trail: original +180, reversal -180, corrected settle 0
+    const settleLedger = await prisma.pointLedger.findMany({ where: { userId, type: 'SETTLE' }, orderBy: { id: 'asc' } });
+    expect(settleLedger.map((l) => l.amount)).toEqual([180n, -180n, 0n]);
+
+    // and re-running with the same corrected score is idempotent (settlement now DONE)
+    const again = await resettleMatch(prisma, matchId, { home: 1, away: 2 });
+    expect(again.reversed).toBe(1);
+    const wallet2 = await prisma.wallet.findFirstOrThrow({ where: { userId } });
+    expect(wallet2.balance).toBe(900n);
   });
 });

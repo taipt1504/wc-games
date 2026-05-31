@@ -135,3 +135,59 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
 
   return { alreadySettled: false, result, settledCount };
 }
+
+/**
+ * Admin re-settle (PRD §09 ADMIN-04): correct a wrong score after settlement.
+ * Reverses the prior settlement (claws back credited payouts, undoes the ROI stats,
+ * writes reversal ledger rows, returns predictions to LOCKED, drops the Settlement),
+ * then re-runs settleMatch with the corrected score. Net-idempotent: re-running with
+ * the same score produces the same wallet/stat state. Returns how many bets were reversed.
+ */
+export async function resettleMatch(
+  prisma: PrismaClient,
+  matchId: bigint,
+  score: { home: number; away: number },
+): Promise<SettleResult & { reversed: number }> {
+  const existing = await prisma.settlement.findUnique({ where: { matchId } });
+  let reversed = 0;
+
+  if (existing && existing.status === 'DONE') {
+    await prisma.$transaction(async (tx) => {
+      const preds = await tx.prediction.findMany({ where: { matchId, status: { in: ['WON', 'LOST'] } } });
+      for (const p of preds) {
+        const payout = p.payout ?? 0n;
+        if (payout > 0n) {
+          const wallet = await tx.wallet.findFirstOrThrow({
+            where: { userId: p.userId, contextType: p.contextType, contextId: p.contextId },
+          });
+          const newBal = wallet.balance - payout;
+          await tx.wallet.update({ where: { id: wallet.id }, data: { balance: newBal } });
+          await tx.pointLedger.create({
+            data: {
+              userId: p.userId, contextType: p.contextType, contextId: p.contextId,
+              type: 'SETTLE', amount: -payout, balanceAfter: newBal,
+              refType: 'PREDICTION', refId: p.id,
+            },
+          });
+        }
+        if (p.contextType === 'GLOBAL') {
+          await tx.predictionUserStats.update({
+            where: { userId: p.userId },
+            data: {
+              totalStaked: { decrement: p.stake },
+              totalReturned: { decrement: payout },
+              settledCount: { decrement: 1 },
+              winCount: { decrement: p.status === 'WON' ? 1 : 0 },
+            },
+          });
+        }
+        await tx.prediction.update({ where: { id: p.id }, data: { status: 'LOCKED', payout: 0n, settledAt: null } });
+        reversed++;
+      }
+      await tx.settlement.delete({ where: { matchId } });
+    });
+  }
+
+  const res = await settleMatch(prisma, matchId, score);
+  return { ...res, reversed };
+}

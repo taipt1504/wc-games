@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@wc/db';
-import { settleMatch } from '@wc/prediction';
+import { settleMatch, placeBet } from '@wc/prediction';
 import { registerUser } from '@wc/auth';
 
 const TEST_DB = 'postgresql://wc:wc@localhost:5433/wc_game';
@@ -223,5 +223,44 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
     await page.locator('.rail').getByText('Admin').click();
     await page.getByRole('button', { name: 'Audit log' }).click();
     await expect(page.getByText('LOGIN').first()).toBeVisible();
+  });
+
+  test('admin corrects a wrong score -> re-settle flips the bet + audits it (ADMIN-04)', async ({ page }) => {
+    const stamp = Date.now();
+    const adminEmail = `settleadmin_${stamp}@golazo.test`;
+    const bettorEmail = `bettor_${stamp}@golazo.test`;
+
+    // a bettor backs HOME on a scheduled match; it settles HOME 2-0 so they win
+    const { matchId, predId } = await withDb(async (p) => {
+      await registerUser(p, { email: adminEmail, username: `settleadmin${stamp}`, password: 'password123' });
+      await p.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+      const bettor = await registerUser(p, { email: bettorEmail, username: `bettor${stamp}`, password: 'password123' });
+      const match = await p.match.findFirstOrThrow({ where: { status: 'SCHEDULED' }, orderBy: { id: 'asc' } });
+      const pred = await placeBet(p, { userId: bettor.id, matchId: match.id, pick: '1', stake: 100n });
+      await settleMatch(p, match.id, { home: 2, away: 0 });
+      return { matchId: match.id, predId: pred.id };
+    });
+    const won = await withDb((p) => p.prediction.findUniqueOrThrow({ where: { id: predId } }));
+    expect(won.status).toBe('WON');
+
+    // admin logs in, then corrects the score to an AWAY win via the role-gated re-settle API
+    // (same endpoint the admin match-detail "Save score & re-settle" action calls)
+    await page.goto('/');
+    await page.getByRole('button', { name: /I have an account/i }).click();
+    await page.getByPlaceholder('you@email.com').fill(adminEmail);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.getByRole('button', { name: 'Log in' }).last().click();
+    await expect(page.getByText("Today's matches")).toBeVisible();
+
+    const res = await page.request.post(`/api/v1/admin/matches/${matchId}/resettle`, {
+      data: { home: 0, away: 2, reason: 'API feed was wrong' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    // the previously-winning bet is now LOST and the correction is in the audit log
+    const after = await withDb((p) => p.prediction.findUniqueOrThrow({ where: { id: predId } }));
+    expect(after.status).toBe('LOST');
+    const audit = await withDb((p) => p.auditLog.findFirst({ where: { action: 'RESETTLE_MATCH', target: `match:${matchId}` } }));
+    expect(audit).toBeTruthy();
   });
 });

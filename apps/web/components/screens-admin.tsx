@@ -1052,10 +1052,17 @@ function AdmMatchDetail({ id, onBack, s }: { id: number; onBack: () => void; s: 
         </div>
       </div>
 
-      {edit && <ScoreEditModal m={edit} onClose={() => setEdit(null)} onSave={(mid, hs, as_) => {
-        setM(x => ({ ...x, hs, as: as_ }));
+      {edit && <ScoreEditModal m={edit} onClose={() => setEdit(null)} onSave={async (mid, hs, as_) => {
+        setM(x => ({ ...x, hs, as: as_, status: 'FINISHED', locked: true }));
         setEdit(null);
-        s.toastMsg('Score saved · logged to audit', 'check', 'var(--gold)');
+        try {
+          const res = await fetch(`/api/v1/admin/matches/${mid}/resettle`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ home: hs, away: as_ }),
+          });
+          const j = await res.json().catch(() => ({}));
+          s.toastMsg(res.ok ? `Re-settled ${hs}-${as_} · ${j.data?.reversed ?? 0} bets reversed` : 'Re-settle failed', res.ok ? 'check' : 'alert', res.ok ? 'var(--green)' : 'var(--danger)');
+        } catch { s.toastMsg('Network error — score not re-settled', 'alert', 'var(--danger)'); }
       }} />}
       {editOdds && <OddsEditModal m={m} onClose={() => setEditOdds(null)} onSave={(mid, mh_, md_, ma_) => {
         setM(x => ({ ...x, odds: { mh: mh_, md: md_, ma: ma_ } }));
