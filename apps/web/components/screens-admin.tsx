@@ -855,15 +855,27 @@ function AdmPipeline() {
 }
 
 /* ===================== AUDIT ===================== */
+const MOCK_AUDIT: [string, string, string, string, string][] = [
+  ['admin.ban', 'Hằng banned banned_joe', 'real-money abuse', '14:32', 'danger'],
+  ['data.override', 'Tú corrected score ESP 3-2 GER', 'API mismatch', '13:50', 'gold'],
+  ['news.approve', 'Hằng published "Host cities…"', '—', '13:21', 'green'],
+  ['auth.login', 'ghost_08 login · 113.161.x.x', 'flagged cluster', '12:58', 'muted'],
+  ['point.revoke', 'Hằng revoked 1,200 pts · ghost_07', 'fraud', '12:40', 'danger'],
+  ['settle.run', 'Auto-settled FRA 2-1 SUI', 'idempotent', '12:05', 'sky'],
+];
+
 function AdmAudit() {
-  const log: [string, string, string, string, string][] = [
-    ['admin.ban', 'Hằng banned banned_joe', 'real-money abuse', '14:32', 'danger'],
-    ['data.override', 'Tú corrected score ESP 3-2 GER', 'API mismatch', '13:50', 'gold'],
-    ['news.approve', 'Hằng published "Host cities…"', '—', '13:21', 'green'],
-    ['auth.login', 'ghost_08 login · 113.161.x.x', 'flagged cluster', '12:58', 'muted'],
-    ['point.revoke', 'Hằng revoked 1,200 pts · ghost_07', 'fraud', '12:40', 'danger'],
-    ['settle.run', 'Auto-settled FRA 2-1 SUI', 'idempotent', '12:05', 'sky'],
-  ];
+  const [log, setLog] = useState<[string, string, string, string, string][]>(MOCK_AUDIT);
+  useEffect(() => {
+    fetch('/api/v1/admin/audit')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.data?.length) {
+          setLog(j.data.map((e: { action: string; desc: string; reason: string; when: string; sev: string }) => [e.action, e.desc, e.reason, e.when, e.sev]));
+        }
+      })
+      .catch(() => {});
+  }, []);
   return (
     <div>
       <SecHead title="Audit log" sub="Immutable record of every sensitive action" action={<Btn variant="ghost" size="sm" icon="share">Export</Btn>} />

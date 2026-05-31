@@ -15,6 +15,11 @@ export async function POST(req: Request) {
   try {
     const user = await verifyLogin(prisma, parsed.data);
     await createSession(user);
+    // Capture login IP/UA in the immutable audit log (PRD §09 ADMIN-06 / §16).
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null;
+    await prisma.auditLog.create({
+      data: { actorType: 'USER', actorId: user.id, action: 'LOGIN', target: user.email, ip, userAgent: req.headers.get('user-agent') },
+    });
     return NextResponse.json({ data: { id: user.id, email: user.email } });
   } catch (e) {
     const msg = (e as Error).message;

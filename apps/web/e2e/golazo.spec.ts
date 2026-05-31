@@ -196,4 +196,32 @@ test.describe('GOLAZO — admin console (live API + Postgres)', () => {
     await page.locator('.rail').getByText('News').click();
     await expect(page.getByText(SPAIN).first()).toBeVisible();
   });
+
+  test('login is captured in the immutable audit log + visible to admin (ADMIN-06)', async ({ page }) => {
+    const stamp = Date.now();
+    const adminEmail = `auditadmin_${stamp}@golazo.test`;
+    await withDb(async (p) => {
+      await registerUser(p, { email: adminEmail, username: `auditadmin${stamp}`, password: 'password123' });
+      await p.user.update({ where: { email: adminEmail }, data: { role: 'ADMIN' } });
+    });
+
+    // logging in writes a LOGIN audit row (POST /auth/login captures IP/UA)
+    await page.goto('/');
+    await page.getByRole('button', { name: /I have an account/i }).click();
+    await page.getByPlaceholder('you@email.com').fill(adminEmail);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.getByRole('button', { name: 'Log in' }).last().click();
+    await expect(page.getByText("Today's matches")).toBeVisible();
+
+    // it's persisted in the audit log
+    const loginEntry = await withDb((p) =>
+      p.auditLog.findFirst({ where: { action: 'LOGIN', target: adminEmail } }),
+    );
+    expect(loginEntry).toBeTruthy();
+
+    // and the admin audit view (GET /api/v1/admin/audit) surfaces LOGIN actions
+    await page.locator('.rail').getByText('Admin').click();
+    await page.getByRole('button', { name: 'Audit log' }).click();
+    await expect(page.getByText('LOGIN').first()).toBeVisible();
+  });
 });

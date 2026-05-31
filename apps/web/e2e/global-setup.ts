@@ -11,6 +11,7 @@ export default async function globalSetup() {
   // leaving the seeded tournament intact. Keeps cross-run e2e deterministic.
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "User" CASCADE');
   await prisma.newsArticle.deleteMany(); // fresh PENDING review queue each run (no FK to User)
+  await prisma.auditLog.deleteMany();    // audit has no FK to User either — reset for determinism
   const r = await seedTournament(prisma);
   const news = await seedNews(prisma);
   // eslint-disable-next-line no-console
