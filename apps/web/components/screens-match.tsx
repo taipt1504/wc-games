@@ -5,10 +5,33 @@ import { WC, type Match, type Team, type Pick1X2 } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, OddsRow, MatchCard, SecHead } from '@/components/ui';
 
+/* live-score polling (DATA-07) — overlays LIVE scores from /api/v1/matches/live */
+function useLiveScores() {
+  const [scores, setScores] = useState<Map<number, { home: number; away: number }>>(new Map());
+  useEffect(() => {
+    let active = true;
+    const poll = () => {
+      fetch('/api/v1/matches/live')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (active && j?.data) {
+            setScores(new Map((j.data as { id: number; home: number; away: number }[]).map((x) => [x.id, { home: x.home, away: x.away }])));
+          }
+        })
+        .catch(() => {});
+    };
+    poll();
+    const t = setInterval(poll, 15000);
+    return () => { active = false; clearInterval(t); };
+  }, []);
+  return scores;
+}
+
 /* ===================== SCHEDULE ===================== */
 export function Schedule({ s }: ScreenProps) {
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
+  const liveScores = useLiveScores();
   const filters = [
     { k: 'all', label: 'All' }, { k: 'live', label: 'Live' }, { k: 'today', label: 'Today' },
     { k: 'open', label: 'Open' }, { k: 'finished', label: 'Finished' },
@@ -35,10 +58,14 @@ export function Schedule({ s }: ScreenProps) {
       </div>
 
       <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
-        {list.map(m => (
-          <MatchCard key={m.id} m={m} onOpen={() => s.go('match', { id: m.id })}
-            onPick={(pick, odds) => s.openBet(m, pick, odds)} picked={s.pickFor(m.id)} />
-        ))}
+        {list.map(m => {
+          const lv = liveScores.get(m.id);
+          const mm = lv ? ({ ...m, hs: lv.home, as: lv.away, status: 'LIVE' } as Match) : m;
+          return (
+            <MatchCard key={m.id} m={mm} onOpen={() => s.go('match', { id: m.id })}
+              onPick={(pick, odds) => s.openBet(m, pick, odds)} picked={s.pickFor(m.id)} />
+          );
+        })}
       </div>
       {!list.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No matches match that filter.</p></div>}
     </div>
@@ -48,7 +75,10 @@ export function Schedule({ s }: ScreenProps) {
 /* ===================== MATCH DETAIL ===================== */
 export function MatchDetail({ s }: ScreenProps) {
   const [tab, setTab] = useState('preview');
-  const m = WC.matchById(Number(s.param.id));
+  const liveScores = useLiveScores();
+  const base = WC.matchById(Number(s.param.id));
+  const lv = base ? liveScores.get(base.id) : undefined;
+  const m = base && lv ? ({ ...base, hs: lv.home, as: lv.away, status: 'LIVE' } as typeof base) : base;
   if (!m) return null;
   const home = WC.byId(m.home), away = WC.byId(m.away);
   const live = m.status === 'LIVE', fin = m.status === 'FINISHED', open = m.status === 'SCHEDULED';

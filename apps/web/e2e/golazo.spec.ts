@@ -122,6 +122,25 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
   });
 });
 
+test.describe('GOLAZO — live scores (DATA-07)', () => {
+  test('a LIVE match surfaces on the public live feed', async ({ page }) => {
+    const liveId = BigInt(Date.now());
+    await withDb(async (p) => {
+      await p.match.create({
+        data: { id: liveId, round: 'GROUP', homeTeamId: 5n, awayTeamId: 6n, kickoffAt: new Date(Date.now() - 600_000), status: 'LIVE', scoreHome90: 1, scoreAway90: 0 },
+      });
+    });
+    await page.goto('/');
+    const res = await page.request.get('/api/v1/matches/live');
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    const m = (body.data as { id: number; home: number; away: number }[]).find((x) => x.id === Number(liveId));
+    expect(m).toBeTruthy();
+    expect(m!.home).toBe(1);
+    expect(m!.away).toBe(0);
+  });
+});
+
 test.describe('GOLAZO — exact-score knockout bonus (FR-SCORE-03)', () => {
   test('bettor calls an exact knockout score via the live API -> settle awards the bonus', async ({ page }) => {
     const stamp = Date.now();
