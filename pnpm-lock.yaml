@@ -108,6 +108,9 @@ importers:
       '@wc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@wc/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@wc/prediction':
         specifier: workspace:*
         version: link:../../packages/prediction
@@ -226,6 +229,9 @@ importers:
 
   packages/pipeline:
     dependencies:
+      '@wc/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@wc/db':
         specifier: workspace:*
         version: link:../db

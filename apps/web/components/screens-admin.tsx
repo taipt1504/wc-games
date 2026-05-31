@@ -802,6 +802,7 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
 /* ===================== REVIEW QUEUE ===================== */
 function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
   const [queue, setQueue] = useState<ReviewItem[]>(WC.reviewQueue);
+  const [generating, setGenerating] = useState(false);
   const load = () =>
     fetch('/api/v1/admin/news')
       .then((r) => (r.ok ? r.json() : null))
@@ -812,10 +813,16 @@ function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
     try { await fetch(`/api/v1/admin/news/${id}/${action}`, { method: 'POST' }); await load(); }
     catch { /* keep current queue */ }
   };
+  const generateDrafts = async () => {
+    setGenerating(true);
+    try { await fetch('/api/v1/admin/news/generate', { method: 'POST' }); await load(); }
+    catch { /* keep current queue */ }
+    finally { setGenerating(false); }
+  };
   const badge = (st: string) => (st === 'PUBLISHED' || st === 'APPROVED' ? 'green' : st === 'REJECTED' ? 'danger' : 'muted');
   return (
     <div>
-      <SecHead title="News review queue" sub="Tap a story to read the full draft before approving" />
+      <SecHead title="News review queue" sub="Tap a story to read the full draft before approving" action={<Btn variant="ghost" size="sm" icon="refresh" onClick={generateDrafts} disabled={generating}>{generating ? 'Generating…' : 'Generate drafts'}</Btn>} />
       <div className="stack gap-12">
         {queue.map((a: ReviewItem) => (
           <div key={a.id} className="card card-pad card-hover pointer" onClick={() => open('news', a.id)}>

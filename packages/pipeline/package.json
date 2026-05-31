@@ -16,6 +16,7 @@
     "seed": "dotenv -e ../../.env -- tsx src/seed-cli.ts"
   },
   "dependencies": {
+    "@wc/ai": "workspace:*",
     "@wc/db": "workspace:*",
     "@wc/fixtures": "workspace:*"
   },
