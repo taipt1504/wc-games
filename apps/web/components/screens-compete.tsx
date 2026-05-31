@@ -368,8 +368,42 @@ export function Profile({ s }: ScreenProps) {
         </div>
         <div className="card card-pad" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
           <div className="row gap-8"><Icon name="share" size={18} style={{ color: 'var(--green)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Share your form</span></div>
-          <p className="tiny t2 mt-8">&quot;I&apos;m +18.4% ROI and {me.won} bets up at the World Cup.&quot; Make a share card.</p>
-          <Btn variant="ghost" size="sm" className="mt-12" icon="share" onClick={() => s.toastMsg('Share card generated!', 'share', 'var(--green)')}>Generate card</Btn>
+          <p className="tiny t2 mt-8">&quot;I&apos;m +{me.roi}% ROI and {me.won} bets up at the World Cup.&quot; Make a share card.</p>
+          <div className="row gap-8 mt-12">
+            <Btn variant="ghost" size="sm" icon="share" onClick={() => {
+              const params = new URLSearchParams({
+                name: me.name,
+                roi: String(me.roi),
+                won: String(me.won),
+                settled: String(me.settled),
+                rank: String(me.rank),
+                tier: 'Gold',
+                streak: String(s.winStreak ?? WC.me.winStreak),
+              });
+              const url = typeof window !== 'undefined'
+                ? `${window.location.origin}/api/og/share?${params}`
+                : `/api/og/share?${params}`;
+              if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(() => s.toastMsg('Share link copied!', 'check', 'var(--green)')).catch(() => s.toastMsg('Copy failed', 'alert', 'var(--danger)'));
+              } else {
+                s.toastMsg('Share link copied!', 'check', 'var(--green)');
+              }
+            }}>Copy link</Btn>
+            <Btn variant="primary" size="sm" onClick={() => {
+              const params = new URLSearchParams({
+                name: me.name,
+                roi: String(me.roi),
+                won: String(me.won),
+                settled: String(me.settled),
+                rank: String(me.rank),
+                tier: 'Gold',
+                streak: String(s.winStreak ?? WC.me.winStreak),
+              });
+              if (typeof window !== 'undefined') {
+                window.open(`/api/og/share?${params}`, '_blank');
+              }
+            }}>Preview</Btn>
+          </div>
         </div>
       </div>
 
