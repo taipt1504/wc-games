@@ -94,4 +94,18 @@ Chạy **Workflow `golazo-design-conformance-audit`** (15 agents: 8 audit + 7 ad
 - **Admin odds-margin:** `1/m` → `1/(1+m)` (đúng convention multiplier-odds, khớp design).
 - **Article detail:** hydrate từ `/api/v1/news` (trước đọc mock tĩnh → bài đã duyệt rơi về `news[0]`).
 
-**Defer (đúng phạm vi v1 / design cũng mock / cần data thật):** full 26-player squad (B1), live bracket progression engine (B5), admin case-file export·escalation·audit-filter·pipeline-toggle (ADMIN-03/06/07), lobby transfer-host + chat auto-scroll + borrow-message, OAuth Google, Article OG meta, dynamic check-in label, H2H winner-highlight (design cũng bỏ trống). Tất cả đã ghi nhận, không phải lỗi ship.
+**Defer (đúng phạm vi v1 / design cũng mock / cần data thật):** full 26-player squad (B1), live bracket progression engine (B5), admin case-file export·escalation·audit-filter·pipeline-toggle (ADMIN-03/06/07), lobby transfer-host + chat auto-scroll + borrow-message, OAuth Google, Article OG meta, H2H winner-highlight. Lưu ý: chat-autoscroll & H2H-winner là **design-mock parity** — bản design cũng render đúng như impl (year/label/score, không scroll), nên "fix" sẽ **lệch khỏi** design source-of-truth → giữ nguyên. Tất cả đã ghi nhận, không phải lỗi ship.
+
+## 9. Superpowers agentic workflow — enforced (2026-05-31)
+
+`enforce wokflow agentic của plugin superpowers`: ngoài audit workflow (§8), đã invoke skill **`superpowers:subagent-driven-development`** và chạy đủ chu trình cho 1 task thật:
+- **Implementer subagent** → build feature + tests + commit + self-review.
+- **Spec-compliance reviewer subagent** → verify code khớp spec (đọc code, không tin report).
+- **Code-quality reviewer subagent** → Strengths/Issues(Critical/Important/Minor)/Assessment.
+- **Implementer re-dispatch** → fix review issues → tests xanh → commit.
+
+**Task đã ship qua chu trình — Tiered daily check-in (FR-ENG-01, ENG-01):** backend `dailyCheckin` trước đây thưởng **flat 200**; nay theo bậc streak **200/250/300/400** qua pure `checkinReward(streak)` trong `@wc/core` (unit-tested boundaries 0/1/2/3/6/7/13/14/20); UI `CheckinCard` hiện reward + mốc động theo `s.streak` (bỏ hardcode). +int test (streak 1→200, 3→250). Đây là **MVP feature thật chưa implement**, không phải cosmetic.
+
+Gate sau Task 1: **147 unit/integration + 13 E2E = 160, pass 100%**; `next build` xanh.
+
+> **Design URL `…/h/a0eo169Wls0sIZWdRxlYsw`:** re-fetch nhiều cách (anon / `x-api-key` → `401 unsupported auth method` / `Bearer` → `404` / version header / `/content` / `claude.ai` → `403`). Resource đã bị xoá phía server (share hết hạn) — không method nào lấy được. Bản trích xuất verbatim trong `docs/design/predict-wc-2026/` (lấy khi link còn sống) là nguồn đang theo.
