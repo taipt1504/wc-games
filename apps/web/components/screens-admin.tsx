@@ -622,28 +622,75 @@ function AdmRisk({ open }: { open: (kind: DetailKind, id: number) => void }) {
 }
 
 /* ===================== LOBBY RISK DETAIL ===================== */
+type InvestigationData = {
+  lobby: { id: number; name: string; status: string; ownerId: number };
+  flags: { id: number; rule: string; severity: string; status: string; reasons: string[] }[];
+  members: { id: number; userId: number; email: string; username: string; role: string; borrowed: number; defaultPoints: number }[];
+  pointFlow: { totalBorrowed: number; recentEntries: { userId: number; type: string; amount: number; createdAt: string }[] };
+};
+
 function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: ScreenProps['s'] }) {
   const r = WC.riskLobbies.find(x => x.id === id) || WC.riskLobbies[0];
   const [resolved, setResolved] = useState<string | null>(null);
+  const [inv, setInv] = useState<InvestigationData | null>(null);
   const rc = r.risk === 'High' ? 'danger' : r.risk === 'Medium' ? 'gold' : 'muted';
-  const members: { name: string; role: string; net: number; borrowed: number; flag: boolean }[] = [
-    { name: 'ghost_07', role: 'owner', net: -1200, borrowed: 600, flag: true },
-    { name: 'ghost_08', role: 'member', net: +1200, borrowed: 0, flag: true },
-  ];
-  if (r.members > 2) members.push({ name: 'casual_max', role: 'member', net: -40, borrowed: 0, flag: false });
 
-  const act = (verdict: string) => {
-    setResolved(verdict);
-    if (verdict === 'ban') s.toastMsg('Lobby closed · accounts banned · logged', 'ban', 'var(--danger)');
-    else if (verdict === 'warn') s.toastMsg('Warning issued to lobby owner', 'check', 'var(--gold)');
-    else s.toastMsg('Case dismissed as false positive', 'check', 'var(--green)');
+  useEffect(() => {
+    fetch(`/api/v1/admin/lobbies/${id}/investigation`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((j) => { if (j?.data) setInv(j.data); })
+      .catch(() => {});
+  }, [id]);
+
+  // Use real data when available, fall back to mock
+  const lobbyName = inv?.lobby.name ?? r.name;
+  const memberCount = inv?.members.length ?? r.members;
+  const reasons = (inv?.flags[0]?.reasons) ?? r.reasons;
+  const primaryFlagId = inv?.flags[0]?.id ?? null;
+  const displayMembers = inv
+    ? inv.members.map((m) => ({ name: m.username, role: m.role.toLowerCase(), borrowed: m.borrowed, flag: m.borrowed > 0 }))
+    : [
+        { name: 'ghost_07', role: 'owner', borrowed: 600, flag: true },
+        { name: 'ghost_08', role: 'member', borrowed: 0, flag: true },
+        ...(r.members > 2 ? [{ name: 'casual_max', role: 'member', borrowed: 0, flag: false }] : []),
+      ];
+
+  const downloadEvidence = async () => {
+    try {
+      const res = await fetch(`/api/v1/admin/lobbies/${id}/case-file`, { method: 'POST' });
+      if (!res.ok) { s.toastMsg('Could not export evidence', 'alert', 'var(--danger)'); return; }
+      const j = await res.json();
+      const evidence = j?.data?.evidence;
+      if (evidence && typeof window !== 'undefined' && typeof Blob !== 'undefined') {
+        const blob = new Blob([JSON.stringify(evidence, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `case-lobby-${id}.json`; a.click();
+        URL.revokeObjectURL(url);
+      }
+      s.toastMsg('Evidence bundle exported', 'share', 'var(--sky)');
+    } catch { s.toastMsg('Export failed', 'alert', 'var(--danger)'); }
   };
 
-  const pointFlowRows: [string, string, string][] = [
-    ['ghost_07 → ghost_08', '−1,200', 'one-way'],
-    ['ghost_08 → ghost_07', '0', ''],
-    ['borrow ×6', '+1,200', 'maxed'],
-  ];
+  const closeLobby = async () => {
+    try {
+      const res = await fetch(`/api/v1/admin/lobbies/${id}/close`, { method: 'POST' });
+      if (res.ok) { setResolved('ban'); s.toastMsg('Lobby closed · flags resolved · logged', 'ban', 'var(--danger)'); }
+      else s.toastMsg('Close failed', 'alert', 'var(--danger)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  const escalateFlag = async () => {
+    if (!primaryFlagId) { s.toastMsg('No open flag to escalate', 'alert', 'var(--gold)'); return; }
+    try {
+      const res = await fetch(`/api/v1/admin/risk-flags/${primaryFlagId}/escalate`, { method: 'POST' });
+      if (res.ok) s.toastMsg('Flag escalated · logged', 'check', 'var(--gold)');
+      else s.toastMsg('Escalate failed', 'alert', 'var(--danger)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  const totalBorrowed = inv?.pointFlow.totalBorrowed ?? 0;
+  const recentFlow = inv?.pointFlow.recentEntries ?? [];
 
   return (
     <div>
@@ -654,9 +701,9 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
           <div>
             <div className="row gap-8">
               <Icon name="shield" size={18} style={{ color: `var(--${rc === 'muted' ? 'muted' : rc})` }} />
-              <span className="mono h3">{r.name}</span>
+              <span className="mono h3">{lobbyName}</span>
             </div>
-            <div className="tiny muted mt-4">{r.members} members · flagged {r.flagged}</div>
+            <div className="tiny muted mt-4">{memberCount} members · flagged {r.flagged}</div>
           </div>
           <span className={`badge badge-${rc}`} style={{ fontSize: 13 }}>{r.risk} risk · {r.score}/100</span>
         </div>
@@ -676,7 +723,7 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
             {r.score}<span className="muted" style={{ fontSize: 18 }}>/100</span>
           </div>
           <div className="stack gap-8 mt-12">
-            {r.reasons.map((x, i) => (
+            {reasons.map((x, i) => (
               <div key={i} className="row gap-8 small t2"><Icon name="alert" size={14} style={{ color: 'var(--danger)' }} />{x}</div>
             ))}
           </div>
@@ -684,15 +731,17 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
         <div className="card card-pad">
           <span className="eyebrow">Point flow</span>
           <div className="stack gap-10 mt-12">
-            {pointFlowRows.map(([a, b, tag], i) => (
+            <div className="row between small">
+              <span className="t2 mono">Total borrowed</span>
+              <span className="tnum text-danger">{totalBorrowed.toLocaleString()}</span>
+            </div>
+            {recentFlow.slice(0, 5).map((e, i) => (
               <div key={i} className="row between small">
-                <span className="t2 mono">{a}</span>
-                <div className="row gap-8">
-                  <span className="tnum text-danger">{b}</span>
-                  {tag && <span className="badge badge-danger">{tag}</span>}
-                </div>
+                <span className="t2 mono">user {e.userId} · {e.type}</span>
+                <span className={`tnum ${e.amount >= 0 ? 'text-green' : 'text-danger'}`}>{e.amount >= 0 ? '+' : ''}{e.amount}</span>
               </div>
             ))}
+            {recentFlow.length === 0 && <span className="tiny muted">No recent borrow/settle entries</span>}
           </div>
         </div>
         <div className="card card-pad">
@@ -713,13 +762,12 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
             <tr>
               <th>Member</th>
               <th style={{ textAlign: 'center' }}>Role</th>
-              <th style={{ textAlign: 'right' }}>Net flow</th>
               <th style={{ textAlign: 'right' }}>Borrowed</th>
               <th style={{ textAlign: 'center' }}>Flag</th>
             </tr>
           </thead>
           <tbody>
-            {members.map((mem, i) => (
+            {displayMembers.map((mem, i) => (
               <tr key={i}>
                 <td>
                   <div className="row gap-8">
@@ -728,7 +776,6 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
                   </div>
                 </td>
                 <td style={{ textAlign: 'center' }}><span className="badge badge-muted">{mem.role}</span></td>
-                <td className="tnum" style={{ textAlign: 'right', color: mem.net >= 0 ? 'var(--green)' : 'var(--danger)' }}>{mem.net >= 0 ? '+' : ''}{mem.net}</td>
                 <td className="tnum t2" style={{ textAlign: 'right' }}>{mem.borrowed || '—'}</td>
                 <td style={{ textAlign: 'center' }}>
                   {mem.flag ? <Icon name="alert" size={15} style={{ color: 'var(--danger)' }} /> : <span className="muted">—</span>}
@@ -742,10 +789,10 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
       <div className="card card-pad mt-16 row between wrap gap-12">
         <span className="small t2">Confirm verdict — every action is written to the immutable audit trail.</span>
         <div className="row gap-8">
-          <Btn variant="ghost" size="sm" icon="share" onClick={() => s.toastMsg('Evidence bundle exported', 'share', 'var(--sky)')}>Export evidence</Btn>
-          <Btn variant="ghost" size="sm" disabled={!!resolved} onClick={() => act('dismiss')}>Dismiss</Btn>
-          <Btn variant="ghost" size="sm" disabled={!!resolved} onClick={() => act('warn')}>Warn</Btn>
-          <Btn variant="danger" size="sm" icon="ban" disabled={!!resolved} onClick={() => act('ban')}>Close & ban</Btn>
+          <Btn variant="ghost" size="sm" icon="share" onClick={downloadEvidence}>Export evidence</Btn>
+          <Btn variant="ghost" size="sm" disabled={!!resolved} onClick={escalateFlag}>Escalate</Btn>
+          <Btn variant="ghost" size="sm" disabled={!!resolved} onClick={() => { setResolved('dismiss'); s.toastMsg('Case dismissed as false positive', 'check', 'var(--green)'); }}>Dismiss</Btn>
+          <Btn variant="danger" size="sm" icon="ban" disabled={!!resolved} onClick={closeLobby}>Close & ban</Btn>
         </div>
       </div>
     </div>
@@ -803,15 +850,49 @@ function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
 }
 
 /* ===================== AI PIPELINE ===================== */
+type PipelineKpis = {
+  total: number; last24h: number; byProvider: Record<string, number>;
+  fallbackCount: number; avgLatencyMs: number; totalCost: number;
+};
+type PipelineJob = {
+  id: number; type: string; providerUsed: string; status: string;
+  tokens: number | null; cost: number | null; latencyMs: number | null;
+  error: string | null; createdAt: string;
+};
+
 function AdmPipeline() {
+  const [jobs, setJobs] = useState<PipelineJob[]>([]);
+  const [kpis, setKpis] = useState<PipelineKpis | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/admin/ai-jobs')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.data) { setJobs(j.data.jobs); setKpis(j.data.kpis); }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Derive active provider from kpis (most used provider)
+  const activeProvider = kpis
+    ? Object.entries(kpis.byProvider).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'claude'
+    : 'Claude';
+
+  const avgLatencyStr = kpis
+    ? kpis.avgLatencyMs >= 1000 ? `${(kpis.avgLatencyMs / 1000).toFixed(1)}s` : `${kpis.avgLatencyMs}ms`
+    : '—';
+
+  // Display: real jobs when loaded, WC mock as fallback (WC.aiJobs is shown in the overview; pipeline tab shows the real table or WC mock)
+  const showMock = jobs.length === 0;
+
   return (
     <div>
       <SecHead title="AI & data pipeline" sub="9router · Claude primary → OpenAI fallback" />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', marginBottom: 20 }}>
-        <KPI v="Claude" l="Active provider" c="var(--green)" sub="9router primary" />
-        <KPI v="1" l="Fallbacks (24h)" c="var(--gold)" sub="OpenAI · quota" />
-        <KPI v="$42.10" l="LLM spend today" c="var(--text)" />
-        <KPI v="4.4s" l="Avg preview latency" c="var(--sky)" />
+        <KPI v={kpis ? activeProvider : 'Claude'} l="Active provider" c="var(--green)" sub="9router primary" />
+        <KPI v={kpis ? kpis.fallbackCount : '—'} l="Fallbacks (24h)" c="var(--gold)" sub="non-primary provider" />
+        <KPI v={kpis ? `$${kpis.totalCost.toFixed(2)}` : '—'} l="LLM spend" c="var(--text)" />
+        <KPI v={kpis ? avgLatencyStr : '—'} l="Avg latency" c="var(--sky)" />
       </div>
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
@@ -822,26 +903,48 @@ function AdmPipeline() {
                 <th>Provider</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
                 <th style={{ textAlign: 'right' }} className="hide-mobile">Latency</th>
-                <th style={{ textAlign: 'right' }}>Last run</th>
+                <th style={{ textAlign: 'right' }}>When</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {WC.aiJobs.map((j: AiJob, i: number) => (
-                <tr key={i}>
-                  <td className="mono small">{j.name}</td>
-                  <td className="small t2">{j.provider}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span className="row gap-6 center">
-                      <JobDot st={j.status} />
-                      <span className="tiny" style={{ textTransform: 'capitalize' }}>{j.status}</span>
-                    </span>
-                  </td>
-                  <td className="tnum tiny t2 hide-mobile" style={{ textAlign: 'right' }}>{j.latency}</td>
-                  <td className="tiny muted" style={{ textAlign: 'right' }}>{j.last} ago</td>
-                  <td style={{ textAlign: 'right' }}><button className="btn-icon btn-ghost"><Icon name="refresh" size={15} /></button></td>
-                </tr>
-              ))}
+              {showMock
+                ? WC.aiJobs.map((j: AiJob, i: number) => (
+                    <tr key={i}>
+                      <td className="mono small">{j.name}</td>
+                      <td className="small t2">{j.provider}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="row gap-6 center">
+                          <JobDot st={j.status} />
+                          <span className="tiny" style={{ textTransform: 'capitalize' }}>{j.status}</span>
+                        </span>
+                      </td>
+                      <td className="tnum tiny t2 hide-mobile" style={{ textAlign: 'right' }}>{j.latency}</td>
+                      <td className="tiny muted" style={{ textAlign: 'right' }}>{j.last} ago</td>
+                      <td style={{ textAlign: 'right' }}><button className="btn-icon btn-ghost"><Icon name="refresh" size={15} /></button></td>
+                    </tr>
+                  ))
+                : jobs.map((j) => {
+                    const latStr = j.latencyMs != null
+                      ? j.latencyMs >= 1000 ? `${(j.latencyMs / 1000).toFixed(1)}s` : `${j.latencyMs}ms`
+                      : '—';
+                    const when = new Date(j.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <tr key={j.id}>
+                        <td className="mono small">{j.type}</td>
+                        <td className="small t2">{j.providerUsed}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className="row gap-6 center">
+                            <JobDot st={j.status} />
+                            <span className="tiny" style={{ textTransform: 'capitalize' }}>{j.status}</span>
+                          </span>
+                        </td>
+                        <td className="tnum tiny t2 hide-mobile" style={{ textAlign: 'right' }}>{latStr}</td>
+                        <td className="tiny muted" style={{ textAlign: 'right' }}>{when}</td>
+                        <td style={{ textAlign: 'right' }}>{j.error && <Icon name="alert" size={14} style={{ color: 'var(--danger)' }} />}</td>
+                      </tr>
+                    );
+                  })}
             </tbody>
           </table>
         </div>
