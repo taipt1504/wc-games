@@ -6,7 +6,7 @@
 Tài liệu này là **checklist build** cho phần implement. Brand: **GOLAZO**.
 
 ### Design provenance & verification (2026-05-31)
-- **Nguồn:** Claude Design share `https://api.anthropic.com/v1/design/h/a0eo169Wls0sIZWdRxlYsw`. Re-fetch hôm nay trả **404 (share link đã hết hạn)** — bản trích xuất verbatim của chính URL đó đã lưu tại [`docs/design/predict-wc-2026/`](../design/predict-wc-2026/) (README + `chats/chat1.md` + `project/*`) là bản gốc dùng để build.
+- **Nguồn:** Claude Design share. Hash gốc `…/h/a0eo169Wls0sIZWdRxlYsw` đã hết hạn (404). User **re-share** → hash mới `https://api.anthropic.com/v1/design/h/eauZ_wFVmPLBaEgLzMFz3g`, **fetch live thành công** (gzip bundle 121.6KB). Giải nén + diff với bản trích xuất trong repo [`docs/design/predict-wc-2026/`](../design/predict-wc-2026/): **byte-identical** (aggregate SHA `6f723765e6e9a162c1e5d250d6d218d594319f3f` khớp 2 phía, danh sách file giống hệt) → xác nhận bản extract là verbatim của URL, và **0 delta để implement** (port đã theo 1:1).
 - **Đã đọc lại** README + toàn bộ `chats/chat1.md` (8 vòng iterate của user). **Final state của design** đã được verify hiện diện trong code port:
 
 | Design feature (chốt trong chat) | Ported |
@@ -108,4 +108,4 @@ Chạy **Workflow `golazo-design-conformance-audit`** (15 agents: 8 audit + 7 ad
 
 Gate sau Task 1: **147 unit/integration + 13 E2E = 160, pass 100%**; `next build` xanh.
 
-> **Design URL `…/h/a0eo169Wls0sIZWdRxlYsw`:** re-fetch nhiều cách (anon / `x-api-key` → `401 unsupported auth method` / `Bearer` → `404` / version header / `/content` / `claude.ai` → `403`). Resource đã bị xoá phía server (share hết hạn) — không method nào lấy được. Bản trích xuất verbatim trong `docs/design/predict-wc-2026/` (lấy khi link còn sống) là nguồn đang theo.
+> **Design URL — RESOLVED:** hash gốc `…/a0eo169Wls0sIZWdRxlYsw` hết hạn (404 mọi method). User re-share → `…/eauZ_wFVmPLBaEgLzMFz3g` **fetch live OK** (gzip 121.6KB). Bundle byte-identical với extract trong repo (SHA `6f723765…`) → live source == bản đang build == 0 delta. Điều kiện "fetch design + read README + implement" đã hoàn tất.
