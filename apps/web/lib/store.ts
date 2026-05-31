@@ -36,7 +36,7 @@ export interface Store {
   logout: () => void;
   refreshUser: () => void;
   checkin: () => void;
-  claimMission: (code: string) => void;
+  claimMission: (code: string) => Promise<void>;
   pickFor: (mid: number) => string | undefined;
   openBet: (match: Match, pick: Pick1X2, odds: number) => void;
   setSlipPick: (pick: Pick1X2, odds: number) => void;

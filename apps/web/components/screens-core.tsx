@@ -256,9 +256,8 @@ function Missions({ s }: ScreenProps) {
   useEffect(() => { fetchMissions(); }, []);
 
   const handleClaim = async (code: string) => {
-    s.claimMission(code);
-    // Refetch after claim to sync state
-    setTimeout(fetchMissions, 400);
+    await s.claimMission(code);
+    fetchMissions();
   };
 
   const complete = missions.filter((m) => m.complete).length;
