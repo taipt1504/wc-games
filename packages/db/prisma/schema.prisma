@@ -43,6 +43,7 @@ enum LedgerType {
   REFERRAL
   PURCHASE
   ADMIN_ADJ
+  BONUS
 }
 
 // Outcome map: HOME='1', DRAW='X', AWAY='2'

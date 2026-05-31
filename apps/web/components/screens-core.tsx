@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — Landing · Auth · Home (ported from design screens-core.jsx) */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WC, type Match } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, MatchCard, Pundit, SecHead, Avatar, TIER_C } from '@/components/ui';
@@ -220,30 +220,68 @@ function CheckinCard({ s }: ScreenProps) {
   );
 }
 
+interface ApiMission {
+  code: string;
+  label: string;
+  reward: number;
+  progress: number;
+  target: number;
+  complete: boolean;
+  claimed: boolean;
+  icon: string;
+}
+
+// Map WC.missions fallback shape to ApiMission shape
+const FALLBACK_MISSIONS: ApiMission[] = WC.missions.map((m) => ({
+  code: String(m.id),
+  label: m.label,
+  reward: m.reward,
+  progress: m.done,
+  target: m.total,
+  complete: m.done >= m.total,
+  claimed: m.claimed,
+  icon: m.icon,
+}));
+
 function Missions({ s }: ScreenProps) {
+  const [missions, setMissions] = useState<ApiMission[]>(FALLBACK_MISSIONS);
+
+  const fetchMissions = () => {
+    fetch('/api/v1/me/missions')
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { if (j?.data) setMissions(j.data as ApiMission[]); })
+      .catch(() => { /* keep fallback */ });
+  };
+
+  useEffect(() => { fetchMissions(); }, []);
+
+  const handleClaim = async (code: string) => {
+    s.claimMission(code);
+    // Refetch after claim to sync state
+    setTimeout(fetchMissions, 400);
+  };
+
+  const complete = missions.filter((m) => m.complete).length;
   return (
     <div className="card card-pad">
-      <SecHead title="Daily missions" sub={`${WC.missions.filter((m) => m.done >= m.total).length}/${WC.missions.length} complete`} />
+      <SecHead title="Daily missions" sub={`${complete}/${missions.length} complete`} />
       <div className="stack gap-12">
-        {WC.missions.map((m) => {
-          const done = m.done >= m.total;
-          return (
-            <div key={m.id} className="row between gap-12">
-              <div className="row gap-10" style={{ minWidth: 0 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
-                  <Icon name={m.icon} size={17} style={{ color: done ? 'var(--green)' : 'var(--text-2)' }} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="small" style={{ fontWeight: 600 }}>{m.label}</div>
-                  <div className="tiny muted">{m.done}/{m.total} · +{m.reward} pts</div>
-                </div>
+        {missions.map((m) => (
+          <div key={m.code} className="row between gap-12">
+            <div className="row gap-10" style={{ minWidth: 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
+                <Icon name={m.icon} size={17} style={{ color: m.complete ? 'var(--green)' : 'var(--text-2)' }} />
               </div>
-              {m.claimed ? <span className="badge badge-muted">Claimed</span>
-                : done ? <Btn variant="gold" size="sm" onClick={() => s.claimMission(m.id)}>Claim</Btn>
-                  : <span className="tnum small muted">{m.done}/{m.total}</span>}
+              <div style={{ minWidth: 0 }}>
+                <div className="small" style={{ fontWeight: 600 }}>{m.label}</div>
+                <div className="tiny muted">{m.progress}/{m.target} · +{m.reward} pts</div>
+              </div>
             </div>
-          );
-        })}
+            {m.claimed ? <span className="badge badge-muted">Claimed</span>
+              : m.complete ? <Btn variant="gold" size="sm" onClick={() => handleClaim(m.code)}>Claim</Btn>
+                : <span className="tnum small muted">{m.progress}/{m.target}</span>}
+          </div>
+        ))}
       </div>
     </div>
   );

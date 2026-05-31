@@ -131,7 +131,21 @@ export default function AppShell() {
         else { setCheckedIn(true); toastMsg(j?.error?.code === 'ALREADY_CHECKED_IN' ? 'Already checked in today' : 'Check-in failed', 'alert', 'var(--gold)'); }
       } catch { toastMsg('Network error', 'alert', 'var(--danger)'); }
     },
-    claimMission: (id: number) => { const m = WC.missions.find((x) => x.id === id); if (!m || m.claimed) return; m.claimed = true; setPoints((p) => p + m.reward); toastMsg(`Mission complete! +${m.reward}`, 'target', 'var(--purple)'); },
+    claimMission: async (code: string) => {
+      try {
+        const res = await fetch(`/api/v1/me/missions/${code}/claim`, { method: 'POST' });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const { reward, balance } = j.data as { reward: number; balance: number };
+          setPoints(balance);
+          toastMsg(`Mission complete! +${reward} pts`, 'target', 'var(--purple)');
+          void refreshUser();
+        } else {
+          const code_ = j?.error?.code;
+          toastMsg(code_ === 'ALREADY_CLAIMED' ? 'Already claimed today' : code_ === 'NOT_COMPLETE' ? 'Mission not complete yet' : 'Claim failed', 'alert', 'var(--danger)');
+        }
+      } catch { toastMsg('Network error', 'alert', 'var(--danger)'); }
+    },
     pickFor: (mid: number) => bets.find((x) => x.mid === mid && x.status === 'OPEN')?.pick,
     openBet: (match: Match, pick: Pick1X2, odds: number) => {
       if (!authedRef.current) { toastMsg('Sign up free to place a bet', 'lock', 'var(--gold)'); go('auth', { mode: 'signup' }); return; }
