@@ -221,7 +221,7 @@ export function Auth({ s }: ScreenProps) {
 
 /* ===================== HOME ===================== */
 export function Home({ s }: ScreenProps) {
-  const me = WC.me;
+  const me = s.me;
   const today = [WC.matchById(23), WC.matchById(24), WC.matchById(27), WC.matchById(31), WC.matchById(33)].filter(Boolean) as Match[];
   const smart: Record<number, string> = { 23: '1', 27: '2', 31: 'X' };
   return (
@@ -237,7 +237,7 @@ export function Home({ s }: ScreenProps) {
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(136px,1fr))', marginBottom: 26 }}>
         <Stat val={s.points.toLocaleString()} lbl="Point balance" c="var(--gold)" i="wallet" onClick={() => s.go('wallet')} />
         <Stat val={`+${me.roi}%`} lbl="Your ROI" c="var(--green)" i="trending" onClick={() => s.go('mybets')} />
-        <Stat val={`#${me.rank.toLocaleString()}`} lbl="Global rank" c="var(--sky)" i="trophy" onClick={() => s.go('leaderboard')} />
+        <Stat val={me.rank == null ? '—' : `#${me.rank.toLocaleString()}`} lbl="Global rank" c="var(--sky)" i="trophy" onClick={() => s.go('leaderboard')} />
         <Stat val={`${me.won}-${me.lost}`} lbl="Win / loss" c="var(--text)" i="target" onClick={() => s.go('mybets')} />
       </div>
 
@@ -312,20 +312,8 @@ interface ApiMission {
   icon: string;
 }
 
-// Map WC.missions fallback shape to ApiMission shape
-const FALLBACK_MISSIONS: ApiMission[] = WC.missions.map((m) => ({
-  code: String(m.id),
-  label: m.label,
-  reward: m.reward,
-  progress: m.done,
-  target: m.total,
-  complete: m.done >= m.total,
-  claimed: m.claimed,
-  icon: m.icon,
-}));
-
 function Missions({ s }: ScreenProps) {
-  const [missions, setMissions] = useState<ApiMission[]>(FALLBACK_MISSIONS);
+  const [missions, setMissions] = useState<ApiMission[]>([]);
 
   const fetchMissions = () => {
     fetch('/api/v1/me/missions')
@@ -344,47 +332,64 @@ function Missions({ s }: ScreenProps) {
   const complete = missions.filter((m) => m.complete).length;
   return (
     <div className="card card-pad">
-      <SecHead title="Daily missions" sub={`${complete}/${missions.length} complete`} />
-      <div className="stack gap-12">
-        {missions.map((m) => (
-          <div key={m.code} className="row between gap-12">
-            <div className="row gap-10" style={{ minWidth: 0 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
-                <Icon name={m.icon} size={17} style={{ color: m.complete ? 'var(--green)' : 'var(--text-2)' }} />
+      <SecHead title="Daily missions" sub={missions.length > 0 ? `${complete}/${missions.length} complete` : undefined} />
+      {missions.length === 0 ? (
+        <p className="small muted" style={{ marginTop: 8 }}>No missions today.</p>
+      ) : (
+        <div className="stack gap-12">
+          {missions.map((m) => (
+            <div key={m.code} className="row between gap-12">
+              <div className="row gap-10" style={{ minWidth: 0 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
+                  <Icon name={m.icon} size={17} style={{ color: m.complete ? 'var(--green)' : 'var(--text-2)' }} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="small" style={{ fontWeight: 600 }}>{m.label}</div>
+                  <div className="tiny muted">{m.progress}/{m.target} · +{m.reward} pts</div>
+                </div>
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div className="small" style={{ fontWeight: 600 }}>{m.label}</div>
-                <div className="tiny muted">{m.progress}/{m.target} · +{m.reward} pts</div>
-              </div>
+              {m.claimed ? <span className="badge badge-muted">Claimed</span>
+                : m.complete ? <Btn variant="gold" size="sm" onClick={() => handleClaim(m.code)}>Claim</Btn>
+                  : <span className="tnum small muted">{m.progress}/{m.target}</span>}
             </div>
-            {m.claimed ? <span className="badge badge-muted">Claimed</span>
-              : m.complete ? <Btn variant="gold" size="sm" onClick={() => handleClaim(m.code)}>Claim</Btn>
-                : <span className="tnum small muted">{m.progress}/{m.target}</span>}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function MiniBoard({ s }: ScreenProps) {
-  const top = WC.leaderboard.slice(0, 4);
+  const [rows, setRows] = useState<import('@/lib/wc').LeaderRow[]>([]);
+
+  useEffect(() => {
+    fetch('/api/v1/leaderboard')
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { setRows(j?.data ?? []); })
+      .catch(() => { /* keep empty */ });
+  }, []);
+
+  const top = rows.slice(0, 4);
   return (
     <div className="card card-pad">
       <SecHead title="Global leaderboard" action={<button className="chip" onClick={() => s.go('leaderboard')}>See all →</button>} />
-      <div className="stack gap-10">
-        {top.map((p) => (
-          <div key={p.rank} className="row between">
-            <div className="row gap-10"><span className="tnum muted" style={{ width: 18 }}>{p.rank}</span><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span className="small" style={{ fontWeight: 600 }}>{p.name}</span></div>
-            <span className="tnum text-green" style={{ fontWeight: 700 }}>+{p.roi}%</span>
+      {top.length === 0 ? (
+        <p className="small muted" style={{ marginTop: 8 }}>Leaderboard is empty.</p>
+      ) : (
+        <div className="stack gap-10">
+          {top.map((p) => (
+            <div key={p.rank} className="row between">
+              <div className="row gap-10"><span className="tnum muted" style={{ width: 18 }}>{p.rank}</span><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span className="small" style={{ fontWeight: 600 }}>{p.name}</span></div>
+              <span className="tnum text-green" style={{ fontWeight: 700 }}>+{p.roi}%</span>
+            </div>
+          ))}
+          <div className="hr" style={{ margin: '4px 0' }} />
+          <div className="row between">
+            <div className="row gap-10"><span className="tnum text-gold" style={{ width: 18, fontWeight: 700 }}>{s.me.rank ?? '—'}</span><Avatar initials={s.me.avatar} size={28} color="var(--gold)" /><span className="small" style={{ fontWeight: 700 }}>You</span></div>
+            <span className="tnum text-green" style={{ fontWeight: 700 }}>+{s.me.roi}%</span>
           </div>
-        ))}
-        <div className="hr" style={{ margin: '4px 0' }} />
-        <div className="row between">
-          <div className="row gap-10"><span className="tnum text-gold" style={{ width: 18, fontWeight: 700 }}>{WC.me.rank}</span><Avatar initials="AR" size={28} color="var(--gold)" /><span className="small" style={{ fontWeight: 700 }}>You</span></div>
-          <span className="tnum text-green" style={{ fontWeight: 700 }}>+{WC.me.roi}%</span>
         </div>
-      </div>
+      )}
     </div>
   );
 }
