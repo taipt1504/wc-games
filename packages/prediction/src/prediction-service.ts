@@ -4,6 +4,7 @@
  */
 import type { PrismaClient, Prediction } from '@wc/db';
 import { settleBet, type Pick1X2 } from '@wc/core';
+import { consumePowerUp } from './powerups';
 
 type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
@@ -19,13 +20,14 @@ async function recomputeWinStreak(tx: Tx, userId: bigint): Promise<number> {
   const settled = await tx.prediction.findMany({
     where: { userId, contextType: 'GLOBAL', status: { in: ['WON', 'LOST'] } },
     orderBy: [{ settledAt: 'asc' }, { id: 'asc' }],
-    select: { status: true },
+    select: { status: true, powerUp: true },
   });
 
   let streak = 0;
   for (let i = settled.length - 1; i >= 0; i--) {
-    if (settled[i].status === 'WON') streak++;
-    else break;
+    if (settled[i].status === 'WON') { streak++; continue; }
+    if (settled[i].powerUp === 'STREAK_SHIELD') continue; // shielded loss — does not break streak
+    break;
   }
 
   await tx.streak.upsert({
@@ -72,6 +74,8 @@ export interface PlaceBetInput {
   // Optional exact-score prediction for knockout-stage bonus (PRD §04 / FR-SCORE-03).
   exactHome?: number;
   exactAway?: number;
+  // Optional power-up to apply to this bet (DEPTH-04). Consumes 1 from inventory.
+  powerUp?: string;
 }
 
 /** Place a 1X2 bet in the GLOBAL context: escrow stake + create OPEN prediction + ledger (atomic). */
@@ -94,12 +98,18 @@ export async function placeBet(prisma: PrismaClient, input: PlaceBetInput): Prom
     const newBal = wallet.balance - input.stake;
     await tx.wallet.update({ where: { id: wallet.id }, data: { balance: newBal } });
 
+    // Consume power-up inventory before creating the prediction (atomic within $transaction).
+    if (input.powerUp) {
+      await consumePowerUp(tx, input.userId, input.powerUp);
+    }
+
     const prediction = await tx.prediction.create({
       data: {
         userId: input.userId, contextType: 'GLOBAL', contextId: null,
         matchId: input.matchId, market: '1X2', outcome, stake: input.stake,
         oddsSnapshot: odds, status: 'OPEN',
         exactHome: input.exactHome ?? null, exactAway: input.exactAway ?? null,
+        powerUp: input.powerUp ?? null,
       },
     });
     await tx.pointLedger.create({
@@ -153,7 +163,14 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
         knockout,
         exactPick: knockout && p.exactHome != null && p.exactAway != null ? { home: p.exactHome, away: p.exactAway } : undefined,
       });
-      const payout = BigInt(Math.round(r.payout));
+      let payout = BigInt(Math.round(r.payout));
+
+      // Power-up effects (DEPTH-04) — derived from prediction.powerUp, resettle-safe.
+      if (p.powerUp === 'DOUBLE_DOWN' && r.won) {
+        payout = payout * 2n;
+      } else if (p.powerUp === 'INSURANCE' && !r.won) {
+        payout = p.stake; // refund the stake on a loss
+      }
 
       const wallet = await tx.wallet.findFirstOrThrow({
         where: { userId: p.userId, contextType: p.contextType, contextId: p.contextId },

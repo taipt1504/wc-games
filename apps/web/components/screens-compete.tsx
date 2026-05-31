@@ -358,6 +358,8 @@ export function Profile({ s }: ScreenProps) {
   const [duelOpponentId, setDuelOpponentId] = React.useState('');
   const [duelScope, setDuelScope] = React.useState('GLOBAL');
   const [meId, setMeId] = React.useState<string | null>(null);
+  const [powerUpInventory, setPowerUpInventory] = React.useState<Record<string, number>>({});
+  const [buyingPowerUp, setBuyingPowerUp] = React.useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/me')
@@ -410,6 +412,34 @@ export function Profile({ s }: ScreenProps) {
   }
 
   useEffect(() => { fetchDuels(); }, [s.authed]);
+
+  function fetchPowerUps() {
+    if (!s.authed) return;
+    fetch('/api/v1/me/powerups')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { data?: Record<string, number> } | null) => { if (j?.data) setPowerUpInventory(j.data); })
+      .catch(() => { /* empty fallback */ });
+  }
+
+  useEffect(() => { fetchPowerUps(); }, [s.authed]);
+
+  async function handleBuyPowerUp(type: string) {
+    setBuyingPowerUp(type);
+    try {
+      const res = await fetch('/api/v1/powerups/buy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        s.toastMsg(`Bought ${type.replace(/_/g, ' ')}!`, 'star', 'var(--gold)');
+        void s.refreshUser(); // sync balance
+        fetchPowerUps();
+      } else {
+        s.toastMsg(j?.error?.code === 'INSUFFICIENT_BALANCE' ? 'Not enough points' : 'Purchase failed', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    finally { setBuyingPowerUp(null); }
+  }
 
   async function handleChallenge() {
     if (!duelOpponentId) return;
@@ -508,6 +538,35 @@ export function Profile({ s }: ScreenProps) {
           <div key={l} className="card card-pad stat"><span className="s-val tnum" style={{ color: c, fontSize: 22 }}>{v}</span><span className="s-lbl">{l}</span></div>
         ))}
       </div>
+
+      {/* power-ups (DEPTH-04) */}
+      {s.authed && (
+        <div className="card card-pad mt-16">
+          <div className="row gap-8" style={{ marginBottom: 12 }}>
+            <Icon name="sparkles" size={18} style={{ color: 'var(--gold)' }} />
+            <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Power-ups</span>
+          </div>
+          <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
+            {([
+              { type: 'DOUBLE_DOWN', label: 'Double Down', desc: 'Won bet pays 2×', price: 300 },
+              { type: 'INSURANCE', label: 'Insurance', desc: 'Refund stake on a loss', price: 200 },
+              { type: 'STREAK_SHIELD', label: 'Streak Shield', desc: 'One loss won\'t break your win streak', price: 400 },
+            ] as { type: string; label: string; desc: string; price: number }[]).map(({ type, label, desc, price }) => (
+              <div key={type} className="card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
+                <div className="row between">
+                  <span className="small" style={{ fontWeight: 700 }}>{label}</span>
+                  <span className="badge badge-gold">{powerUpInventory[type] ?? 0} owned</span>
+                </div>
+                <div className="tiny muted mt-4">{desc}</div>
+                <Btn variant="ghost" size="sm" className="mt-8" disabled={buyingPowerUp === type}
+                  onClick={() => handleBuyPowerUp(type)}>
+                  Buy · {price} pts
+                </Btn>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* referral / share */}
       <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>

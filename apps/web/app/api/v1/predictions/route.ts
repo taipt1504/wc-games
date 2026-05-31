@@ -12,6 +12,8 @@ const Schema = z.object({
   // optional exact-score prediction → knockout exact-score bonus (FR-SCORE-03)
   exactHome: z.coerce.number().int().min(0).max(30).optional(),
   exactAway: z.coerce.number().int().min(0).max(30).optional(),
+  // optional power-up (DEPTH-04)
+  powerUp: z.enum(['DOUBLE_DOWN', 'INSURANCE', 'STREAK_SHIELD']).optional(),
 });
 
 const ERR_STATUS: Record<string, number> = {
@@ -20,6 +22,7 @@ const ERR_STATUS: Record<string, number> = {
   ODDS_UNAVAILABLE: 409,
   INSUFFICIENT_BALANCE: 422,
   INVALID_STAKE: 422,
+  NO_POWERUP: 422,
 };
 
 export async function POST(req: Request) {
@@ -40,6 +43,7 @@ export async function POST(req: Request) {
       stake: BigInt(parsed.data.stake),
       exactHome: parsed.data.exactHome,
       exactAway: parsed.data.exactAway,
+      powerUp: parsed.data.powerUp,
     });
     return NextResponse.json(
       {

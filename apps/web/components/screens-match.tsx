@@ -321,7 +321,23 @@ export function BetSlip({ s }: ScreenProps) {
   const [stake, setStake] = useState(100);
   const [exH, setExH] = useState(0);
   const [exA, setExA] = useState(0);
-  useEffect(() => { setStake(100); setExH(0); setExA(0); }, [sel?.match?.id, sel?.pick]);
+  const [powerUp, setPowerUp] = useState<string>('');
+  const [inventory, setInventory] = useState<Record<string, number>>({});
+
+  useEffect(() => { setStake(100); setExH(0); setExA(0); setPowerUp(''); }, [sel?.match?.id, sel?.pick]);
+
+  useEffect(() => {
+    if (!sel || !s.authed) return;
+    let cancelled = false;
+    fetch('/api/v1/me/powerups')
+      .then(r => r.ok ? r.json() : null)
+      .then((j: { data?: Record<string, number> } | null) => {
+        if (!cancelled && j?.data) setInventory(j.data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sel?.match?.id, s.authed]);
+
   if (!sel) return null;
   const m = sel.match, odds = sel.odds, pick = sel.pick;
   const home = WC.byId(m.home), away = WC.byId(m.away);
@@ -368,6 +384,34 @@ export function BetSlip({ s }: ScreenProps) {
             </div>
           </div>
 
+          {/* power-up selector (DEPTH-04) — shown when user owns any */}
+          {s.authed && Object.values(inventory).some(q => q > 0) && (
+            <div className="field mt-12">
+              <label className="label">Power-up</label>
+              <div className="row gap-8 mt-4">
+                {[
+                  { key: '', label: 'None' },
+                  { key: 'DOUBLE_DOWN', label: 'Double Down' },
+                  { key: 'INSURANCE', label: 'Insurance' },
+                ].map(({ key, label }) => {
+                  const qty = key ? (inventory[key] ?? 0) : null;
+                  const disabled = !!key && qty === 0;
+                  return (
+                    <button
+                      key={key}
+                      disabled={disabled}
+                      className={`chip ${powerUp === key ? 'active' : ''}`}
+                      onClick={() => setPowerUp(key)}
+                      style={{ opacity: disabled ? 0.4 : 1 }}
+                    >
+                      {label}{qty !== null ? ` (${qty})` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* exact score — knockout bonus (FR-SCORE-03) */}
           {knockout && (
             <div className="field mt-12">
@@ -393,7 +437,7 @@ export function BetSlip({ s }: ScreenProps) {
           </div>
 
           {over && <p className="tiny text-danger mt-8" style={{ textAlign: 'center' }}>Stake exceeds your balance.</p>}
-          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={over || stake <= 0} onClick={() => s.confirmBet(stake, knockout ? { home: exH, away: exA } : undefined)}>
+          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={over || stake <= 0} onClick={() => s.confirmBet(stake, knockout ? { home: exH, away: exA } : undefined, powerUp || undefined)}>
             Confirm bet · {stake} pts
           </Btn>
           <p className="tiny muted mt-8" style={{ textAlign: 'center' }}>Bets lock at kickoff and can&apos;t be changed after.</p>
