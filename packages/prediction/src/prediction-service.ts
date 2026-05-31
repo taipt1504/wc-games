@@ -14,6 +14,9 @@ export interface PlaceBetInput {
   matchId: bigint;
   pick: Pick1X2;
   stake: bigint;
+  // Optional exact-score prediction for knockout-stage bonus (PRD §04 / FR-SCORE-03).
+  exactHome?: number;
+  exactAway?: number;
 }
 
 /** Place a 1X2 bet in the GLOBAL context: escrow stake + create OPEN prediction + ledger (atomic). */
@@ -41,6 +44,7 @@ export async function placeBet(prisma: PrismaClient, input: PlaceBetInput): Prom
         userId: input.userId, contextType: 'GLOBAL', contextId: null,
         matchId: input.matchId, market: '1X2', outcome, stake: input.stake,
         oddsSnapshot: odds, status: 'OPEN',
+        exactHome: input.exactHome ?? null, exactAway: input.exactAway ?? null,
       },
     });
     await tx.pointLedger.create({

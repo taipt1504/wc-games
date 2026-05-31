@@ -139,13 +139,13 @@ export default function AppShell() {
     },
     setSlipPick: (pick: Pick1X2, odds: number) => setBetSlip((b) => (b ? { ...b, pick, odds } : b)),
     closeBet: () => setBetSlip(null),
-    confirmBet: async (stake: number) => {
+    confirmBet: async (stake: number, exact?: { home: number; away: number }) => {
       if (!betSlip) return;
       const { match, pick, odds } = betSlip;
       try {
         const res = await fetch('/api/v1/predictions', {
           method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ matchId: match.id, outcome: pick, stake }),
+          body: JSON.stringify({ matchId: match.id, outcome: pick, stake, exactHome: exact?.home, exactAway: exact?.away }),
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));

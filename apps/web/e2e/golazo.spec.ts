@@ -122,6 +122,44 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
   });
 });
 
+test.describe('GOLAZO — exact-score knockout bonus (FR-SCORE-03)', () => {
+  test('bettor calls an exact knockout score via the live API -> settle awards the bonus', async ({ page }) => {
+    const stamp = Date.now();
+    const email = `ko_${stamp}@golazo.test`;
+    // The fixture set is all group-stage; seed a knockout match so the bonus path applies.
+    // Explicit per-run id: fixtures occupy 1..72 (seeded with explicit ids, so the
+    // autoincrement sequence is behind) and a unique id avoids any prior-run settlement.
+    const koId = BigInt(stamp);
+    await withDb(async (p) => {
+      await p.match.create({
+        data: { id: koId, round: 'R16', homeTeamId: 5n, awayTeamId: 6n, kickoffAt: new Date(Date.now() + 3_600_000), status: 'SCHEDULED' },
+      });
+      await p.matchOdds.create({ data: { matchId: koId, mHome: 1.0, mDraw: 1.2, mAway: 1.6, source: 'API' } });
+    });
+
+    // register via UI -> real session cookie in the browser context
+    await page.goto('/');
+    await page.getByRole('button', { name: /Claim your 1,000 points/i }).click();
+    await page.getByPlaceholder('you@email.com').fill(email);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.getByRole('button', { name: /Claim 1,000 points & play/i }).click();
+    await expect(page.getByText("Today's matches")).toBeVisible();
+
+    // place a HOME bet @1.0 with an exact 2-1 call via the real API (carries the auth cookie)
+    const res = await page.request.post('/api/v1/predictions', {
+      data: { matchId: Number(koId), outcome: '1', stake: 100, exactHome: 2, exactAway: 1 },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    // settle exactly 2-1 -> base 200 (1X2) + knockout exact bonus 100 = 300
+    await withDb((p) => settleMatch(p, koId, { home: 2, away: 1 }));
+    const pred = await withDb((p) => p.prediction.findFirstOrThrow({ where: { matchId: koId }, orderBy: { id: 'desc' } }));
+    expect(pred.status).toBe('WON');
+    expect(pred.exactHome).toBe(2);
+    expect(Number(pred.payout)).toBe(300);
+  });
+});
+
 test.describe('GOLAZO — admin console (live API + Postgres)', () => {
   test('admin logs in, reads real users, bans a victim (read + write paths)', async ({ page }) => {
     const stamp = Date.now();

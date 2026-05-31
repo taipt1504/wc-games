@@ -78,7 +78,15 @@ export function News({ s }: ScreenProps) {
 
 /* ===================== ARTICLE ===================== */
 export function Article({ s }: ScreenProps) {
-  const n = news.find(x => x.id === (s.param.id as number)) ?? news[0];
+  const [live, setLive] = useState<NewsItem[]>([]);
+  useEffect(() => {
+    fetch('/api/v1/news')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setLive(j.data as NewsItem[]); })
+      .catch(() => {});
+  }, []);
+  const id = s.param.id as number;
+  const n = live.find(x => x.id === id) ?? news.find(x => x.id === id) ?? news[0];
   return (
     <div className="page page-narrow fade-up">
       <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}>

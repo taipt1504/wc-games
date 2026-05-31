@@ -41,7 +41,7 @@ export interface Store {
   openBet: (match: Match, pick: Pick1X2, odds: number) => void;
   setSlipPick: (pick: Pick1X2, odds: number) => void;
   closeBet: () => void;
-  confirmBet: (stake: number) => void;
+  confirmBet: (stake: number, exact?: { home: number; away: number }) => void;
   openBorrow: () => void;
   closeBorrow: () => void;
 }

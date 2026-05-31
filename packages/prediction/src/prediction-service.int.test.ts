@@ -113,4 +113,24 @@ describe('prediction-service (integration · Postgres)', () => {
     const wallet2 = await prisma.wallet.findFirstOrThrow({ where: { userId } });
     expect(wallet2.balance).toBe(900n);
   });
+
+  it('placeBet stores an exact-score prediction; knockout settle awards the exact bonus (FR-SCORE-03)', async () => {
+    const u = await prisma.user.create({ data: { email: 'ko@test.io', passwordHash: 'x' } });
+    await prisma.wallet.create({ data: { userId: u.id, contextType: 'GLOBAL', balance: 1000n } });
+    const ko = await prisma.match.create({
+      data: { round: 'R16', homeTeamId: 5n, awayTeamId: 6n, kickoffAt: new Date(Date.now() + 3_600_000), status: 'SCHEDULED' },
+    });
+    await prisma.matchOdds.create({ data: { matchId: ko.id, mHome: 1.0, mDraw: 1.2, mAway: 1.6, source: 'API' } });
+
+    // bet HOME @ 1.0 with an exact-score call of 2-1
+    const pred = await placeBet(prisma, { userId: u.id, matchId: ko.id, pick: '1', stake: 100n, exactHome: 2, exactAway: 1 });
+    expect(pred.exactHome).toBe(2);
+    expect(pred.exactAway).toBe(1);
+
+    // settle exactly 2-1 (HOME win AND exact score) -> base 200 + knockout bonus 100 = 300
+    await settleMatch(prisma, ko.id, { home: 2, away: 1 });
+    const settled = await prisma.prediction.findUniqueOrThrow({ where: { id: pred.id } });
+    expect(settled.status).toBe('WON');
+    expect(Number(settled.payout)).toBe(300); // 200 (1X2) + 100 (exact bonus @ rate 1.0)
+  });
 });

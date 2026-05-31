@@ -9,6 +9,9 @@ const Schema = z.object({
   matchId: z.coerce.number().int().positive(),
   outcome: z.enum(['1', 'X', '2']),
   stake: z.coerce.number().int().positive(),
+  // optional exact-score prediction → knockout exact-score bonus (FR-SCORE-03)
+  exactHome: z.coerce.number().int().min(0).max(30).optional(),
+  exactAway: z.coerce.number().int().min(0).max(30).optional(),
 });
 
 const ERR_STATUS: Record<string, number> = {
@@ -35,6 +38,8 @@ export async function POST(req: Request) {
       matchId: BigInt(parsed.data.matchId),
       pick: parsed.data.outcome,
       stake: BigInt(parsed.data.stake),
+      exactHome: parsed.data.exactHome,
+      exactAway: parsed.data.exactAway,
     });
     return NextResponse.json(
       {

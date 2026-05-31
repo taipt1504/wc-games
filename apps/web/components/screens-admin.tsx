@@ -909,7 +909,8 @@ function OddsEditModal({ m, onClose, onSave }: { m: LocalMatch; onClose: () => v
       onChange={e => set(Math.max(0.1, +e.target.value || 0.1))}
       style={{ textAlign: 'center', fontSize: 18 }} />
   );
-  const marginNum = ((1 / mh) + (1 / md) + (1 / ma)) * 100 - 100;
+  // Odds stored as multiplier m (payout = stake×(1+m)) → implied prob = 1/(1+m); margin = Σ−100% (matches design).
+  const marginNum = ((1 / (1 + mh)) + (1 / (1 + md)) + (1 / (1 + ma))) * 100 - 100;
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>

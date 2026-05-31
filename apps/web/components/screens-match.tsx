@@ -260,7 +260,9 @@ function LineupsPanel({ home, away }: { home: Team; away: Team }) {
 export function BetSlip({ s }: ScreenProps) {
   const sel = s.betSlip;
   const [stake, setStake] = useState(100);
-  useEffect(() => { setStake(100); }, [sel?.match?.id, sel?.pick]);
+  const [exH, setExH] = useState(0);
+  const [exA, setExA] = useState(0);
+  useEffect(() => { setStake(100); setExH(0); setExA(0); }, [sel?.match?.id, sel?.pick]);
   if (!sel) return null;
   const m = sel.match, odds = sel.odds, pick = sel.pick;
   const home = WC.byId(m.home), away = WC.byId(m.away);
@@ -268,6 +270,7 @@ export function BetSlip({ s }: ScreenProps) {
   const payout = Math.round(stake * (1 + odds));
   const profit = Math.round(stake * odds);
   const over = stake > s.points;
+  const knockout = !!m.round && m.round.toLowerCase() !== 'group';
   const quick = [50, 100, 250, 500];
   const picks: [Pick1X2, string, number][] = [
     ['1', home.code, m.odds.mh],
@@ -306,6 +309,21 @@ export function BetSlip({ s }: ScreenProps) {
             </div>
           </div>
 
+          {/* exact score — knockout bonus (FR-SCORE-03) */}
+          {knockout && (
+            <div className="field mt-12">
+              <div className="row between"><label className="label">Exact score</label><span className="tiny muted">optional · knockout bonus</span></div>
+              <div className="row gap-8" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <span className="tiny t2">{home.code}</span>
+                <input className="input input-mono" type="number" min={0} value={exH} onChange={e => setExH(Math.max(0, +e.target.value || 0))} style={{ width: 64, textAlign: 'center' }} />
+                <span className="muted">:</span>
+                <input className="input input-mono" type="number" min={0} value={exA} onChange={e => setExA(Math.max(0, +e.target.value || 0))} style={{ width: 64, textAlign: 'center' }} />
+                <span className="tiny t2">{away.code}</span>
+              </div>
+              <p className="tiny muted mt-4">Nail the 90&apos; score and your pick wins → bonus payout.</p>
+            </div>
+          )}
+
           {/* payout */}
           <div className="card-2 card-pad ticket-notch mt-16" style={{ borderRadius: 'var(--r-sm)' }}>
             <div className="row between small"><span className="t2">Pick</span><span style={{ fontWeight: 700 }}>{pickLabel} ({pick})</span></div>
@@ -316,7 +334,7 @@ export function BetSlip({ s }: ScreenProps) {
           </div>
 
           {over && <p className="tiny text-danger mt-8" style={{ textAlign: 'center' }}>Stake exceeds your balance.</p>}
-          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={over || stake <= 0} onClick={() => s.confirmBet(stake)}>
+          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={over || stake <= 0} onClick={() => s.confirmBet(stake, knockout ? { home: exH, away: exA } : undefined)}>
             Confirm bet · {stake} pts
           </Btn>
           <p className="tiny muted mt-8" style={{ textAlign: 'center' }}>Bets lock at kickoff and can&apos;t be changed after.</p>
