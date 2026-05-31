@@ -437,6 +437,7 @@ function LobbyMembers({ l, isHost, s }: { l: Lobby; isHost: boolean; s: ScreenPr
           </div>
           {isHost && !p.you
             ? <div className="row gap-6">
+                <Btn variant="ghost" size="sm">Set points</Btn>
                 <Btn variant="ghost" size="sm" onClick={() => handleMakeHost(p.userId)}>Make host</Btn>
                 <button className="btn-icon btn-ghost" onClick={() => handleKick(p.userId)}><Icon name="x" size={15} /></button>
               </div>
