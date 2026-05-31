@@ -19,7 +19,13 @@ export async function POST() {
   if (!admin) return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
 
   const gw = createGatewayFromEnv(process.env as Record<string, string | undefined>);
-  const generated = await generateAndStoreNews(prisma, gw ?? fallbackGateway, SAMPLE_SOURCES);
-
-  return NextResponse.json({ data: { generated } });
+  // Try real gateway first; if it fails (e.g. gateway unreachable in dev), fall back to
+  // the deterministic fallback so the review queue can always be populated.
+  try {
+    const generated = await generateAndStoreNews(prisma, gw ?? fallbackGateway, SAMPLE_SOURCES);
+    return NextResponse.json({ data: { generated } });
+  } catch {
+    const generated = await generateAndStoreNews(prisma, fallbackGateway, SAMPLE_SOURCES);
+    return NextResponse.json({ data: { generated } });
+  }
 }
