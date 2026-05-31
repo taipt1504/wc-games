@@ -5,6 +5,61 @@
 import type { PrismaClient, Prediction } from '@wc/db';
 import { settleBet, type Pick1X2 } from '@wc/core';
 
+type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
+const WIN_STREAK_MILESTONES = [5, 10] as const;
+const WIN_STREAK_BONUS = 500n;
+
+/**
+ * Recompute a user's win streak from their settled GLOBAL predictions (ordered by settledAt, id).
+ * The streak = length of the trailing run of consecutive WON entries at the end of the ordered list.
+ * Upserts the Streak row and awards a one-time BONUS if a milestone (5 or 10) is newly reached.
+ */
+async function recomputeWinStreak(tx: Tx, userId: bigint): Promise<number> {
+  const settled = await tx.prediction.findMany({
+    where: { userId, contextType: 'GLOBAL', status: { in: ['WON', 'LOST'] } },
+    orderBy: [{ settledAt: 'asc' }, { id: 'asc' }],
+    select: { status: true },
+  });
+
+  let streak = 0;
+  for (let i = settled.length - 1; i >= 0; i--) {
+    if (settled[i].status === 'WON') streak++;
+    else break;
+  }
+
+  await tx.streak.upsert({
+    where: { userId },
+    create: { userId, winStreak: streak, checkinStreak: 0 },
+    update: { winStreak: streak },
+  });
+
+  // Milestone bonus — paid at most once per milestone tier EVER (per user)
+  for (const milestone of WIN_STREAK_MILESTONES) {
+    if (streak !== milestone) continue;
+
+    const existing = await tx.pointLedger.findFirst({
+      where: { userId, type: 'BONUS', refType: 'WINSTREAK', refId: BigInt(milestone) },
+    });
+    if (existing) continue;
+
+    const wallet = await tx.wallet.findFirstOrThrow({
+      where: { userId, contextType: 'GLOBAL', contextId: null },
+    });
+    const newBal = wallet.balance + WIN_STREAK_BONUS;
+    await tx.wallet.update({ where: { id: wallet.id }, data: { balance: newBal } });
+    await tx.pointLedger.create({
+      data: {
+        userId, contextType: 'GLOBAL', contextId: null,
+        type: 'BONUS', amount: WIN_STREAK_BONUS, balanceAfter: newBal,
+        refType: 'WINSTREAK', refId: BigInt(milestone),
+      },
+    });
+  }
+
+  return streak;
+}
+
 type Outcome = 'HOME' | 'DRAW' | 'AWAY';
 const PICK_TO_OUTCOME: Record<Pick1X2, Outcome> = { '1': 'HOME', X: 'DRAW', '2': 'AWAY' };
 const OUTCOME_TO_PICK: Record<Outcome, Pick1X2> = { HOME: '1', DRAW: 'X', AWAY: '2' };
@@ -85,6 +140,7 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
 
     const preds = await tx.prediction.findMany({ where: { matchId, status: { in: ['OPEN', 'LOCKED'] } } });
     const knockout = knockoutRounds.includes(match.round);
+    const globalUserIds = new Set<bigint>();
 
     for (const p of preds) {
       const pick = OUTCOME_TO_PICK[p.outcome as Outcome];
@@ -130,8 +186,14 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
             winCount: { increment: r.won ? 1 : 0 },
           },
         });
+        globalUserIds.add(p.userId);
       }
       settledCount++;
+    }
+
+    // Recompute win streak for each GLOBAL user whose predictions were settled in this match
+    for (const uid of globalUserIds) {
+      await recomputeWinStreak(tx, uid);
     }
 
     await tx.settlement.create({ data: { matchId, status: 'DONE', result90: result, settledAt: new Date(), settledBy: 'SYSTEM' } });

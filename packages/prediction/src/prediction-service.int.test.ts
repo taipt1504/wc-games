@@ -9,6 +9,7 @@ async function clean() {
   await prisma.prediction.deleteMany();
   await prisma.settlement.deleteMany();
   await prisma.predictionUserStats.deleteMany();
+  await prisma.streak.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.matchOdds.deleteMany();
   await prisma.match.deleteMany();
@@ -149,5 +150,72 @@ describe('prediction-service (integration · Postgres)', () => {
     const settled = await prisma.prediction.findUniqueOrThrow({ where: { id: pred.id } });
     expect(settled.status).toBe('WON');
     expect(Number(settled.payout)).toBe(300); // 200 (1X2) + 100 (exact bonus @ rate 1.0)
+  });
+
+  // ─────────────────────── ENG-02: Win streak (derived) ───────────────────────
+
+  /** Helper: create a match, place a bet on HOME, settle as HOME win (or loss). */
+  async function setupMatchAndBet(userId: bigint, pick: '1' | '2', homeTeam: bigint, awayTeam: bigint) {
+    const m = await prisma.match.create({
+      data: { round: 'GROUP', homeTeamId: homeTeam, awayTeamId: awayTeam, kickoffAt: new Date(Date.now() + 3_600_000), status: 'SCHEDULED' },
+    });
+    await prisma.matchOdds.create({ data: { matchId: m.id, mHome: 0.8, mDraw: 1.1, mAway: 1.5, source: 'API' } });
+    await placeBet(prisma, { userId, matchId: m.id, pick, stake: 10n });
+    return m.id;
+  }
+
+  it('win streak: 5 consecutive HOME wins → winStreak=5 + BONUS +500; 6th win → winStreak=6, no second milestone; LOSS → winStreak=0 (ENG-02)', async () => {
+    const ws = await prisma.user.create({ data: { email: 'ws5@test.io', passwordHash: 'x' } });
+    await prisma.wallet.create({ data: { userId: ws.id, contextType: 'GLOBAL', balance: 5000n } });
+
+    // Win 5 times
+    for (let i = 0; i < 5; i++) {
+      const mid = await setupMatchAndBet(ws.id, '1', BigInt(100 + i * 2), BigInt(101 + i * 2));
+      await settleMatch(prisma, mid, { home: 2, away: 1 }); // HOME win
+    }
+
+    const streak5 = await prisma.streak.findUniqueOrThrow({ where: { userId: ws.id } });
+    expect(streak5.winStreak).toBe(5);
+
+    const bonus5 = await prisma.pointLedger.findMany({ where: { userId: ws.id, type: 'BONUS', refType: 'WINSTREAK' } });
+    expect(bonus5).toHaveLength(1);
+    expect(bonus5[0].amount).toBe(500n);
+    expect(bonus5[0].refId).toBe(5n);
+
+    // 6th win → streak 6, no new WINSTREAK-5 bonus (already paid), no WINSTREAK-10 yet
+    const mid6 = await setupMatchAndBet(ws.id, '1', 200n, 201n);
+    await settleMatch(prisma, mid6, { home: 2, away: 1 });
+
+    const streak6 = await prisma.streak.findUniqueOrThrow({ where: { userId: ws.id } });
+    expect(streak6.winStreak).toBe(6);
+    const bonusAfter6 = await prisma.pointLedger.findMany({ where: { userId: ws.id, type: 'BONUS', refType: 'WINSTREAK' } });
+    expect(bonusAfter6).toHaveLength(1); // still only 1
+
+    // LOSS → win streak resets to 0
+    const midLoss = await setupMatchAndBet(ws.id, '2', 202n, 203n); // pick AWAY
+    await settleMatch(prisma, midLoss, { home: 2, away: 1 }); // HOME wins → AWAY pick loses
+    const streakAfterLoss = await prisma.streak.findUniqueOrThrow({ where: { userId: ws.id } });
+    expect(streakAfterLoss.winStreak).toBe(0);
+  });
+
+  it('win streak is derived correctly through a LOSS in the middle (win, win, loss, win → streak 1)', async () => {
+    const ws2 = await prisma.user.create({ data: { email: 'ws-mid@test.io', passwordHash: 'x' } });
+    await prisma.wallet.create({ data: { userId: ws2.id, contextType: 'GLOBAL', balance: 5000n } });
+
+    // win
+    const m1 = await setupMatchAndBet(ws2.id, '1', 300n, 301n);
+    await settleMatch(prisma, m1, { home: 2, away: 1 });
+    // win
+    const m2 = await setupMatchAndBet(ws2.id, '1', 302n, 303n);
+    await settleMatch(prisma, m2, { home: 2, away: 1 });
+    // loss (pick HOME but AWAY wins)
+    const m3 = await setupMatchAndBet(ws2.id, '1', 304n, 305n);
+    await settleMatch(prisma, m3, { home: 1, away: 2 });
+    // win
+    const m4 = await setupMatchAndBet(ws2.id, '1', 306n, 307n);
+    await settleMatch(prisma, m4, { home: 2, away: 1 });
+
+    const streak = await prisma.streak.findUniqueOrThrow({ where: { userId: ws2.id } });
+    expect(streak.winStreak).toBe(1); // only the last win counts
   });
 });

@@ -50,6 +50,7 @@ export default function AppShell() {
   const [bets, setBets] = useState<Bet[]>(WC.myBets.map((b) => ({ ...b })));
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [streak, setStreak] = useState(WC.me.streak);
+  const [winStreak, setWinStreak] = useState(WC.me.winStreak);
   const [checkedIn, setCheckedIn] = useState(false);
   const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
   const [borrowOpen, setBorrowOpen] = useState(false);
@@ -88,14 +89,14 @@ export default function AppShell() {
       const [meR, betsR, ledR] = await Promise.all([
         fetch('/api/v1/me'), fetch('/api/v1/me/predictions'), fetch('/api/v1/me/ledger'),
       ]);
-      if (meR.ok) { const j = await meR.json(); setPoints(Number(j.data.balance)); setRole(j.data.role ?? 'USER'); }
+      if (meR.ok) { const j = await meR.json(); setPoints(Number(j.data.balance)); setRole(j.data.role ?? 'USER'); setWinStreak(j.data.winStreak ?? 0); }
       if (betsR.ok) { const j = await betsR.json(); setBets(j.data as Bet[]); }
       if (ledR.ok) { const j = await ledR.json(); setLedger(j.data as LedgerEntry[]); }
     } catch { /* keep current state on network error */ }
   }, []);
 
   const store: Store = {
-    route, param, points, role, bets, ledger, streak, checkedIn, betSlip, borrowOpen, toast, authed,
+    route, param, points, role, bets, ledger, streak, winStreak, checkedIn, betSlip, borrowOpen, toast, authed,
     go, back, toastMsg, refreshUser,
     login: async (email?: string, password?: string, mode?: string) => {
       const endpoint = mode === 'login' ? 'login' : 'register';

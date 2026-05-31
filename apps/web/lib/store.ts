@@ -24,6 +24,7 @@ export interface Store {
   bets: Bet[];
   ledger: LedgerEntry[];
   streak: number;
+  winStreak: number;
   checkedIn: boolean;
   betSlip: BetSlipState | null;
   borrowOpen: boolean;

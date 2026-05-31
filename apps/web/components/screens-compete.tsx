@@ -339,7 +339,9 @@ export function Profile({ s }: ScreenProps) {
               <div className="tiny muted">{me.handle} · joined {me.joined}</div>
               <div className="row gap-8 mt-8">
                 <span className="badge badge-gold"><Icon name="fire" size={12} fill="var(--gold)" />{me.streak}-day streak</span>
-                <span className="badge badge-green">🔥 {me.winStreak} win streak</span>
+                {(s.winStreak ?? WC.me.winStreak) > 0 && (
+                  <span className="badge badge-green">🔥 {s.winStreak ?? WC.me.winStreak} win streak</span>
+                )}
               </div>
             </div>
           </div>
