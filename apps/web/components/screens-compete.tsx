@@ -332,6 +332,18 @@ function defaultNotifPrefs(): NotifPrefs {
   return Object.fromEntries(NOTIF_ROWS.map(([, k, d]) => [k, d]));
 }
 
+interface DuelDisplay {
+  id: string;
+  challengerId: string;
+  opponentId: string;
+  scope: string;
+  status: string;
+  winnerId: string | null;
+  createdAt: string;
+  challengerName: string;
+  opponentName: string;
+}
+
 export function Profile({ s }: ScreenProps) {
   const me = WC.me;
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
@@ -342,11 +354,21 @@ export function Profile({ s }: ScreenProps) {
   const [pwLoading, setPwLoading] = React.useState(false);
   const [tierNext, setTierNext] = React.useState<string | null>(null);
   const [tierToNext, setTierToNext] = React.useState<number>(0);
+  const [duels, setDuels] = React.useState<DuelDisplay[]>([]);
+  const [duelOpponentId, setDuelOpponentId] = React.useState('');
+  const [duelScope, setDuelScope] = React.useState('GLOBAL');
+  const [meId, setMeId] = React.useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/me')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data) { setTierNext(j.data.tierNext ?? null); setTierToNext(j.data.tierToNext ?? 0); } })
+      .then((j) => {
+        if (j?.data) {
+          setTierNext(j.data.tierNext ?? null);
+          setTierToNext(j.data.tierToNext ?? 0);
+          setMeId(String(j.data.id));
+        }
+      })
       .catch(() => { /* fall back to defaults */ });
   }, []);
   useEffect(() => {
@@ -378,6 +400,46 @@ export function Profile({ s }: ScreenProps) {
       .then((j) => { if (j?.data) setNotifPrefs(j.data); })
       .catch(() => { /* fall back to defaults */ });
   }, []);
+
+  function fetchDuels() {
+    if (!s.authed) return;
+    fetch('/api/v1/duels')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setDuels(j.data); })
+      .catch(() => { /* empty fallback */ });
+  }
+
+  useEffect(() => { fetchDuels(); }, [s.authed]);
+
+  async function handleChallenge() {
+    if (!duelOpponentId) return;
+    const res = await fetch('/api/v1/duels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opponentId: duelOpponentId, scope: duelScope }),
+    });
+    if (res.ok) {
+      setDuelOpponentId('');
+      fetchDuels();
+    } else {
+      const j = await res.json().catch(() => ({}));
+      s.toastMsg(j?.error?.code === 'SELF_DUEL' ? 'Cannot duel yourself' : 'Challenge failed', 'alert', 'var(--danger)');
+    }
+  }
+
+  async function handleRespond(duelId: string, accept: boolean) {
+    const res = await fetch(`/api/v1/duels/${duelId}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accept }),
+    });
+    if (res.ok) fetchDuels();
+  }
+
+  async function handleResolve(duelId: string) {
+    const res = await fetch(`/api/v1/duels/${duelId}/resolve`, { method: 'POST' });
+    if (res.ok) fetchDuels();
+  }
 
   async function handleChangePassword() {
     setPwLoading(true);
@@ -512,6 +574,54 @@ export function Profile({ s }: ScreenProps) {
           </div>
         ))}
       </div>
+
+      {/* duels */}
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Duels</div>
+      {s.authed && (
+        <div className="stack gap-10">
+          {/* challenge form */}
+          <div className="card card-pad">
+            <div className="row gap-8" style={{ marginBottom: 12 }}><Icon name="target" size={18} style={{ color: 'var(--magenta)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Challenge someone</span></div>
+            <div className="stack gap-8">
+              <div className="field"><label className="label">Opponent user ID</label><input className="input" value={duelOpponentId} onChange={(e) => setDuelOpponentId(e.target.value)} placeholder="e.g. 42" /></div>
+              <div className="field"><label className="label">Scope</label><input className="input" value={duelScope} onChange={(e) => setDuelScope(e.target.value)} placeholder="GLOBAL" /></div>
+              <Btn variant="primary" size="sm" disabled={!duelOpponentId} onClick={handleChallenge}>Send challenge</Btn>
+            </div>
+          </div>
+
+          {/* duel list */}
+          {duels.length === 0 && <div className="card card-pad"><span className="tiny muted">No duels yet.</span></div>}
+          {duels.map((d) => {
+            const statusColor = d.status === 'ACTIVE' ? 'var(--green)' : d.status === 'DONE' ? 'var(--muted)' : 'var(--gold)';
+            const isIncoming = d.status === 'PENDING' && meId && d.opponentId === meId;
+            const isParticipant = meId && (d.challengerId === meId || d.opponentId === meId);
+            return (
+              <div key={d.id} className="card card-pad">
+                <div className="row between wrap gap-8">
+                  <div>
+                    <div className="small" style={{ fontWeight: 700 }}>{d.challengerName} <span className="muted">vs</span> {d.opponentName}</div>
+                    <div className="tiny muted">Scope: {d.scope}</div>
+                    {d.status === 'DONE' && d.winnerId && <div className="tiny" style={{ color: 'var(--green)' }}>Winner: {d.winnerId === d.challengerId ? d.challengerName : d.opponentName}</div>}
+                    {d.status === 'DONE' && !d.winnerId && <div className="tiny muted">Result: tie</div>}
+                  </div>
+                  <div className="row gap-8">
+                    <span className="badge" style={{ background: 'var(--surface-2)', color: statusColor }}>{d.status}</span>
+                    {isIncoming && (
+                      <>
+                        <Btn variant="primary" size="sm" onClick={() => handleRespond(d.id, true)}>Accept</Btn>
+                        <Btn variant="ghost" size="sm" onClick={() => handleRespond(d.id, false)}>Decline</Btn>
+                      </>
+                    )}
+                    {d.status === 'ACTIVE' && isParticipant && (
+                      <Btn variant="gold" size="sm" onClick={() => handleResolve(d.id)}>Resolve</Btn>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* notifications */}
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Notifications</div>
