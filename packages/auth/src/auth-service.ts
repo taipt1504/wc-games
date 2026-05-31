@@ -99,7 +99,7 @@ export async function dailyCheckin(
 
     await tx.streak.upsert({
       where: { userId },
-      create: { userId, checkinStreak: 1, winStreak: 0, lastCheckinDate: dayStart },
+      create: { userId, checkinStreak: newStreak, winStreak: 0, lastCheckinDate: dayStart },
       update: { checkinStreak: newStreak, lastCheckinDate: dayStart },
     });
 

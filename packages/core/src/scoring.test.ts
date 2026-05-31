@@ -135,6 +135,7 @@ describe('isUnderdog', () => {
 });
 
 describe('checkinReward — PRD §05 ENG-01 tiered streak reward', () => {
+  it('streak 0 → 200 (floor)', () => expect(checkinReward(0)).toBe(200));
   it('streak 1 → 200', () => expect(checkinReward(1)).toBe(200));
   it('streak 2 → 200', () => expect(checkinReward(2)).toBe(200));
   it('streak 3 → 250', () => expect(checkinReward(3)).toBe(250));

@@ -193,7 +193,8 @@ function Stat({ val, lbl, c, i, onClick }: { val: string; lbl: string; c: string
 }
 
 function CheckinCard({ s }: ScreenProps) {
-  const nextReward = checkinReward(s.streak + 1);
+  // s.streak is the pre-check-in streak; checking in today increments it by 1
+  const todayReward = checkinReward(s.streak + 1);
   const milestoneBadge = s.streak < 3
     ? `Day 3 = +${checkinReward(3)}`
     : s.streak < 7
@@ -213,7 +214,7 @@ function CheckinCard({ s }: ScreenProps) {
         ))}
       </div>
       <Btn variant={s.checkedIn ? 'ghost' : 'gold'} size="sm" className="btn-block mt-12" disabled={s.checkedIn} onClick={() => s.checkin()}>
-        {s.checkedIn ? '✓ Checked in today' : `Check in · +${nextReward} pts`}
+        {s.checkedIn ? '✓ Checked in today' : `Check in · +${todayReward} pts`}
       </Btn>
     </div>
   );
