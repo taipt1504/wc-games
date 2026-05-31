@@ -12,7 +12,6 @@ type Detail = { kind: DetailKind; id: number } | null;
 type AdminUser = typeof WC.adminUsers[number];
 type RiskLobby = typeof WC.riskLobbies[number];
 type ReviewItem = typeof WC.reviewQueue[number];
-type AiJob = typeof WC.aiJobs[number];
 
 /* -------- helpers -------- */
 function KPI({ v, l, c, sub }: { v: React.ReactNode; l: string; c: string; sub?: string }) {
@@ -38,7 +37,7 @@ export function Admin({ s }: ScreenProps) {
   const loadUsers = () =>
     fetch('/api/v1/admin/users')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setUsers(j.data); })
+      .then((j) => { if (j?.data) setUsers(j.data); })
       .catch(() => {});
   useEffect(() => { void loadUsers(); }, []);
 
@@ -111,13 +110,21 @@ export function Admin({ s }: ScreenProps) {
 
 /* ===================== OVERVIEW ===================== */
 function AdmOverview({ s, setTab, open }: { s: ScreenProps['s']; setTab: (k: string) => void; open: (kind: DetailKind, id: number) => void }) {
+  const [riskLobbies, setRiskLobbies] = useState<RiskLobby[]>([]);
+  useEffect(() => {
+    fetch('/api/v1/admin/risk-flags')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setRiskLobbies(j.data); })
+      .catch(() => {});
+  }, []);
+
   return (
     <div>
       <SecHead title="Operations overview" sub="Matchday · live platform health" />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
         <KPI v="48.2K" l="Active users (24h)" c="var(--text)" sub="▲ 12% vs yesterday" />
         <KPI v="11,940" l="Bets placed today" c="var(--green)" />
-        <KPI v="3" l="Open risk flags" c="var(--danger)" sub="1 high priority" />
+        <KPI v={riskLobbies.length} l="Open risk flags" c="var(--danger)" sub="1 high priority" />
         <KPI v="6" l="Articles pending" c="var(--gold)" />
         <KPI v="99.9%" l="Settle accuracy" c="var(--sky)" />
       </div>
@@ -126,18 +133,15 @@ function AdmOverview({ s, setTab, open }: { s: ScreenProps['s']; setTab: (k: str
         <div>
           <SecHead title="Risk queue" sub="Lobbies auto-flagged for review" action={<button className="chip" onClick={() => setTab('risk')}>Open all →</button>} />
           <div className="stack gap-10">
-            {WC.riskLobbies.map(r => <RiskRow key={r.id} r={r} open={open} />)}
+            {riskLobbies.length === 0
+              ? <p className="tiny muted">No open risk flags.</p>
+              : riskLobbies.map(r => <RiskRow key={r.id} r={r} open={open} />)}
           </div>
         </div>
         <div>
           <SecHead title="Pipeline status" action={<button className="chip" onClick={() => setTab('pipeline')}>Details →</button>} />
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {WC.aiJobs.map((j, i) => (
-              <div key={i} className="row between" style={{ padding: '12px 16px', borderBottom: i < WC.aiJobs.length - 1 ? '1px solid var(--line)' : 0 }}>
-                <div className="row gap-10"><JobDot st={j.status} /><span className="small mono">{j.name}</span></div>
-                <span className="tiny muted">{j.last} ago</span>
-              </div>
-            ))}
+          <div className="card card-pad">
+            <p className="tiny muted">No jobs yet.</p>
           </div>
         </div>
       </div>
@@ -407,46 +411,50 @@ function AdmUsers({ users, open }: { users: AdminUser[]; open: (kind: DetailKind
         <Icon name="search" size={16} className="muted" />
         <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0' }} placeholder="Search email, username, IP" />
       </div>
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th className="hide-mobile">IP</th>
-                <th style={{ textAlign: 'right' }}>Points</th>
-                <th style={{ textAlign: 'center' }}>Flags</th>
-                <th style={{ textAlign: 'center' }}>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u, i) => (
-                <tr key={i} style={{ cursor: 'pointer' }} onClick={() => open('user', i)}>
-                  <td>
-                    <div className="row gap-10">
-                      <Avatar initials={u.name.slice(0, 2).toUpperCase()} size={28} color={u.status === 'banned' ? 'var(--danger)' : 'var(--sky)'} />
-                      <div>
-                        <div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
-                        <div className="tiny muted">{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="tnum tiny t2 hide-mobile">{u.ip}</td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>{u.pts.toLocaleString()}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    {u.flags ? <span className="badge badge-danger">{u.flags}</span> : <span className="muted">—</span>}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span className={`badge badge-${u.status === 'active' ? 'green' : u.status === 'banned' ? 'danger' : 'gold'}`}>{u.status}</span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}><Icon name="chevR" size={16} className="muted" /></td>
+      {users.length === 0
+        ? <p className="tiny muted">No users.</p>
+        : (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th className="hide-mobile">IP</th>
+                  <th style={{ textAlign: 'right' }}>Points</th>
+                  <th style={{ textAlign: 'center' }}>Flags</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u, i) => (
+                  <tr key={i} style={{ cursor: 'pointer' }} onClick={() => open('user', i)}>
+                    <td>
+                      <div className="row gap-10">
+                        <Avatar initials={u.name.slice(0, 2).toUpperCase()} size={28} color={u.status === 'banned' ? 'var(--danger)' : 'var(--sky)'} />
+                        <div>
+                          <div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
+                          <div className="tiny muted">{u.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="tnum tiny t2 hide-mobile">{u.ip}</td>
+                    <td className="tnum" style={{ textAlign: 'right' }}>{u.pts.toLocaleString()}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {u.flags ? <span className="badge badge-danger">{u.flags}</span> : <span className="muted">—</span>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`badge badge-${u.status === 'active' ? 'green' : u.status === 'banned' ? 'danger' : 'gold'}`}>{u.status}</span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}><Icon name="chevR" size={16} className="muted" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
       <p className="tiny muted mt-12">Note: 3 accounts share IP 113.161.x.x — auto-grouped as a possible multi-account cluster. Tap any row to inspect.</p>
     </div>
   );
@@ -454,8 +462,16 @@ function AdmUsers({ users, open }: { users: AdminUser[]; open: (kind: DetailKind
 
 /* ===================== USER DETAIL ===================== */
 function AdmUserDetail({ id, users, reload, onBack, s }: { id: number; users: AdminUser[]; reload: () => void | Promise<void>; onBack: () => void; s: ScreenProps['s'] }) {
-  const u = users[id] ?? WC.adminUsers[0];
-  const [status, setStatus] = useState(u.status);
+  const u = users[id];
+  const [status, setStatus] = useState(u?.status);
+  if (!u) {
+    return (
+      <div>
+        <button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to users</button>
+        <p className="small muted">User not found.</p>
+      </div>
+    );
+  }
   const flagged = u.flags > 0;
   // Real users carry no captured IP yet ('—'); only cluster on a concrete shared IP.
   const cluster = u.ip && u.ip !== '—' ? users.filter((x, i) => i !== id && x.ip === u.ip) : [];
@@ -592,7 +608,7 @@ function AdmRisk({ open }: { open: (kind: DetailKind, id: number) => void }) {
   const loadFlags = () =>
     fetch('/api/v1/admin/risk-flags')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setFlags(j.data); })
+      .then((j) => { if (j?.data) setFlags(j.data); })
       .catch(() => {});
   useEffect(() => { void loadFlags(); }, []);
   const runScan = async () => {
@@ -615,7 +631,9 @@ function AdmRisk({ open }: { open: (kind: DetailKind, id: number) => void }) {
         <KPI v="2.1%" l="Flag rate" c="var(--sky)" />
       </div>
       <div className="stack gap-10">
-        {flags.map(r => <RiskRow key={r.id} r={r} open={open} />)}
+        {flags.length === 0
+          ? <p className="tiny muted">No open risk flags.</p>
+          : flags.map(r => <RiskRow key={r.id} r={r} open={open} />)}
       </div>
     </div>
   );
@@ -630,10 +648,9 @@ type InvestigationData = {
 };
 
 function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: ScreenProps['s'] }) {
-  const r = WC.riskLobbies.find(x => x.id === id) || WC.riskLobbies[0];
+  const r = WC.riskLobbies.find(x => x.id === id) ?? null;
   const [resolved, setResolved] = useState<string | null>(null);
   const [inv, setInv] = useState<InvestigationData | null>(null);
-  const rc = r.risk === 'High' ? 'danger' : r.risk === 'Medium' ? 'gold' : 'muted';
 
   useEffect(() => {
     fetch(`/api/v1/admin/lobbies/${id}/investigation`)
@@ -642,18 +659,28 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
       .catch(() => {});
   }, [id]);
 
+  if (!r && !inv) {
+    return (
+      <div>
+        <button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to risk queue</button>
+        <p className="small muted">Lobby not found.</p>
+      </div>
+    );
+  }
+
+  const risk = r?.risk ?? 'Low';
+  const score = r?.score ?? 0;
+  const flagged = r?.flagged ?? '—';
+  const rc = risk === 'High' ? 'danger' : risk === 'Medium' ? 'gold' : 'muted';
+
   // Use real data when available, fall back to mock
-  const lobbyName = inv?.lobby.name ?? r.name;
-  const memberCount = inv?.members.length ?? r.members;
-  const reasons = (inv?.flags[0]?.reasons) ?? r.reasons;
+  const lobbyName = inv?.lobby.name ?? r?.name ?? 'Lobby';
+  const memberCount = inv?.members.length ?? r?.members ?? 0;
+  const reasons = inv?.flags[0]?.reasons ?? r?.reasons ?? [];
   const primaryFlagId = inv?.flags[0]?.id ?? null;
   const displayMembers = inv
     ? inv.members.map((m) => ({ name: m.username, role: m.role.toLowerCase(), borrowed: m.borrowed, flag: m.borrowed > 0 }))
-    : [
-        { name: 'ghost_07', role: 'owner', borrowed: 600, flag: true },
-        { name: 'ghost_08', role: 'member', borrowed: 0, flag: true },
-        ...(r.members > 2 ? [{ name: 'casual_max', role: 'member', borrowed: 0, flag: false }] : []),
-      ];
+    : [];
 
   const downloadEvidence = async () => {
     try {
@@ -703,9 +730,9 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
               <Icon name="shield" size={18} style={{ color: `var(--${rc === 'muted' ? 'muted' : rc})` }} />
               <span className="mono h3">{lobbyName}</span>
             </div>
-            <div className="tiny muted mt-4">{memberCount} members · flagged {r.flagged}</div>
+            <div className="tiny muted mt-4">{memberCount} members · flagged {flagged}</div>
           </div>
-          <span className={`badge badge-${rc}`} style={{ fontSize: 13 }}>{r.risk} risk · {r.score}/100</span>
+          <span className={`badge badge-${rc}`} style={{ fontSize: 13 }}>{risk} risk · {score}/100</span>
         </div>
         {resolved && (
           <div className="row gap-8 mt-12">
@@ -718,9 +745,9 @@ function AdmRiskDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
 
       <div className="grid gap-16 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
         <div className="card card-pad" style={{ borderColor: 'rgba(255,90,101,.35)' }}>
-          <div className="row between"><span className="eyebrow">Risk score</span><span className={`badge badge-${rc}`}>{r.risk}</span></div>
+          <div className="row between"><span className="eyebrow">Risk score</span><span className={`badge badge-${rc}`}>{risk}</span></div>
           <div className="display tnum mt-8" style={{ fontSize: 40, color: `var(--${rc === 'muted' ? 'text' : rc})` }}>
-            {r.score}<span className="muted" style={{ fontSize: 18 }}>/100</span>
+            {score}<span className="muted" style={{ fontSize: 18 }}>/100</span>
           </div>
           <div className="stack gap-8 mt-12">
             {reasons.map((x, i) => (
@@ -806,7 +833,7 @@ function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
   const load = () =>
     fetch('/api/v1/admin/news')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setQueue(j.data); })
+      .then((j) => { if (j?.data) setQueue(j.data); })
       .catch(() => {});
   useEffect(() => { void load(); }, []);
   const decide = async (id: number, action: 'approve' | 'reject') => {
@@ -824,6 +851,7 @@ function AdmReview({ open }: { open: (kind: DetailKind, id: number) => void }) {
     <div>
       <SecHead title="News review queue" sub="Tap a story to read the full draft before approving" action={<Btn variant="ghost" size="sm" icon="refresh" onClick={generateDrafts} disabled={generating}>{generating ? 'Generating…' : 'Generate drafts'}</Btn>} />
       <div className="stack gap-12">
+        {queue.length === 0 && <p className="tiny muted">Queue empty.</p>}
         {queue.map((a: ReviewItem) => (
           <div key={a.id} className="card card-pad card-hover pointer" onClick={() => open('news', a.id)}>
             <div className="row between wrap gap-10">
@@ -889,9 +917,6 @@ function AdmPipeline() {
     ? kpis.avgLatencyMs >= 1000 ? `${(kpis.avgLatencyMs / 1000).toFixed(1)}s` : `${kpis.avgLatencyMs}ms`
     : '—';
 
-  // Display: real jobs when loaded, WC mock as fallback (WC.aiJobs is shown in the overview; pipeline tab shows the real table or WC mock)
-  const showMock = jobs.length === 0;
-
   return (
     <div>
       <SecHead title="AI & data pipeline" sub="9router · Claude primary → OpenAI fallback" />
@@ -901,61 +926,49 @@ function AdmPipeline() {
         <KPI v={kpis ? `$${kpis.totalCost.toFixed(2)}` : '—'} l="LLM spend" c="var(--text)" />
         <KPI v={kpis ? avgLatencyStr : '—'} l="Avg latency" c="var(--sky)" />
       </div>
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Job</th>
-                <th>Provider</th>
-                <th style={{ textAlign: 'center' }}>Status</th>
-                <th style={{ textAlign: 'right' }} className="hide-mobile">Latency</th>
-                <th style={{ textAlign: 'right' }}>When</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {showMock
-                ? WC.aiJobs.map((j: AiJob, i: number) => (
-                    <tr key={i}>
-                      <td className="mono small">{j.name}</td>
-                      <td className="small t2">{j.provider}</td>
+      {jobs.length === 0
+        ? <p className="tiny muted">No jobs yet.</p>
+        : (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Provider</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                  <th style={{ textAlign: 'right' }} className="hide-mobile">Latency</th>
+                  <th style={{ textAlign: 'right' }}>When</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((j) => {
+                  const latStr = j.latencyMs != null
+                    ? j.latencyMs >= 1000 ? `${(j.latencyMs / 1000).toFixed(1)}s` : `${j.latencyMs}ms`
+                    : '—';
+                  const when = new Date(j.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <tr key={j.id}>
+                      <td className="mono small">{j.type}</td>
+                      <td className="small t2">{j.providerUsed}</td>
                       <td style={{ textAlign: 'center' }}>
                         <span className="row gap-6 center">
                           <JobDot st={j.status} />
                           <span className="tiny" style={{ textTransform: 'capitalize' }}>{j.status}</span>
                         </span>
                       </td>
-                      <td className="tnum tiny t2 hide-mobile" style={{ textAlign: 'right' }}>{j.latency}</td>
-                      <td className="tiny muted" style={{ textAlign: 'right' }}>{j.last} ago</td>
-                      <td style={{ textAlign: 'right' }}><button className="btn-icon btn-ghost"><Icon name="refresh" size={15} /></button></td>
+                      <td className="tnum tiny t2 hide-mobile" style={{ textAlign: 'right' }}>{latStr}</td>
+                      <td className="tiny muted" style={{ textAlign: 'right' }}>{when}</td>
+                      <td style={{ textAlign: 'right' }}>{j.error && <Icon name="alert" size={14} style={{ color: 'var(--danger)' }} />}</td>
                     </tr>
-                  ))
-                : jobs.map((j) => {
-                    const latStr = j.latencyMs != null
-                      ? j.latencyMs >= 1000 ? `${(j.latencyMs / 1000).toFixed(1)}s` : `${j.latencyMs}ms`
-                      : '—';
-                    const when = new Date(j.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    return (
-                      <tr key={j.id}>
-                        <td className="mono small">{j.type}</td>
-                        <td className="small t2">{j.providerUsed}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span className="row gap-6 center">
-                            <JobDot st={j.status} />
-                            <span className="tiny" style={{ textTransform: 'capitalize' }}>{j.status}</span>
-                          </span>
-                        </td>
-                        <td className="tnum tiny t2 hide-mobile" style={{ textAlign: 'right' }}>{latStr}</td>
-                        <td className="tiny muted" style={{ textAlign: 'right' }}>{when}</td>
-                        <td style={{ textAlign: 'right' }}>{j.error && <Icon name="alert" size={14} style={{ color: 'var(--danger)' }} />}</td>
-                      </tr>
-                    );
-                  })}
-            </tbody>
-          </table>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
       <div className="card-2 card-pad mt-12 small t2 row gap-8" style={{ borderRadius: 'var(--r-sm)' }}>
         <Icon name="alert" size={15} style={{ color: 'var(--gold)', flex: 'none' }} />
         <span><b>pundit.preview</b> fell back to OpenAI after Claude hit its quota. <b>news.crawl</b> failed (source 503) — retry queued.</span>
@@ -1264,8 +1277,16 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
 
 /* ===================== ADMIN NEWS REVIEW DETAIL ===================== */
 function AdmNewsDetail({ id, onBack, s }: { id: number; onBack: () => void; s: ScreenProps['s'] }) {
-  const a = WC.reviewQueue.find(x => x.id === id) || WC.reviewQueue[0];
-  const [status, setStatus] = useState(a.status);
+  const a = WC.reviewQueue.find(x => x.id === id) ?? null;
+  const [status, setStatus] = useState(a?.status ?? 'PENDING');
+  if (!a) {
+    return (
+      <div>
+        <button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to review queue</button>
+        <p className="small muted">Article not found.</p>
+      </div>
+    );
+  }
   const act = (st: string, msg: string, icon: string, color: string) => { setStatus(st); s.toastMsg(msg, icon, color); };
   return (
     <div>
