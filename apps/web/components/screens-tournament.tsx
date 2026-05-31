@@ -1,6 +1,6 @@
 'use client';
 /* GOLAZO — Teams · Team detail · Groups · Bracket (ported from screens-tournament.jsx) */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { WC, type Team } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, MatchCard, SecHead } from '@/components/ui';
@@ -158,6 +158,12 @@ export function Groups({ s }: ScreenProps) {
 type BracketMatchProps = { a: Team; b: Team; score?: [number, number] | null; hot?: boolean };
 type ColProps = { title: string; count: number; start: number; score?: [number, number] | null };
 
+interface BracketPicks {
+  CHAMPION?: number;
+  FINALISTS?: number[];
+  SEMIS?: number[];
+}
+
 export function Bracket({ s }: ScreenProps) {
   // Projected qualifiers (top of each group) for a clean knockout view
   const winners = WC.GROUPS.map((g) =>
@@ -168,6 +174,66 @@ export function Bracket({ s }: ScreenProps) {
   );
   const pool: Team[] = [...winners, ...seconds];
   const pick = (i: number): Team => pool[i % pool.length];
+
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [picks, setPicks] = useState<BracketPicks>({});
+  const [saving, setSaving] = useState(false);
+
+  const fetchPicks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/me/bracket');
+      if (res.ok) {
+        const json = await res.json();
+        setPicks(json.data?.picks ?? {});
+      }
+    } catch {
+      // ignore fetch errors in static shell
+    }
+  }, []);
+
+  useEffect(() => {
+    if (panelOpen && s.authed) fetchPicks();
+  }, [panelOpen, s.authed, fetchPicks]);
+
+  function toggleChip(field: 'CHAMPION', id: number): void;
+  function toggleChip(field: 'FINALISTS', id: number, max: number): void;
+  function toggleChip(field: 'SEMIS', id: number, max: number): void;
+  function toggleChip(field: keyof BracketPicks, id: number, max?: number): void {
+    if (field === 'CHAMPION') {
+      setPicks((p) => ({ ...p, CHAMPION: p.CHAMPION === id ? undefined : id }));
+    } else {
+      setPicks((p) => {
+        const arr: number[] = (p[field] as number[] | undefined) ?? [];
+        if (arr.includes(id)) return { ...p, [field]: arr.filter((x) => x !== id) };
+        if (arr.length >= (max ?? 99)) return p;
+        return { ...p, [field]: [...arr, id] };
+      });
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/v1/me/bracket', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ picks }),
+      });
+      if (res.ok) {
+        s.toastMsg('Bracket saved!', 'trophy', 'var(--gold)');
+        setPanelOpen(false);
+      } else {
+        const json = await res.json().catch(() => ({}));
+        const code = json?.error?.code ?? 'ERROR';
+        if (code === 'BRACKET_LOCKED') s.toastMsg('Bracket is locked', 'lock', 'var(--muted)');
+        else s.toastMsg('Could not save bracket', 'alert', 'var(--red)');
+      }
+    } catch {
+      s.toastMsg('Could not save bracket', 'alert', 'var(--red)');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function BracketMatch({ a, b, score, hot }: BracketMatchProps) {
     return (
@@ -250,10 +316,79 @@ export function Bracket({ s }: ScreenProps) {
         <Btn
           variant="primary"
           size="sm"
-          onClick={() => s.toastMsg('Bracket predictor opening soon!', 'bracket', 'var(--sky)')}
+          onClick={() => {
+            if (!s.authed) { s.go('auth', { mode: 'signup' }); return; }
+            setPanelOpen((o) => !o);
+          }}
         >
           Open predictor
         </Btn>
+      </div>
+
+      {panelOpen && s.authed && (
+        <div className="card card-pad mt-16 fade-up" aria-label="Bracket predictor panel">
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <span className="h3">Your bracket picks</span>
+            <button className="chip" onClick={() => setPanelOpen(false)}>
+              <Icon name="x" size={14} /> Close
+            </button>
+          </div>
+
+          <PickSection
+            label="Champion"
+            subtitle="Pick 1 team"
+            selected={picks.CHAMPION !== undefined ? [picks.CHAMPION] : []}
+            onToggle={(id) => toggleChip('CHAMPION', id)}
+          />
+          <PickSection
+            label="Finalists"
+            subtitle="Pick up to 2 teams"
+            selected={picks.FINALISTS ?? []}
+            onToggle={(id) => toggleChip('FINALISTS', id, 2)}
+          />
+          <PickSection
+            label="Semi-finalists"
+            subtitle="Pick up to 4 teams"
+            selected={picks.SEMIS ?? []}
+            onToggle={(id) => toggleChip('SEMIS', id, 4)}
+          />
+
+          <div className="row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+            <Btn variant="primary" size="sm" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save picks'}
+            </Btn>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PickSection({
+  label, subtitle, selected, onToggle,
+}: {
+  label: string; subtitle: string; selected: number[]; onToggle: (id: number) => void;
+}) {
+  const teams = WC.teams.slice().sort((a, b) => a.rank - b.rank);
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div className="eyebrow" style={{ marginBottom: 4 }}>{label}</div>
+      <div className="tiny muted" style={{ marginBottom: 10 }}>{subtitle}</div>
+      <div className="row gap-8 wrap-w">
+        {teams.map((t) => {
+          const active = selected.includes(t.id);
+          return (
+            <button
+              key={t.id}
+              className={`chip ${active ? 'active' : ''}`}
+              onClick={() => onToggle(t.id)}
+              title={t.name}
+            >
+              <Flag team={t} size={16} />
+              <span style={{ marginLeft: 4 }}>{t.code}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

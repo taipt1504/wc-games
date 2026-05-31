@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Teams, TeamDetail, Groups, Bracket } from '@/components/screens-tournament';
 import type { Store } from '@/lib/store';
@@ -62,6 +62,20 @@ describe('Groups', () => {
 });
 
 describe('Bracket', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    // Stub fetch so the prefill GET doesn't cause unhandled rejections in jsdom
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { picks: {}, lockedAt: null, score: 0 } }),
+    } as Response);
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
   it('renders knockout bracket heading and round labels', () => {
     render(<Bracket s={mockStore()} />);
     expect(screen.getByText('Knockout bracket')).toBeInTheDocument();
@@ -70,14 +84,16 @@ describe('Bracket', () => {
     expect(screen.getByText('Champion')).toBeInTheDocument();
   });
 
-  it('Open predictor button fires toastMsg', () => {
-    const toastMsg = vi.fn();
-    render(<Bracket s={mockStore({ toastMsg })} />);
+  it('Open predictor: authed user → predictor panel opens', async () => {
+    render(<Bracket s={mockStore({ authed: true })} />);
     screen.getByRole('button', { name: /Open predictor/i }).click();
-    expect(toastMsg).toHaveBeenCalledWith(
-      'Bracket predictor opening soon!',
-      'bracket',
-      'var(--sky)',
-    );
+    expect(await screen.findByLabelText('Bracket predictor panel')).toBeInTheDocument();
+  });
+
+  it('Open predictor: guest → redirects to auth signup', () => {
+    const go = vi.fn();
+    render(<Bracket s={mockStore({ authed: false, go })} />);
+    screen.getByRole('button', { name: /Open predictor/i }).click();
+    expect(go).toHaveBeenCalledWith('auth', { mode: 'signup' });
   });
 });
