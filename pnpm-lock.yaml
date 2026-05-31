@@ -217,6 +217,9 @@ importers:
         specifier: workspace:*
         version: link:../db
     devDependencies:
+      '@wc/prediction':
+        specifier: workspace:*
+        version: link:../prediction
       dotenv-cli:
         specifier: ^7.4.0
         version: 7.4.4

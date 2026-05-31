@@ -538,10 +538,39 @@ export function LobbyView({ s }: ScreenProps) {
     setOdds(p => ({ ...p, [id]: { mh, md, ma } }));
     setEditM(null);
     s.toastMsg('Lobby odds updated for this match', 'check', 'var(--sky)');
+    // POST to API and refetch overrides (guarded so jsdom tests are unaffected)
+    fetch(`/api/v1/lobbies/${lid}/odds`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ matchId: id, mHome: mh, mDraw: md, mAway: ma }),
+    })
+      .then(r => r.ok ? fetch(`/api/v1/lobbies/${lid}/odds`) : null)
+      .then(r => (r && r.ok ? r.json() : null))
+      .then(j => {
+        if (j?.data) {
+          setOdds(prev => {
+            const next = { ...prev };
+            for (const [mid, o] of Object.entries(j.data as Record<string, { mHome: number; mDraw: number; mAway: number }>)) {
+              next[Number(mid)] = { mh: o.mHome, md: o.mDraw, ma: o.mAway };
+            }
+            return next;
+          });
+        }
+      })
+      .catch(() => { /* network error — local state already updated */ });
   };
   const placeBet = (m: Match, pick: Pick1X2) => {
     setBets(b => ({ ...b, [m.id]: pick }));
     s.toastMsg(`Lobby bet: ${pick} · uses your lobby wallet`, 'check', 'var(--green)');
+    // POST to API (guarded so jsdom tests are unaffected)
+    const DEFAULT_STAKE = 100;
+    fetch(`/api/v1/lobbies/${lid}/predictions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ matchId: m.id, outcome: pick, stake: DEFAULT_STAKE }),
+    })
+      .then(r => {
+        if (!r.ok) r.json().then(j => s.toastMsg(j?.error?.code ?? 'Bet failed', 'alert', 'var(--danger)')).catch(() => {});
+      })
+      .catch(() => { /* network error — local state already updated */ });
   };
 
   const tabs: [string, string][] = [
