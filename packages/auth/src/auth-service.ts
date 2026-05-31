@@ -64,7 +64,7 @@ function startOfDayUtc7(now: Date): Date {
 const DAY_MS = 24 * 3600 * 1000;
 
 /**
- * Daily check-in: +200 once per UTC+7 calendar day. Throws ALREADY_CHECKED_IN.
+ * Daily check-in: +200–400 streak-tiered (ENG-01) once per UTC+7 calendar day. Throws ALREADY_CHECKED_IN.
  * The logical "day" is tracked on Streak.lastCheckinDate (start-of-day UTC+7 instant),
  * so it is independent of DB row insertion time and deterministic for a given `now`.
  */
