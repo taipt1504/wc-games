@@ -574,6 +574,25 @@ model Duel {
   createdAt    DateTime   @default(now())
 }
 
+// Cosmetic shop (AIMETA-02) — point sink: buy avatar/frame/theme cosmetics with points.
+model CosmeticItem {
+  id    BigInt @id @default(autoincrement())
+  code  String @unique
+  name  String
+  kind  String // avatar | frame | theme
+  price BigInt
+}
+
+model UserCosmetic {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt
+  itemId     BigInt
+  equipped   Boolean  @default(false)
+  acquiredAt DateTime @default(now())
+
+  @@unique([userId, itemId])
+}
+
 // ─────────────────────────── ADMIN & RISK ───────────────────────────
 model RiskFlag {
   id         BigInt   @id @default(autoincrement())
