@@ -134,6 +134,42 @@ describe('isUnderdog', () => {
   });
 });
 
+describe('settleBet — underdog bonus (DEPTH-03)', () => {
+  it('(a) underdog win odds=2.5 stake=100 → base 350, +15% = +53 → total 403', () => {
+    const r = settleBet({ stake: 100, odds: 2.5, pick: '1', homeGoals: 2, awayGoals: 1 });
+    expect(r.won).toBe(true);
+    expect(r.payout).toBe(403);
+  });
+
+  it('(b) favourite win odds=1.5 → no underdog bonus (payout 250)', () => {
+    const r = settleBet({ stake: 100, odds: 1.5, pick: '2', homeGoals: 0, awayGoals: 1 });
+    expect(r.won).toBe(true);
+    expect(r.payout).toBe(250); // round(100*(1+1.5)) = 250, no underdog bonus
+  });
+
+  it('(c) underdog LOSS odds=2.5 → payout 0', () => {
+    const r = settleBet({ stake: 100, odds: 2.5, pick: '1', homeGoals: 0, awayGoals: 2 });
+    expect(r.won).toBe(false);
+    expect(r.payout).toBe(0);
+  });
+
+  it('(d) underdog win + knockout exact hit → both bonuses; underdog = 15% of base 1X2 only, not including KO bonus', () => {
+    // base 1X2 = round(100*(1+2.5)) = 350; KO bonus = round(100*1.0) = 100; underdog = round(350*0.15) = 53
+    // total = 350 + 100 + 53 = 503 (NOT 518, which would be 15% of 350+100)
+    const r = settleBet({
+      stake: 100,
+      odds: 2.5,
+      pick: '1',
+      homeGoals: 2,
+      awayGoals: 1,
+      knockout: true,
+      exactPick: { home: 2, away: 1 },
+      bonusRate: 1.0,
+    });
+    expect(r.payout).toBe(503);
+  });
+});
+
 describe('checkinReward — PRD §05 ENG-01 tiered streak reward', () => {
   it('streak 0 → 200 (floor)', () => expect(checkinReward(0)).toBe(200));
   it('streak 1 → 200', () => expect(checkinReward(1)).toBe(200));

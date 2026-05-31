@@ -36,6 +36,8 @@ export interface SettleInput {
   knockout?: boolean;
   exactPick?: { home: number; away: number };
   bonusRate?: number;
+  underdogThreshold?: number; // default 2.0 (PRD §06 DEPTH-03)
+  underdogBonusRate?: number; // default 0.15 (PRD §06 DEPTH-03)
 }
 
 export interface SettleResult {
@@ -45,14 +47,18 @@ export interface SettleResult {
   netProfit: number;
 }
 
-/** Settle 1 kèo: 1X2 + bonus knockout (nếu có). PRD §04.3/04.5/04.7 */
+/** Settle 1 kèo: 1X2 + bonus knockout (nếu có) + bonus underdog (DEPTH-03). PRD §04.3/04.5/04.7/§06 */
 export function settleBet(i: SettleInput): SettleResult {
   const result = result1x2(i.homeGoals, i.awayGoals);
   const won = i.pick === result;
-  let payout = payout1x2(i.stake, i.odds, i.pick, result);
+  const base1x2 = payout1x2(i.stake, i.odds, i.pick, result);
+  let payout = base1x2;
   if (i.knockout && i.exactPick) {
     const exactCorrect = i.exactPick.home === i.homeGoals && i.exactPick.away === i.awayGoals;
     payout += knockoutExactBonus(i.stake, won, exactCorrect, i.bonusRate ?? 1.0);
+  }
+  if (won && isUnderdog(i.odds, i.underdogThreshold ?? 2.0)) {
+    payout += Math.round(base1x2 * (i.underdogBonusRate ?? 0.15));
   }
   return { result, won, payout, netProfit: payout - i.stake };
 }

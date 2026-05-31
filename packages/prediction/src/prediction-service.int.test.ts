@@ -114,6 +114,23 @@ describe('prediction-service (integration · Postgres)', () => {
     expect(wallet2.balance).toBe(900n);
   });
 
+  it('underdog bonus: HOME win at mHome=2.5, stake=100 → payout 403 (DEPTH-03)', async () => {
+    const u = await prisma.user.create({ data: { email: 'underdog@test.io', passwordHash: 'x' } });
+    await prisma.wallet.create({ data: { userId: u.id, contextType: 'GLOBAL', balance: 1000n } });
+    const m = await prisma.match.create({
+      data: { round: 'GROUP', homeTeamId: 7n, awayTeamId: 8n, kickoffAt: new Date(Date.now() + 3_600_000), status: 'SCHEDULED' },
+    });
+    await prisma.matchOdds.create({ data: { matchId: m.id, mHome: 2.5, mDraw: 1.2, mAway: 0.8, source: 'API' } });
+
+    const pred = await placeBet(prisma, { userId: u.id, matchId: m.id, pick: '1', stake: 100n });
+
+    // HOME wins 2-1; base 1X2 = round(100*(1+2.5))=350, underdog bonus = round(350*0.15)=53 → 403
+    await settleMatch(prisma, m.id, { home: 2, away: 1 });
+    const settled = await prisma.prediction.findUniqueOrThrow({ where: { id: pred.id } });
+    expect(settled.status).toBe('WON');
+    expect(Number(settled.payout)).toBe(403);
+  });
+
   it('placeBet stores an exact-score prediction; knockout settle awards the exact bonus (FR-SCORE-03)', async () => {
     const u = await prisma.user.create({ data: { email: 'ko@test.io', passwordHash: 'x' } });
     await prisma.wallet.create({ data: { userId: u.id, contextType: 'GLOBAL', balance: 1000n } });
