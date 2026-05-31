@@ -257,6 +257,7 @@ export function Home({ s }: ScreenProps) {
           <Missions s={s} />
           <MiniBoard s={s} />
           <PunditPromo s={s} />
+          <ActivityFeed />
         </div>
       </div>
     </div>
@@ -399,6 +400,58 @@ function PunditPromo({ s }: ScreenProps) {
           <p className="tiny t2 mt-4">&quot;France&apos;s press is overwhelming Switzerland&apos;s build-up. I lean home — but value sits on the draw.&quot;</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface FeedItem {
+  who: string;
+  action: 'bet' | 'won' | 'lost';
+  matchId: string;
+  detail: string;
+  when: string;
+}
+
+function ActivityFeed() {
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/v1/feed')
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { if (j?.data) setItems(j.data as FeedItem[]); })
+      .catch(() => { /* keep empty */ })
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const actionColor = (action: FeedItem['action']) =>
+    action === 'won' ? 'var(--green)' : action === 'lost' ? 'var(--danger)' : 'var(--sky)';
+
+  const actionLabel = (action: FeedItem['action']) =>
+    action === 'won' ? 'won' : action === 'lost' ? 'lost' : 'bet';
+
+  return (
+    <div className="card card-pad">
+      <SecHead title="Friends' activity" />
+      {loaded && items.length === 0 ? (
+        <p className="small muted" style={{ marginTop: 8 }}>Join a lobby to see friends&apos; activity.</p>
+      ) : (
+        <div className="stack gap-10" style={{ marginTop: 8 }}>
+          {items.map((item, i) => (
+            <div key={i} className="row between gap-8">
+              <div className="row gap-8" style={{ minWidth: 0 }}>
+                <span className="small" style={{ fontWeight: 600, color: actionColor(item.action) }}>{actionLabel(item.action)}</span>
+                <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.who} · {item.detail}
+                </span>
+              </div>
+              <span className="tiny muted" style={{ flexShrink: 0 }}>
+                {new Date(item.when).toLocaleDateString()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
