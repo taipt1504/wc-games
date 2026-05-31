@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/session';
+import { predictorTier } from '@wc/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,8 @@ export async function GET() {
     prisma.predictionUserStats.findUnique({ where: { userId: user.id } }),
     prisma.streak.findUnique({ where: { userId: user.id } }),
   ]);
+  const netProfit = stats ? Number(stats.totalReturned) - Number(stats.totalStaked) : 0;
+  const { tier, next: tierNext, toNext: tierToNext } = predictorTier(netProfit);
   return NextResponse.json({
     data: {
       id: user.id,
@@ -21,6 +24,9 @@ export async function GET() {
       settled: stats?.settledCount ?? 0,
       won: stats?.winCount ?? 0,
       winStreak: streakRow?.winStreak ?? 0,
+      tier,
+      tierNext,
+      tierToNext,
     },
   });
 }

@@ -257,7 +257,15 @@ export function Profile({ s }: ScreenProps) {
   const [currentPw, setCurrentPw] = React.useState('');
   const [newPw, setNewPw] = React.useState('');
   const [pwLoading, setPwLoading] = React.useState(false);
+  const [tierNext, setTierNext] = React.useState<string | null>(null);
+  const [tierToNext, setTierToNext] = React.useState<number>(0);
 
+  useEffect(() => {
+    fetch('/api/v1/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) { setTierNext(j.data.tierNext ?? null); setTierToNext(j.data.tierToNext ?? 0); } })
+      .catch(() => { /* fall back to defaults */ });
+  }, []);
   useEffect(() => {
     fetch('/api/v1/me/referral')
       .then((r) => (r.ok ? r.json() : null))
@@ -335,7 +343,7 @@ export function Profile({ s }: ScreenProps) {
           <div className="row gap-16">
             <Avatar initials="AR" size={64} color="var(--gold)" ring="var(--gold)" />
             <div>
-              <div className="row gap-8"><span className="h3">{me.name}</span><TierPill tier="Gold" /></div>
+              <div className="row gap-8"><span className="h3">{me.name}</span><TierPill tier={s.tier ?? WC.me.tier} />{tierNext && tierToNext > 0 && <span className="tiny muted">{tierToNext.toLocaleString()} to {tierNext}</span>}</div>
               <div className="tiny muted">{me.handle} · joined {me.joined}</div>
               <div className="row gap-8 mt-8">
                 <span className="badge badge-gold"><Icon name="fire" size={12} fill="var(--gold)" />{me.streak}-day streak</span>

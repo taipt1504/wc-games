@@ -6,7 +6,7 @@ import { WC } from '@/lib/wc';
 
 function mockStore(over: Partial<Store> = {}): Store {
   return {
-    route: 'leaderboard', param: {}, points: WC.me.points, bets: [], streak: 6, checkedIn: false,
+    route: 'leaderboard', param: {}, points: WC.me.points, tier: WC.me.tier, bets: [], streak: 6, checkedIn: false,
     betSlip: null, borrowOpen: false, toast: null, authed: false,
     go: vi.fn(), back: vi.fn(), toastMsg: vi.fn(), login: vi.fn(), logout: vi.fn(),
     checkin: vi.fn(), claimMission: vi.fn(), pickFor: () => undefined, openBet: vi.fn(),

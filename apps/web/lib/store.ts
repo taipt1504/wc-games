@@ -21,6 +21,7 @@ export interface Store {
   param: Record<string, unknown>;
   points: number;
   role: string;
+  tier: string;
   bets: Bet[];
   ledger: LedgerEntry[];
   streak: number;

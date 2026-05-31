@@ -10,6 +10,7 @@ import {
   lobbyScore,
   isUnderdog,
   checkinReward,
+  predictorTier,
 } from './scoring';
 
 describe('result1x2', () => {
@@ -180,4 +181,85 @@ describe('checkinReward — PRD §05 ENG-01 tiered streak reward', () => {
   it('streak 13 → 300', () => expect(checkinReward(13)).toBe(300));
   it('streak 14 → 400', () => expect(checkinReward(14)).toBe(400));
   it('streak 20 → 400', () => expect(checkinReward(20)).toBe(400));
+});
+
+describe('predictorTier — PRD §08 AIMETA-03 tier from lifetime net profit', () => {
+  it('negative net profit → Bronze', () => {
+    const r = predictorTier(-500);
+    expect(r.tier).toBe('Bronze');
+    expect(r.next).toBe('Silver');
+    expect(r.toNext).toBe(1500);
+  });
+  it('net 0 → Bronze, toNext 1000', () => {
+    const r = predictorTier(0);
+    expect(r.tier).toBe('Bronze');
+    expect(r.next).toBe('Silver');
+    expect(r.toNext).toBe(1000);
+  });
+  it('net 999 → Bronze (just below Silver threshold)', () => {
+    const r = predictorTier(999);
+    expect(r.tier).toBe('Bronze');
+    expect(r.next).toBe('Silver');
+    expect(r.toNext).toBe(1);
+  });
+  it('net 1000 → Silver', () => {
+    const r = predictorTier(1000);
+    expect(r.tier).toBe('Silver');
+    expect(r.next).toBe('Gold');
+    expect(r.toNext).toBe(2000);
+  });
+  it('net 2999 → Silver (just below Gold threshold)', () => {
+    const r = predictorTier(2999);
+    expect(r.tier).toBe('Silver');
+    expect(r.next).toBe('Gold');
+    expect(r.toNext).toBe(1);
+  });
+  it('net 3000 → Gold', () => {
+    const r = predictorTier(3000);
+    expect(r.tier).toBe('Gold');
+    expect(r.next).toBe('Platinum');
+    expect(r.toNext).toBe(5000);
+  });
+  it('net 7999 → Gold (just below Platinum threshold)', () => {
+    const r = predictorTier(7999);
+    expect(r.tier).toBe('Gold');
+    expect(r.next).toBe('Platinum');
+    expect(r.toNext).toBe(1);
+  });
+  it('net 8000 → Platinum', () => {
+    const r = predictorTier(8000);
+    expect(r.tier).toBe('Platinum');
+    expect(r.next).toBe('Diamond');
+    expect(r.toNext).toBe(12000);
+  });
+  it('net 19999 → Platinum (just below Diamond threshold)', () => {
+    const r = predictorTier(19999);
+    expect(r.tier).toBe('Platinum');
+    expect(r.next).toBe('Diamond');
+    expect(r.toNext).toBe(1);
+  });
+  it('net 20000 → Diamond', () => {
+    const r = predictorTier(20000);
+    expect(r.tier).toBe('Diamond');
+    expect(r.next).toBe('Legend');
+    expect(r.toNext).toBe(30000);
+  });
+  it('net 49999 → Diamond (just below Legend threshold)', () => {
+    const r = predictorTier(49999);
+    expect(r.tier).toBe('Diamond');
+    expect(r.next).toBe('Legend');
+    expect(r.toNext).toBe(1);
+  });
+  it('net 50000 → Legend, next null, toNext 0', () => {
+    const r = predictorTier(50000);
+    expect(r.tier).toBe('Legend');
+    expect(r.next).toBeNull();
+    expect(r.toNext).toBe(0);
+  });
+  it('net 99999 → Legend (well above threshold)', () => {
+    const r = predictorTier(99999);
+    expect(r.tier).toBe('Legend');
+    expect(r.next).toBeNull();
+    expect(r.toNext).toBe(0);
+  });
 });

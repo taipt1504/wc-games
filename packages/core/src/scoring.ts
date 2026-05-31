@@ -103,3 +103,22 @@ export function checkinReward(streak: number): number {
   if (streak >= 3) return 250;
   return 200;
 }
+
+/**
+ * Predictor tier from lifetime net profit (returned − staked). PRD §08 AIMETA-03.
+ * | Net profit   | Tier     |
+ * | < 1000       | Bronze   |
+ * | ≥ 1000       | Silver   |
+ * | ≥ 3000       | Gold     |
+ * | ≥ 8000       | Platinum |
+ * | ≥ 20000      | Diamond  |
+ * | ≥ 50000      | Legend   |
+ */
+export function predictorTier(netProfit: number): { tier: string; next: string | null; toNext: number } {
+  if (netProfit >= 50000) return { tier: 'Legend', next: null, toNext: 0 };
+  if (netProfit >= 20000) return { tier: 'Diamond', next: 'Legend', toNext: 50000 - netProfit };
+  if (netProfit >= 8000) return { tier: 'Platinum', next: 'Diamond', toNext: 20000 - netProfit };
+  if (netProfit >= 3000) return { tier: 'Gold', next: 'Platinum', toNext: 8000 - netProfit };
+  if (netProfit >= 1000) return { tier: 'Silver', next: 'Gold', toNext: 3000 - netProfit };
+  return { tier: 'Bronze', next: 'Silver', toNext: 1000 - netProfit };
+}
