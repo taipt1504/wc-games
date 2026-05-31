@@ -8,7 +8,7 @@
 export * from '@wc/fixtures';
 import {
   teams, byId, byGroup, GROUPS, venues, matches, upcoming, live, finished,
-  fmtDate, matchById, type Match, type Pick1X2,
+  fmtDate, matchById, squadFor, type Match, type Pick1X2, type Player,
 } from '@wc/fixtures';
 
 // local deterministic rng for mock leaderboard numbers
@@ -157,5 +157,6 @@ export const WC = {
   teams, byId, byGroup, GROUPS, venues, matches, upcoming, live, finished,
   me, myBets, ledger, leaderboard, missions, achievements,
   lobbies, lobbyBoard, lobbyChat, borrowRequests, lobbyMatches, news,
-  riskLobbies, adminUsers, reviewQueue, aiJobs, fmtDate, matchById,
+  riskLobbies, adminUsers, reviewQueue, aiJobs, fmtDate, matchById, squadFor,
 };
+export type { Player };

@@ -162,3 +162,53 @@ export function fmtDate(d: Date): string {
 export function matchById(id: number): Match | undefined {
   return matches.find((m) => m.id === id);
 }
+
+/* ============================================================
+   Squad generator — DETERMINISTIC, SSR-safe (no Math.random/Date).
+   23 players per team: 3 GK, 8 DEF, 7 MID, 5 FWD.
+   Shirt numbers: GK=#1,#12,#23; outfield=2..22 excl 12 (20 numbers).
+   ============================================================ */
+export type PlayerPos = 'GK' | 'DEF' | 'MID' | 'FWD';
+export interface Player { num: number; name: string; pos: PlayerPos }
+
+const SURNAMES = [
+  'Silva', 'Santos', 'Müller', 'García', 'López', 'Martínez', 'Hernández', 'González',
+  'Rodríguez', 'Fernández', 'Alves', 'Costa', 'Pereira', 'Nunes', 'Sousa',
+  'Hoffmann', 'Wagner', 'Becker', 'Klein', 'Schäfer',
+  'Dupont', 'Martin', 'Bernard', 'Thomas', 'Petit',
+  'Rossi', 'Ferrari', 'Romano', 'Conti', 'Ricci',
+  'Ahmed', 'Hassan', 'Ibrahim', 'Yilmaz', 'Kaya',
+  'Park', 'Kim', 'Lee', 'Choi', 'Jung',
+];
+
+function strSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function squadFor(teamCode: string): Player[] {
+  const seed = strSeed(teamCode);
+  // deterministic pick from surname pool using rng
+  const pick = (idx: number): string => {
+    const r = rng(seed + idx * 13);
+    return SURNAMES[Math.floor(r * SURNAMES.length)];
+  };
+
+  const positions: { pos: PlayerPos; nums: number[] }[] = [
+    { pos: 'GK',  nums: [1, 12, 23] },
+    { pos: 'DEF', nums: [2, 3, 4, 5, 6, 7, 8, 9] },
+    { pos: 'MID', nums: [10, 11, 13, 14, 15, 16, 17] },
+    { pos: 'FWD', nums: [18, 19, 20, 21, 22] },
+  ];
+
+  const players: Player[] = [];
+  let pi = 0; // player index for name derivation
+  for (const { pos, nums } of positions) {
+    for (const num of nums) {
+      players.push({ num, name: pick(pi), pos });
+      pi++;
+    }
+  }
+  return players;
+}

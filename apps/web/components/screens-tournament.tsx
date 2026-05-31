@@ -75,14 +75,22 @@ export function TeamDetail({ s }: ScreenProps) {
 
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Squad</div>
       <div className="card card-pad">
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10 }}>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="row gap-8 small">
-              <span className="tnum muted" style={{ width: 18 }}>{i + 1}</span>
-              <span className="t2 ellip">{t.code} Player {i + 1}</span>
+        {(['GK', 'DEF', 'MID', 'FWD'] as const).map((pos) => {
+          const group = WC.squadFor(t.code).filter((p) => p.pos === pos);
+          return (
+            <div key={pos} style={{ marginBottom: 12 }}>
+              <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{pos}</div>
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 6 }}>
+                {group.map((p) => (
+                  <div key={p.num} className="row gap-8 small">
+                    <span className="tnum muted" style={{ width: 18 }}>{p.num}</span>
+                    <span className="t2 ellip">{p.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
