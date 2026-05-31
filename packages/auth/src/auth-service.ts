@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { checkinReward } from '@wc/core';
 
 const SIGNUP_BONUS = 1000n;
+const REFERRAL_BONUS = 300n;
 const TZ_OFFSET_MS = 7 * 3600 * 1000; // UTC+7 (PRD OQ-07)
 const BCRYPT_ROUNDS = 10;
 
@@ -105,4 +106,75 @@ export async function dailyCheckin(
 
     return { balance: newBal, reward, streak: newStreak };
   });
+}
+
+/** Returns the user's referral code, creating one if absent. Code is base36(userId) for uniqueness. */
+export async function getOrCreateReferralCode(prisma: PrismaClient, userId: bigint): Promise<string> {
+  const existing = await prisma.referralCode.findUnique({ where: { userId } });
+  if (existing) return existing.code;
+  const code = userId.toString(36);
+  await prisma.referralCode.create({ data: { userId, code } });
+  return code;
+}
+
+/**
+ * Redeem a referral code for a new user.
+ * Idempotent: unknown code / self-referral / already-referred referee → {awarded:false}.
+ * On success: creates Referral(ACTIVATED) + credits both users REFERRAL_BONUS in one transaction.
+ */
+export async function redeemReferral(
+  prisma: PrismaClient,
+  refereeId: bigint,
+  code: string,
+): Promise<{ awarded: boolean }> {
+  const refCode = await prisma.referralCode.findUnique({ where: { code } });
+  if (!refCode) return { awarded: false };
+  const referrerId = refCode.userId;
+  if (referrerId === refereeId) return { awarded: false };
+  const existing = await prisma.referral.findUnique({ where: { refereeId } });
+  if (existing) return { awarded: false };
+
+  await prisma.$transaction(async (tx) => {
+    const referral = await tx.referral.create({
+      data: { referrerId, refereeId, status: 'ACTIVATED' },
+    });
+
+    // Credit referrer
+    const referrerWallet = await tx.wallet.findFirstOrThrow({
+      where: { userId: referrerId, contextType: 'GLOBAL', contextId: null },
+    });
+    const referrerNewBal = referrerWallet.balance + REFERRAL_BONUS;
+    await tx.wallet.update({ where: { id: referrerWallet.id }, data: { balance: referrerNewBal } });
+    await tx.pointLedger.create({
+      data: {
+        userId: referrerId, contextType: 'GLOBAL', type: 'REFERRAL',
+        amount: REFERRAL_BONUS, balanceAfter: referrerNewBal, refType: 'REFERRAL', refId: referral.id,
+      },
+    });
+
+    // Credit referee
+    const refereeWallet = await tx.wallet.findFirstOrThrow({
+      where: { userId: refereeId, contextType: 'GLOBAL', contextId: null },
+    });
+    const refereeNewBal = refereeWallet.balance + REFERRAL_BONUS;
+    await tx.wallet.update({ where: { id: refereeWallet.id }, data: { balance: refereeNewBal } });
+    await tx.pointLedger.create({
+      data: {
+        userId: refereeId, contextType: 'GLOBAL', type: 'REFERRAL',
+        amount: REFERRAL_BONUS, balanceAfter: refereeNewBal, refType: 'REFERRAL', refId: referral.id,
+      },
+    });
+  });
+
+  return { awarded: true };
+}
+
+/** Returns the user's referral code and count of ACTIVATED referrals where they are the referrer. */
+export async function referralStats(
+  prisma: PrismaClient,
+  userId: bigint,
+): Promise<{ code: string; count: number }> {
+  const code = await getOrCreateReferralCode(prisma, userId);
+  const count = await prisma.referral.count({ where: { referrerId: userId, status: 'ACTIVATED' } });
+  return { code, count };
 }

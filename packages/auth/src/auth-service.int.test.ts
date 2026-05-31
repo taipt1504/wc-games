@@ -1,16 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@wc/db';
-import { registerUser, verifyLogin, dailyCheckin } from './auth-service';
+import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats } from './auth-service';
 
 const prisma = new PrismaClient();
 
 async function clean() {
-  // FK-safe order: clear predictions (-> user FK) before users on the shared test DB
+  // FK-safe order
   await prisma.pointLedger.deleteMany();
   await prisma.prediction.deleteMany();
   await prisma.settlement.deleteMany();
   await prisma.predictionUserStats.deleteMany();
   await prisma.streak.deleteMany();
+  await prisma.referral.deleteMany();
+  await prisma.referralCode.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();
 }
@@ -66,5 +68,74 @@ describe('auth-service (integration · Postgres)', () => {
     expect(r.reward).toBe(250n);
     expect(r.streak).toBe(3);
     expect(r.balance).toBe(1650n);
+  });
+});
+
+describe('referral (integration · Postgres)', () => {
+  let referrerId: bigint;
+  let refereeId: bigint;
+  let code: string;
+
+  it('setup: create referrer + referee users', async () => {
+    const referrer = await registerUser(prisma, { email: 'referrer@test.io', username: 'referrer1', password: 'pw123456' });
+    const referee = await registerUser(prisma, { email: 'referee@test.io', username: 'referee1', password: 'pw123456' });
+    referrerId = referrer.id;
+    refereeId = referee.id;
+  });
+
+  it('getOrCreateReferralCode: creates a code on first call, returns same on second', async () => {
+    code = await getOrCreateReferralCode(prisma, referrerId);
+    expect(typeof code).toBe('string');
+    expect(code.length).toBeGreaterThan(0);
+    // idempotent
+    const again = await getOrCreateReferralCode(prisma, referrerId);
+    expect(again).toBe(code);
+  });
+
+  it('redeemReferral: credits both users +300 and creates ACTIVATED referral', async () => {
+    const result = await redeemReferral(prisma, refereeId, code);
+    expect(result.awarded).toBe(true);
+
+    // referrer wallet: 1000 (signup) + 300 = 1300
+    const referrerWallet = await prisma.wallet.findFirstOrThrow({ where: { userId: referrerId, contextType: 'GLOBAL', contextId: null } });
+    expect(referrerWallet.balance).toBe(1300n);
+
+    // referee wallet: 1000 (signup) + 300 = 1300
+    const refereeWallet = await prisma.wallet.findFirstOrThrow({ where: { userId: refereeId, contextType: 'GLOBAL', contextId: null } });
+    expect(refereeWallet.balance).toBe(1300n);
+
+    // ACTIVATED referral row exists
+    const referral = await prisma.referral.findUnique({ where: { refereeId } });
+    expect(referral).not.toBeNull();
+    expect(referral!.status).toBe('ACTIVATED');
+    expect(referral!.referrerId).toBe(referrerId);
+  });
+
+  it('referralStats: count === 1 after one successful referral', async () => {
+    const stats = await referralStats(prisma, referrerId);
+    expect(stats.code).toBe(code);
+    expect(stats.count).toBe(1);
+  });
+
+  it('redeemReferral: second attempt by same referee returns {awarded:false} with no double credit', async () => {
+    const result = await redeemReferral(prisma, refereeId, code);
+    expect(result.awarded).toBe(false);
+
+    // balances unchanged from previous test
+    const referrerWallet = await prisma.wallet.findFirstOrThrow({ where: { userId: referrerId, contextType: 'GLOBAL', contextId: null } });
+    expect(referrerWallet.balance).toBe(1300n);
+
+    const refereeWallet = await prisma.wallet.findFirstOrThrow({ where: { userId: refereeId, contextType: 'GLOBAL', contextId: null } });
+    expect(refereeWallet.balance).toBe(1300n);
+  });
+
+  it('redeemReferral: unknown code returns {awarded:false}', async () => {
+    const result = await redeemReferral(prisma, refereeId, 'zzzzunknown');
+    expect(result.awarded).toBe(false);
+  });
+
+  it('redeemReferral: self-referral returns {awarded:false}', async () => {
+    const result = await redeemReferral(prisma, referrerId, code);
+    expect(result.awarded).toBe(false);
   });
 });

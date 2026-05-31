@@ -242,6 +242,13 @@ export function Profile({ s }: ScreenProps) {
     ['Lobby & borrow alerts', false],
     ['Hot news', false],
   ];
+  const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
+  useEffect(() => {
+    fetch('/api/v1/me/referral')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setReferral(j.data); })
+      .catch(() => { /* fall back to mock */ });
+  }, []);
 
   return (
     <div className="page page-narrow fade-up">
@@ -274,9 +281,9 @@ export function Profile({ s }: ScreenProps) {
       <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
         <div className="card card-pad">
           <div className="row gap-8"><Icon name="users" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Refer &amp; earn</span></div>
-          <p className="tiny t2 mt-8">Invite a friend — you both get +300 points when they place their first bet.</p>
+          <p className="tiny t2 mt-8">Invite a friend — you both get +300 points. {referral ? `${referral.count} friend${referral.count !== 1 ? 's' : ''} referred so far.` : 'You both get +300 points when they place their first bet.'}</p>
           <div className="row gap-8 mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
-            <span className="tnum small grow ellip">golazo.gg/r/alexr</span>
+            <span className="tnum small grow ellip">{referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : 'golazo.gg/r/alexr'}</span>
             <Btn variant="primary" size="sm" onClick={() => s.toastMsg('Invite link copied!', 'check')}>Copy</Btn>
           </div>
         </div>
