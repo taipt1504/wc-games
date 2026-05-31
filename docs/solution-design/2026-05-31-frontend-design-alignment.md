@@ -109,3 +109,13 @@ Chạy **Workflow `golazo-design-conformance-audit`** (15 agents: 8 audit + 7 ad
 Gate sau Task 1: **147 unit/integration + 13 E2E = 160, pass 100%**; `next build` xanh.
 
 > **Design URL — RESOLVED:** hash gốc `…/a0eo169Wls0sIZWdRxlYsw` hết hạn (404 mọi method). User re-share → `…/eauZ_wFVmPLBaEgLzMFz3g` **fetch live OK** (gzip 121.6KB). Bundle byte-identical với extract trong repo (SHA `6f723765…`) → live source == bản đang build == 0 delta. Điều kiện "fetch design + read README + implement" đã hoàn tất.
+
+## 10. Feature completion — 100% of PRD matrix (2026-05-31)
+
+Goal "hoàn thành project 100%": entire PRD §02 feature matrix implemented (MVP + v1 + v2), each as a tested vertical via the superpowers subagent-driven cycle. Final gate: **308 unit/integration + 14 E2E = 322 tests, 100% pass**; `next build` + `@wc/worker build` clean.
+
+- **MVP** — auth/IP-UA, tournament data + 48 teams/groups/schedule/match-detail/**squads (DATA-05)**, global 1X2 + lock + leaderboard ROI + history + daily check-in (**tiered ENG-01**), scoring (1X2/knockout/**exact-bonus FR-SCORE-03**/settle/ledger/void/**re-settle ADMIN-04**), admin core (users/ban/audit/news-queue/data), news read+queue, **live scores (DATA-07)**, AI pipeline ingest.
+- **v1** — private lobby (create/join/scope/leaderboard/borrow/**host-odds+betting LOBBY-07**/**transfer-host LOBBY-08**), depth (**bracket-predictor DEPTH-01**, **underdog DEPTH-03**), engagement (**win-streak ENG-02**, **missions ENG-03**, **achievements ENG-04**, **notif-prefs ENG-05**), social (**chat**, **share-card SOCIAL-02**, **referral SOCIAL-03**), **AI Pundit AIMETA-01** (9router + fallback), admin v1 (**risk-engine/investigation/case-file/escalate ADMIN-02/03**, **AI-pipeline metrics ADMIN-07**), **news AI gen + auto-publish NEWS-01/04**, **password change/reset AUTH-06/08**.
+- **v2** — **power-ups DEPTH-04** (Double Down/Insurance/Streak Shield), **parlay DEPTH-05**, **in-play DEPTH-06**, **duel SOCIAL-04**, **activity-feed SOCIAL-05**, **cosmetic shop AIMETA-02**, **predictor tiers AIMETA-03**.
+
+**Deferred (external infra only, env-gated seams in place):** real web-push/email delivery (VAPID/SMTP), live LLM via 9router (gateway client built; deterministic fallback active when `LLM_GATEWAY_*` unset), external live-score/odds provider feed (admin ingest seam built). These are environment configuration, not unbuilt features.
