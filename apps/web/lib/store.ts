@@ -15,10 +15,25 @@ export interface LedgerEntry {
   bal: number;
 }
 
+/** Current user's display profile (from GET /api/v1/me). Neutral defaults until authed. */
+export interface MeProfile {
+  name: string;
+  handle: string;
+  avatar: string;
+  country: string;
+  rank: number | null;
+  roi: number;
+  won: number;
+  lost: number;
+  settled: number;
+  joined: string;
+}
+
 /** Global app store passed as `s` to every screen (ported from design app.jsx). */
 export interface Store {
   route: string;
   param: Record<string, unknown>;
+  me: MeProfile;
   points: number;
   role: string;
   tier: string;

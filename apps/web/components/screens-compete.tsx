@@ -518,7 +518,7 @@ interface DuelDisplay {
 export function Profile({ s }: ScreenProps) {
   const me = s.me;
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
-  const [achievements, setAchievements] = React.useState<AchievementDisplay[]>(WC.achievements);
+  const [achievements, setAchievements] = React.useState<AchievementDisplay[]>([]);
   const [notifPrefs, setNotifPrefs] = React.useState<NotifPrefs>(defaultNotifPrefs());
   const [currentPw, setCurrentPw] = React.useState('');
   const [newPw, setNewPw] = React.useState('');

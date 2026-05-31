@@ -4,7 +4,7 @@
    ============================================================ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WC, type Match, type Bet, type Pick1X2 } from '@/lib/wc';
-import type { Store, BetSlipState, LedgerEntry } from '@/lib/store';
+import type { Store, BetSlipState, LedgerEntry, MeProfile } from '@/lib/store';
 import { Btn, Icon, Avatar, Pundit, Toast, type ToastData } from '@/components/ui';
 import { Landing, Auth, Home } from '@/components/screens-core';
 import { Schedule, MatchDetail, BetSlip } from '@/components/screens-match';
@@ -39,12 +39,18 @@ function navKey(r: string): string {
   return r;
 }
 
+const ME_DEFAULT: MeProfile = {
+  name: WC.me.name, handle: WC.me.handle, avatar: WC.me.avatar, country: WC.me.country,
+  rank: WC.me.rank, roi: WC.me.roi, won: WC.me.won, lost: WC.me.lost, settled: WC.me.settled, joined: WC.me.joined,
+};
+
 export default function AppShell() {
   const [route, setRoute] = useState('landing');
   const [param, setParam] = useState<Record<string, unknown>>({});
   const [, setStack] = useState<{ route: string; param: Record<string, unknown> }[]>([]);
   const [authed, setAuthed] = useState(false);
   const authedRef = useRef(false);
+  const [me, setMe] = useState<MeProfile>(ME_DEFAULT);
   const [points, setPoints] = useState(WC.me.points);
   const [role, setRole] = useState<string>('USER');
   const [tier, setTier] = useState<string>(WC.me.tier);
@@ -90,14 +96,22 @@ export default function AppShell() {
       const [meR, betsR, ledR] = await Promise.all([
         fetch('/api/v1/me'), fetch('/api/v1/me/predictions'), fetch('/api/v1/me/ledger'),
       ]);
-      if (meR.ok) { const j = await meR.json(); setPoints(Number(j.data.balance)); setRole(j.data.role ?? 'USER'); setWinStreak(j.data.winStreak ?? 0); setTier(j.data.tier ?? WC.me.tier); }
+      if (meR.ok) {
+        const j = await meR.json(); const d = j.data;
+        setPoints(Number(d.balance)); setRole(d.role ?? 'USER'); setWinStreak(d.winStreak ?? 0); setTier(d.tier ?? WC.me.tier);
+        setMe({
+          name: d.name ?? ME_DEFAULT.name, handle: d.handle ?? ME_DEFAULT.handle, avatar: d.avatar ?? ME_DEFAULT.avatar,
+          country: d.country ?? ME_DEFAULT.country, rank: d.rank ?? null, roi: d.roi ?? 0,
+          won: d.won ?? 0, lost: d.lost ?? 0, settled: d.settled ?? 0, joined: ME_DEFAULT.joined,
+        });
+      }
       if (betsR.ok) { const j = await betsR.json(); setBets(j.data as Bet[]); }
       if (ledR.ok) { const j = await ledR.json(); setLedger(j.data as LedgerEntry[]); }
     } catch { /* keep current state on network error */ }
   }, []);
 
   const store: Store = {
-    route, param, points, role, tier, bets, ledger, streak, winStreak, checkedIn, betSlip, borrowOpen, toast, authed,
+    route, param, me, points, role, tier, bets, ledger, streak, winStreak, checkedIn, betSlip, borrowOpen, toast, authed,
     go, back, toastMsg, refreshUser,
     login: async (email?: string, password?: string, mode?: string) => {
       const endpoint = mode === 'login' ? 'login' : 'register';
@@ -123,7 +137,12 @@ export default function AppShell() {
         toastMsg('Network error — try again', 'alert', 'var(--danger)');
       }
     },
-    logout: () => { void fetch('/api/v1/auth/logout', { method: 'POST' }); authedRef.current = false; setAuthed(false); setRole('USER'); setStack([]); setRoute('landing'); setParam({}); },
+    logout: () => {
+      void fetch('/api/v1/auth/logout', { method: 'POST' });
+      authedRef.current = false; setAuthed(false);
+      setRole('USER'); setMe(ME_DEFAULT); setPoints(0); setBets([]); setLedger([]); setStreak(0); setWinStreak(0); setTier(WC.me.tier); setCheckedIn(false);
+      setStack([]); setRoute('landing'); setParam({});
+    },
     checkin: async () => {
       if (checkedIn) return;
       try {
@@ -257,8 +276,8 @@ export default function AppShell() {
           <button className="nav-i" onClick={() => go('admin')} style={{ marginTop: 8 }}><Icon name="shield" size={19} />Admin</button>
         )}
         <div className="card card-pad row gap-10" style={{ marginTop: 8 }}>
-          <Avatar initials="AR" size={34} color="var(--gold)" />
-          <div style={{ minWidth: 0 }}><div className="small ellip" style={{ fontWeight: 700 }}>{WC.me.name}</div><div className="tiny text-gold tnum">{points.toLocaleString()} pts</div></div>
+          <Avatar initials={me.avatar} size={34} color="var(--gold)" />
+          <div style={{ minWidth: 0 }}><div className="small ellip" style={{ fontWeight: 700 }}>{me.name}</div><div className="tiny text-gold tnum">{points.toLocaleString()} pts</div></div>
         </div>
       </aside>
 
