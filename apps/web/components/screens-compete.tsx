@@ -117,6 +117,166 @@ export function Leaderboard({ s }: ScreenProps) {
   );
 }
 
+/* ===================== PARLAY BUILDER ===================== */
+
+interface ParlayLegDraft { matchId: string; outcome: 'HOME' | 'DRAW' | 'AWAY' }
+interface ParlayRecord {
+  id: string;
+  stake: string;
+  status: string;
+  payout: string;
+  legs: Array<{ id: string; matchId: string; outcome: string; oddsSnapshot: string; result: string | null }>;
+}
+
+function ParlayBuilder({ s }: ScreenProps) {
+  const [legs, setLegs] = React.useState<ParlayLegDraft[]>([{ matchId: '', outcome: 'HOME' }, { matchId: '', outcome: 'HOME' }]);
+  const [stake, setStake] = React.useState('100');
+  const [parlays, setParlays] = React.useState<ParlayRecord[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  function fetchParlays() {
+    if (typeof window === 'undefined') return;
+    fetch('/api/v1/parlays')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { data?: ParlayRecord[] } | null) => { if (j?.data) setParlays(j.data); })
+      .catch(() => { /* silent */ });
+  }
+
+  useEffect(() => { if (s.authed) fetchParlays(); }, [s.authed]);
+
+  function addLeg() { setLegs((prev) => [...prev, { matchId: '', outcome: 'HOME' }]); }
+  function removeLeg(i: number) { if (legs.length > 2) setLegs((prev) => prev.filter((_, idx) => idx !== i)); }
+  function updateLeg(i: number, field: keyof ParlayLegDraft, value: string) {
+    setLegs((prev) => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
+  }
+
+  async function handleSubmit() {
+    const stakeNum = parseInt(stake, 10);
+    if (isNaN(stakeNum) || stakeNum <= 0) { s.toastMsg('Invalid stake', 'alert', 'var(--danger)'); return; }
+    if (legs.some((l) => !l.matchId || isNaN(parseInt(l.matchId, 10)))) {
+      s.toastMsg('Fill all match IDs', 'alert', 'var(--danger)'); return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/v1/parlays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stake: stakeNum,
+          legs: legs.map((l) => ({ matchId: parseInt(l.matchId, 10), outcome: l.outcome })),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        s.toastMsg('Parlay placed!', 'check', 'var(--green)');
+        void s.refreshUser();
+        setLegs([{ matchId: '', outcome: 'HOME' }, { matchId: '', outcome: 'HOME' }]);
+        setStake('100');
+        fetchParlays();
+      } else {
+        const code = j?.error?.code;
+        const msg = code === 'TOO_FEW_LEGS' ? 'Need ≥ 2 legs'
+          : code === 'INSUFFICIENT_BALANCE' ? 'Not enough points'
+            : code === 'BET_LOCKED' ? 'A match is locked'
+              : code === 'ODDS_UNAVAILABLE' ? 'Odds unavailable for a match'
+                : code === 'DUPLICATE_MATCH' ? 'Duplicate match in legs'
+                  : 'Parlay failed';
+        s.toastMsg(msg, 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    finally { setSubmitting(false); }
+  }
+
+  if (!s.authed) return null;
+
+  return (
+    <div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Parlay / Combo bets</div>
+
+      {/* builder */}
+      <div className="card card-pad">
+        <div className="row gap-8" style={{ marginBottom: 12 }}>
+          <Icon name="target" size={18} style={{ color: 'var(--magenta)' }} />
+          <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Build a combo</span>
+          <span className="tiny muted ml-4">All legs must win to pay out</span>
+        </div>
+        <div className="stack gap-8">
+          {legs.map((leg, i) => (
+            <div key={i} className="row gap-8 wrap-w">
+              <input
+                className="input"
+                style={{ width: 100, flex: 'none' }}
+                placeholder="Match ID"
+                value={leg.matchId}
+                onChange={(e) => updateLeg(i, 'matchId', e.target.value)}
+              />
+              <select
+                className="input"
+                style={{ flex: 1 }}
+                value={leg.outcome}
+                onChange={(e) => updateLeg(i, 'outcome', e.target.value)}
+              >
+                <option value="HOME">Home win</option>
+                <option value="DRAW">Draw</option>
+                <option value="AWAY">Away win</option>
+              </select>
+              {legs.length > 2 && (
+                <Btn variant="ghost" size="sm" onClick={() => removeLeg(i)}>×</Btn>
+              )}
+            </div>
+          ))}
+          <Btn variant="ghost" size="sm" onClick={addLeg}>+ Add leg</Btn>
+          <div className="field">
+            <label className="label">Stake (points)</label>
+            <input className="input" type="number" min={1} value={stake} onChange={(e) => setStake(e.target.value)} />
+          </div>
+          <Btn variant="primary" disabled={submitting} onClick={handleSubmit}>
+            {submitting ? 'Placing…' : 'Place parlay'}
+          </Btn>
+        </div>
+      </div>
+
+      {/* parlay history */}
+      {parlays.length > 0 && (
+        <div className="stack gap-8 mt-12">
+          {parlays.map((p) => {
+            const c = p.status === 'WON' ? 'green' : p.status === 'LOST' ? 'danger' : 'sky';
+            const profit = Number(p.payout) - Number(p.stake);
+            return (
+              <div key={p.id} className="card card-pad">
+                <div className="row between wrap gap-8">
+                  <div>
+                    <div className="small" style={{ fontWeight: 700 }}>Parlay #{p.id} · {p.legs.length} legs</div>
+                    <div className="tiny muted">Stake {p.stake} pts</div>
+                  </div>
+                  <div className="row gap-8">
+                    <span className={`badge badge-${c}`}>{p.status}</span>
+                    {(p.status === 'WON' || p.status === 'LOST') && (
+                      <span className="tnum" style={{ fontWeight: 700, color: profit >= 0 ? 'var(--green)' : 'var(--danger)' }}>
+                        {profit >= 0 ? '+' : ''}{profit} pts
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="row gap-6 wrap-w mt-8">
+                  {p.legs.map((l) => {
+                    const lc = l.result === 'WON' ? 'green' : l.result === 'LOST' ? 'danger' : 'muted';
+                    return (
+                      <span key={l.id} className={`badge badge-${lc}`} style={{ fontSize: 11 }}>
+                        Match {l.matchId} {l.outcome} @{parseFloat(l.oddsSnapshot).toFixed(2)}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ===================== MY BETS ===================== */
 export function MyBets({ s }: ScreenProps) {
   const [f, setF] = useState('all');
@@ -171,6 +331,7 @@ export function MyBets({ s }: ScreenProps) {
         })}
         {!list.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No bets here yet.</p></div>}
       </div>
+      <ParlayBuilder s={s} />
     </div>
   );
 }

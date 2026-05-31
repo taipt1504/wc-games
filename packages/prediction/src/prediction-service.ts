@@ -5,6 +5,7 @@
 import type { PrismaClient, Prediction } from '@wc/db';
 import { settleBet, type Pick1X2 } from '@wc/core';
 import { consumePowerUp } from './powerups';
+import { settleParlays } from './parlay';
 
 type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
@@ -215,6 +216,9 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
 
     await tx.settlement.create({ data: { matchId, status: 'DONE', result90: result, settledAt: new Date(), settledBy: 'SYSTEM' } });
   });
+
+  // Settle parlays that have a leg on this match (outside core tx; no-op when none exist).
+  await settleParlays(prisma, matchId);
 
   return { alreadySettled: false, result, settledCount };
 }
