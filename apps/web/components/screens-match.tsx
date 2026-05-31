@@ -125,16 +125,45 @@ function TeamBig({ t }: { t: Team }) {
 function PunditPanel({ m, home, away }: { m: Match; home: Team; away: Team }) {
   const pick: Pick1X2 = m.odds.mh <= m.odds.ma ? '1' : '2';
   const pickTeam = pick === '1' ? home : away;
+
+  const mockContent = `${home.name} arrive as FIFA #${home.rank} and have controlled tempo in their opening fixtures, while ${away.name} (#${away.rank}) have looked sharpest in transition. Expect ${home.name} to see more of the ball; the danger is ${away.name} on the counter. Set pieces could decide a tight one.`;
+  const mockDisclaimer = 'For entertainment only — Ora is not betting advice and never guarantees outcomes.';
+
+  const [content, setContent] = useState<string>(mockContent);
+  const [disclaimer, setDisclaimer] = useState<string>(mockDisclaimer);
+  const [provider, setProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      fetch(`/api/v1/ai/preview/${m.id}`)
+        .then(r => r.json())
+        .then((body: { data?: { content?: string; disclaimer?: string; provider?: string } }) => {
+          if (cancelled) return;
+          if (body?.data?.content) setContent(body.data.content);
+          if (body?.data?.disclaimer) setDisclaimer(body.data.disclaimer);
+          if (body?.data?.provider) setProvider(body.data.provider);
+        })
+        .catch(() => { /* keep mock on error */ });
+    } catch {
+      // fetch may not exist in test environments — keep mock
+    }
+    return () => { cancelled = true; };
+  }, [m.id]);
+
   return (
     <div className="stack gap-16">
       <div className="panel card-pad" style={{ background: 'linear-gradient(120deg, var(--sky-soft), transparent)' }}>
         <div className="row gap-14" style={{ alignItems: 'flex-start' }}>
           <Pundit size={56} mood="think" glow />
           <div className="grow">
-            <div className="row between"><span className="badge badge-sky">Ora · Match preview</span><span className="tiny muted">Grounded on fixture data</span></div>
-            <p className="t2 small mt-8" style={{ lineHeight: 1.6 }}>
-              {home.name} arrive as FIFA #{home.rank} and have controlled tempo in their opening fixtures, while {away.name} (#{away.rank}) have looked sharpest in transition. Expect {home.name} to see more of the ball; the danger is {away.name} on the counter. Set pieces could decide a tight one.
-            </p>
+            <div className="row between">
+              <span className="badge badge-sky">Ora · Match preview</span>
+              <span className="tiny muted">
+                {provider ? `AI-assisted · ${provider}` : 'Grounded on fixture data'}
+              </span>
+            </div>
+            <p className="t2 small mt-8" style={{ lineHeight: 1.6 }}>{content}</p>
           </div>
         </div>
       </div>
@@ -150,7 +179,7 @@ function PunditPanel({ m, home, away }: { m: Match; home: Team; away: Team }) {
         </div>
         <div className="card-2 card-pad mt-12 small t2" style={{ borderRadius: 'var(--r-sm)', display: 'flex', gap: 8 }}>
           <Icon name="alert" size={15} style={{ color: 'var(--gold)', flex: 'none', marginTop: 2 }} />
-          <span>For entertainment only — Ora is not betting advice and never guarantees outcomes.</span>
+          <span>{disclaimer}</span>
         </div>
       </div>
     </div>

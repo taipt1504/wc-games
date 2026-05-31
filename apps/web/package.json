@@ -12,6 +12,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@wc/ai": "workspace:*",
     "@wc/auth": "workspace:*",
     "@wc/core": "workspace:*",
     "@wc/db": "workspace:*",

@@ -2,13 +2,28 @@
  * AI Pundit (Ora) + news generation. Grounded on real data; always tagged with a
  * disclaimer. PRD §08 (AI Pundit), §10 (News review queue), §15 (pipeline).
  */
-import { AI_DISCLAIMER, type LlmGateway } from './llm';
+import { AI_DISCLAIMER, type LlmGateway, type LlmMessage } from './llm';
 
 export interface PreviewTeam { name: string; rank: number }
 export interface MatchPreview {
   content: string;
   disclaimer: string;
   provider?: string;
+}
+
+/**
+ * Pure, deterministic rule-based preview — no network, no randomness.
+ * Favourite = team with lower FIFA rank number (better rank wins tiebreak: home favoured).
+ */
+export function deterministicPreview(input: { home: PreviewTeam; away: PreviewTeam }): MatchPreview {
+  const { home, away } = input;
+  const fav = home.rank <= away.rank ? home : away;
+  const dog = fav === home ? away : home;
+  const content =
+    `${home.name} (FIFA #${home.rank}) host ${away.name} (FIFA #${away.rank}) in what promises to be a competitive fixture. ` +
+    `${fav.name} enter as the higher-ranked side and will look to control proceedings, while ${dog.name} will rely on a disciplined defensive shape and swift transitions. ` +
+    `Smart pick: ${fav.name}. ${AI_DISCLAIMER}`;
+  return { content, disclaimer: AI_DISCLAIMER, provider: 'rule-based' };
 }
 
 /** Generate a grounded match preview + smart pick. Grounding: only the given facts. */

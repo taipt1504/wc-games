@@ -17,6 +17,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@wc/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@wc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
