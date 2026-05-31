@@ -42,6 +42,7 @@ export function Teams({ s }: ScreenProps) {
 export function TeamDetail({ s }: ScreenProps) {
   const t = WC.byId(Number(s.param.id));
   const fixtures = WC.matches.filter((m) => m.home === t.id || m.away === t.id).slice(0, 3);
+  const squad = WC.squadFor(t.code);
   return (
     <div className="page page-narrow fade-up">
       <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}>
@@ -76,7 +77,7 @@ export function TeamDetail({ s }: ScreenProps) {
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Squad</div>
       <div className="card card-pad">
         {(['GK', 'DEF', 'MID', 'FWD'] as const).map((pos) => {
-          const group = WC.squadFor(t.code).filter((p) => p.pos === pos);
+          const group = squad.filter((p) => p.pos === pos);
           return (
             <div key={pos} style={{ marginBottom: 12 }}>
               <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{pos}</div>
