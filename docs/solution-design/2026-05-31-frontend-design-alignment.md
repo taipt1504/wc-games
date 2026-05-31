@@ -84,3 +84,14 @@ Shell: desktop **rail** (Home/Matches/Leaderboard/Lobbies · Tournament: Teams/G
 | **ADMIN-07** Pipeline dashboard | v1 | **Mock** — KPI/jobs đọc `lib/wc.ts`; chưa wire AIJob/9router metrics thật | — | — |
 
 **Còn lại (post-MVP / v1):** ADMIN-02 investigation detail, ADMIN-03 case-file/export + escalation, ADMIN-07 live AIJob/9router metrics; ADMIN-01 search/clawback/session-view; worker BullMQ AI-news job để sinh draft thật (hiện `seedNews` đứng thay); register-login audit (login đã có). Resettle UI (`ScoreEditModal → onSave → fetch`) đã compile + gọi đúng endpoint nhưng e2e drive qua `page.request` (chưa click nút).
+
+## 8. Design-conformance audit (agentic workflow, 2026-05-31)
+
+Chạy **Workflow `golazo-design-conformance-audit`** (15 agents: 8 audit + 7 adversarial-verify) so sánh từng vùng design (`docs/design/predict-wc-2026/project/*` + `chats/chat1.md`) + PRD vs code port. Kết quả: **8 vùng, 23 confirmed gaps** (sau khi verify loại 5 false-positive). Test gate sau khi xử lý: **137 unit/integration + 13 E2E = 150, pass 100%**.
+
+**Đã fix (gap thật, backend sẵn sàng):**
+- **FR-SCORE-03 — exact-score knockout bonus:** `placeBet` + `POST /predictions` nhận & lưu `exactHome/exactAway`; BetSlip hiện ô nhập tỉ số cho trận knockout; `confirmBet` truyền qua; `settleMatch` đã cộng bonus. +int test (placeBet→settle = 300) +e2e (live API).
+- **Admin odds-margin:** `1/m` → `1/(1+m)` (đúng convention multiplier-odds, khớp design).
+- **Article detail:** hydrate từ `/api/v1/news` (trước đọc mock tĩnh → bài đã duyệt rơi về `news[0]`).
+
+**Defer (đúng phạm vi v1 / design cũng mock / cần data thật):** full 26-player squad (B1), live bracket progression engine (B5), admin case-file export·escalation·audit-filter·pipeline-toggle (ADMIN-03/06/07), lobby transfer-host + chat auto-scroll + borrow-message, OAuth Google, Article OG meta, dynamic check-in label, H2H winner-highlight (design cũng bỏ trống). Tất cả đã ghi nhận, không phải lỗi ship.
