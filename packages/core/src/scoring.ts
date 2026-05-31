@@ -82,3 +82,18 @@ export function lobbyScore(winnings: number, defaultPoints: number, borrowed: nu
 export function isUnderdog(odds: number, threshold = 2.0): boolean {
   return odds >= threshold;
 }
+
+/**
+ * Daily check-in reward for a given resulting streak (after incrementing). PRD §05 ENG-01.
+ * | Streak  | Reward |
+ * | 1–2     | 200    |
+ * | 3–6     | 250    |
+ * | 7–13    | 300    |
+ * | 14+     | 400    |
+ */
+export function checkinReward(streak: number): number {
+  if (streak >= 14) return 400;
+  if (streak >= 7) return 300;
+  if (streak >= 3) return 250;
+  return 200;
+}

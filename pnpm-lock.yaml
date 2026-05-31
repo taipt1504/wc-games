@@ -148,6 +148,9 @@ importers:
 
   packages/auth:
     dependencies:
+      '@wc/core':
+        specifier: workspace:*
+        version: link:../core
       '@wc/db':
         specifier: workspace:*
         version: link:../db

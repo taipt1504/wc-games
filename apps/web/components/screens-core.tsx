@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { WC, type Match } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, MatchCard, Pundit, SecHead, Avatar, TIER_C } from '@/components/ui';
+import { checkinReward } from '@wc/core';
 
 /* ===================== LANDING ===================== */
 export function Landing({ s }: ScreenProps) {
@@ -192,11 +193,19 @@ function Stat({ val, lbl, c, i, onClick }: { val: string; lbl: string; c: string
 }
 
 function CheckinCard({ s }: ScreenProps) {
+  const nextReward = checkinReward(s.streak + 1);
+  const milestoneBadge = s.streak < 3
+    ? `Day 3 = +${checkinReward(3)}`
+    : s.streak < 7
+      ? `Day 7 = +${checkinReward(7)}`
+      : s.streak < 14
+        ? `Day 14 = +${checkinReward(14)}`
+        : `Max tier · +${checkinReward(14)}`;
   return (
     <div className="card card-pad" style={{ background: 'linear-gradient(120deg, var(--gold-soft), transparent)', borderColor: 'rgba(255,200,61,.25)', minWidth: 248 }}>
       <div className="row between">
         <div className="row gap-8"><Icon name="fire" size={20} fill="var(--gold)" /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{s.streak}-day streak</span></div>
-        <span className="badge badge-gold">Day 7 = +300</span>
+        <span className="badge badge-gold">{milestoneBadge}</span>
       </div>
       <div className="row gap-4 mt-12">
         {[1, 2, 3, 4, 5, 6, 7].map((d) => (
@@ -204,7 +213,7 @@ function CheckinCard({ s }: ScreenProps) {
         ))}
       </div>
       <Btn variant={s.checkedIn ? 'ghost' : 'gold'} size="sm" className="btn-block mt-12" disabled={s.checkedIn} onClick={() => s.checkin()}>
-        {s.checkedIn ? '✓ Checked in today' : 'Check in · +300 pts'}
+        {s.checkedIn ? '✓ Checked in today' : `Check in · +${nextReward} pts`}
       </Btn>
     </div>
   );

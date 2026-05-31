@@ -40,19 +40,31 @@ describe('auth-service (integration · Postgres)', () => {
     await expect(verifyLogin(prisma, { email: 'a@test.io', password: 'wrong' })).rejects.toThrow('INVALID_CREDENTIALS');
   });
 
-  it('dailyCheckin adds 200 once per UTC+7 day; same-day repeat rejected', async () => {
+  it('dailyCheckin: streak 1 → reward 200; same-day repeat rejected', async () => {
     const u = await prisma.user.findFirstOrThrow({ where: { email: 'a@test.io' } });
     const now = new Date('2026-06-13T05:00:00Z'); // noon in UTC+7
     const r = await dailyCheckin(prisma, u.id, now);
     expect(r.reward).toBe(200n);
+    expect(r.streak).toBe(1);
     expect(r.balance).toBe(1200n);
     await expect(dailyCheckin(prisma, u.id, now)).rejects.toThrow('ALREADY_CHECKED_IN');
   });
 
-  it('allows check-in again on the next UTC+7 day', async () => {
+  it('allows check-in again on the next UTC+7 day (streak 2 → reward 200)', async () => {
     const u = await prisma.user.findFirstOrThrow({ where: { email: 'a@test.io' } });
     const nextDay = new Date('2026-06-14T05:00:00Z');
     const r = await dailyCheckin(prisma, u.id, nextDay);
+    expect(r.reward).toBe(200n);
+    expect(r.streak).toBe(2);
     expect(r.balance).toBe(1400n);
+  });
+
+  it('third consecutive day: streak 3 → reward 250', async () => {
+    const u = await prisma.user.findFirstOrThrow({ where: { email: 'a@test.io' } });
+    const day3 = new Date('2026-06-15T05:00:00Z');
+    const r = await dailyCheckin(prisma, u.id, day3);
+    expect(r.reward).toBe(250n);
+    expect(r.streak).toBe(3);
+    expect(r.balance).toBe(1650n);
   });
 });

@@ -5,9 +5,9 @@
  */
 import type { PrismaClient } from '@wc/db';
 import bcrypt from 'bcryptjs';
+import { checkinReward } from '@wc/core';
 
 const SIGNUP_BONUS = 1000n;
-const DAILY_CHECKIN = 200n;
 const TZ_OFFSET_MS = 7 * 3600 * 1000; // UTC+7 (PRD OQ-07)
 const BCRYPT_ROUNDS = 10;
 
@@ -79,28 +79,30 @@ export async function dailyCheckin(
     if (streak?.lastCheckinDate && streak.lastCheckinDate.getTime() === dayStart.getTime()) {
       throw new Error('ALREADY_CHECKED_IN');
     }
+    // compute new streak before crediting so reward is based on the post-checkin streak
+    const prevDay = new Date(dayStart.getTime() - DAY_MS);
+    const consecutive = !!streak?.lastCheckinDate && streak.lastCheckinDate.getTime() === prevDay.getTime();
+    const newStreak = consecutive ? streak!.checkinStreak + 1 : 1;
+    const reward = BigInt(checkinReward(newStreak));
+
     const wallet = await tx.wallet.findFirstOrThrow({
       where: { userId, contextType: 'GLOBAL', contextId: null },
     });
-    const newBal = wallet.balance + DAILY_CHECKIN;
+    const newBal = wallet.balance + reward;
     await tx.wallet.update({ where: { id: wallet.id }, data: { balance: newBal } });
     await tx.pointLedger.create({
       data: {
         userId, contextType: 'GLOBAL', type: 'DAILY',
-        amount: DAILY_CHECKIN, balanceAfter: newBal, refType: 'USER', refId: userId,
+        amount: reward, balanceAfter: newBal, refType: 'USER', refId: userId,
       },
     });
 
-    // consecutive day -> increment streak, otherwise reset to 1
-    const prevDay = new Date(dayStart.getTime() - DAY_MS);
-    const consecutive = !!streak?.lastCheckinDate && streak.lastCheckinDate.getTime() === prevDay.getTime();
-    const newStreak = consecutive ? streak!.checkinStreak + 1 : 1;
     await tx.streak.upsert({
       where: { userId },
       create: { userId, checkinStreak: 1, winStreak: 0, lastCheckinDate: dayStart },
       update: { checkinStreak: newStreak, lastCheckinDate: dayStart },
     });
 
-    return { balance: newBal, reward: DAILY_CHECKIN, streak: newStreak };
+    return { balance: newBal, reward, streak: newStreak };
   });
 }
