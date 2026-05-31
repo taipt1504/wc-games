@@ -26,8 +26,8 @@ export function Leaderboard({ s }: ScreenProps) {
   useEffect(() => {
     fetch('/api/v1/leaderboard')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setRows(j.data); })
-      .catch(() => { /* fall back to seed display */ });
+      .then((j) => { if (j?.data) setRows(j.data); })
+      .catch(() => { /* fall back to empty display */ });
   }, []);
   const scopes: [string, string][] = guest
     ? [['global', 'Global'], ['week', 'This week']]
@@ -59,60 +59,68 @@ export function Leaderboard({ s }: ScreenProps) {
         <div className="panel card-pad mt-4" style={{ background: 'linear-gradient(120deg, var(--gold-soft), transparent)', borderColor: 'rgba(255,200,61,.25)', marginBottom: 18 }}>
           <div className="row between wrap gap-12">
             <div className="row gap-14">
-              <div className="display" style={{ fontSize: 32, color: 'var(--gold)' }}>#{WC.me.rank.toLocaleString()}</div>
-              <div><div style={{ fontWeight: 700 }}>Your global rank</div><div className="tiny muted">Top 14% · {WC.me.settled} settled bets</div></div>
+              <div className="display" style={{ fontSize: 32, color: 'var(--gold)' }}>#{s.me.rank ?? '—'}</div>
+              <div><div style={{ fontWeight: 700 }}>Your global rank</div><div className="tiny muted">Top 14% · {s.me.settled} settled bets</div></div>
             </div>
             <div className="row gap-20">
-              <div className="stat"><span className="s-val tnum text-green">+{WC.me.roi}%</span><span className="s-lbl">ROI</span></div>
-              <div className="stat"><span className="s-val tnum">{WC.me.won}/{WC.me.settled}</span><span className="s-lbl">Won</span></div>
+              <div className="stat"><span className="s-val tnum text-green">+{s.me.roi}%</span><span className="s-lbl">ROI</span></div>
+              <div className="stat"><span className="s-val tnum">{s.me.won}/{s.me.settled}</span><span className="s-lbl">Won</span></div>
               <TierPill tier="Gold" />
             </div>
           </div>
         </div>
       )}
 
-      {/* top 3 podium */}
-      <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 18 }}>
-        {rows.slice(0, 3).map((p, i) => (
-          <div key={p.rank} className="card card-pad" style={{ textAlign: 'center', order: i === 0 ? 2 : i === 1 ? 1 : 3, transform: i === 0 ? 'scale(1.04)' : 'none', borderColor: i === 0 ? 'rgba(255,200,61,.4)' : 'var(--line)' }}>
-            <div className="display" style={{ fontSize: 22, color: ['#FFC83D', '#AEB8D0', '#c08457'][i] }}>{['🥇', '🥈', '🥉'][i]}</div>
-            <Avatar initials={p.name.slice(0, 2).toUpperCase()} size={48} color={TIER_C[p.tier]} ring={TIER_C[p.tier]} />
-            <div className="small" style={{ fontWeight: 700, marginTop: 8 }}>{p.name}</div>
-            <div className="tnum text-green" style={{ fontWeight: 700, fontSize: 18 }}>+{p.roi}%</div>
-            <div className="tiny muted">+{p.net.toLocaleString()} net</div>
-          </div>
-        ))}
-      </div>
-
-      {/* table */}
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Player</th>
-                <th>Tier</th>
-                <th style={{ textAlign: 'right' }}>ROI</th>
-                <th style={{ textAlign: 'right' }} className="hide-mobile">Net</th>
-                <th style={{ textAlign: 'right' }} className="hide-mobile">W/Settled</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.rank}>
-                  <td className="tnum muted">{p.rank}</td>
-                  <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span style={{ fontWeight: 600 }}>{p.name}</span></div></td>
-                  <td><TierPill tier={p.tier} /></td>
-                  <td style={{ textAlign: 'right' }} className="tnum text-green">+{p.roi}%</td>
-                  <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">+{p.net.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">{p.won}/{p.settled}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {rows.length === 0 ? (
+        <div className="card card-pad-lg" style={{ textAlign: 'center', marginBottom: 18 }}>
+          <p className="muted">Leaderboard is empty — check back once bets have settled.</p>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* top 3 podium */}
+          <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 18 }}>
+            {rows.slice(0, 3).map((p, i) => (
+              <div key={p.rank} className="card card-pad" style={{ textAlign: 'center', order: i === 0 ? 2 : i === 1 ? 1 : 3, transform: i === 0 ? 'scale(1.04)' : 'none', borderColor: i === 0 ? 'rgba(255,200,61,.4)' : 'var(--line)' }}>
+                <div className="display" style={{ fontSize: 22, color: ['#FFC83D', '#AEB8D0', '#c08457'][i] }}>{['🥇', '🥈', '🥉'][i]}</div>
+                <Avatar initials={p.name.slice(0, 2).toUpperCase()} size={48} color={TIER_C[p.tier]} ring={TIER_C[p.tier]} />
+                <div className="small" style={{ fontWeight: 700, marginTop: 8 }}>{p.name}</div>
+                <div className="tnum text-green" style={{ fontWeight: 700, fontSize: 18 }}>+{p.roi}%</div>
+                <div className="tiny muted">+{p.net.toLocaleString()} net</div>
+              </div>
+            ))}
+          </div>
+
+          {/* table */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Player</th>
+                    <th>Tier</th>
+                    <th style={{ textAlign: 'right' }}>ROI</th>
+                    <th style={{ textAlign: 'right' }} className="hide-mobile">Net</th>
+                    <th style={{ textAlign: 'right' }} className="hide-mobile">W/Settled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((p) => (
+                    <tr key={p.rank}>
+                      <td className="tnum muted">{p.rank}</td>
+                      <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span style={{ fontWeight: 600 }}>{p.name}</span></div></td>
+                      <td><TierPill tier={p.tier} /></td>
+                      <td style={{ textAlign: 'right' }} className="tnum text-green">+{p.roi}%</td>
+                      <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">+{p.net.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">{p.won}/{p.settled}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -292,7 +300,7 @@ export function MyBets({ s }: ScreenProps) {
     <div className="page fade-up">
       <SecHead title="My bets" sub="Every prediction, settled or live" />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', marginBottom: 18 }}>
-        <div className="card card-pad stat"><span className="s-val tnum text-green">+{WC.me.roi}%</span><span className="s-lbl">ROI</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum text-green">+{s.me.roi}%</span><span className="s-lbl">ROI</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{Math.round(won / (settled.length || 1) * 100)}%</span><span className="s-lbl">Win rate</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{settled.length}</span><span className="s-lbl">Settled</span></div>
         <div className="card card-pad stat"><span className="s-val tnum" style={{ color: net >= 0 ? 'var(--green)' : 'var(--danger)' }}>{net >= 0 ? '+' : ''}{net}</span><span className="s-lbl">Net points</span></div>
@@ -367,7 +375,9 @@ export function Wallet({ s }: ScreenProps) {
 
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Transaction history</div>
       <div className="card" style={{ overflow: 'hidden' }}>
-        {(s.ledger && s.ledger.length ? s.ledger : WC.ledger).map((tx, i, arr) => {
+        {s.ledger.length === 0 ? (
+          <div className="card-pad" style={{ textAlign: 'center' }}><p className="muted">No transactions yet.</p></div>
+        ) : s.ledger.map((tx, i, arr) => {
           const [icon, color] = ICON[tx.type] || ['dollar', 'var(--text-2)'];
           return (
             <div key={i} className="row between" style={{ padding: '14px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : 0 }}>
@@ -412,8 +422,8 @@ function CosmeticShop({ s }: ScreenProps) {
   function fetchShop() {
     fetch('/api/v1/shop')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data?.length) setItems(j.data); })
-      .catch(() => { /* mock-empty fallback */ });
+      .then((j) => { if (j?.data) setItems(j.data); })
+      .catch(() => { /* empty fallback */ });
   }
 
   useEffect(() => { if (s.authed) fetchShop(); }, [s.authed]);
@@ -506,7 +516,7 @@ interface DuelDisplay {
 }
 
 export function Profile({ s }: ScreenProps) {
-  const me = WC.me;
+  const me = s.me;
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
   const [achievements, setAchievements] = React.useState<AchievementDisplay[]>(WC.achievements);
   const [notifPrefs, setNotifPrefs] = React.useState<NotifPrefs>(defaultNotifPrefs());
@@ -677,14 +687,14 @@ export function Profile({ s }: ScreenProps) {
       <div className="panel card-pad-lg" style={{ background: 'linear-gradient(160deg, var(--surface-2), var(--bg-2))' }}>
         <div className="row between wrap gap-16">
           <div className="row gap-16">
-            <Avatar initials="AR" size={64} color="var(--gold)" ring="var(--gold)" />
+            <Avatar initials={me.avatar} size={64} color="var(--gold)" ring="var(--gold)" />
             <div>
-              <div className="row gap-8"><span className="h3">{me.name}</span><TierPill tier={s.tier ?? WC.me.tier} />{tierNext && tierToNext > 0 && <span className="tiny muted">{tierToNext.toLocaleString()} to {tierNext}</span>}</div>
+              <div className="row gap-8"><span className="h3">{me.name}</span><TierPill tier={s.tier} />{tierNext && tierToNext > 0 && <span className="tiny muted">{tierToNext.toLocaleString()} to {tierNext}</span>}</div>
               <div className="tiny muted">{me.handle} · joined {me.joined}</div>
               <div className="row gap-8 mt-8">
-                <span className="badge badge-gold"><Icon name="fire" size={12} fill="var(--gold)" />{me.streak}-day streak</span>
-                {(s.winStreak ?? WC.me.winStreak) > 0 && (
-                  <span className="badge badge-green">🔥 {s.winStreak ?? WC.me.winStreak} win streak</span>
+                <span className="badge badge-gold"><Icon name="fire" size={12} fill="var(--gold)" />{s.streak}-day streak</span>
+                {s.winStreak > 0 && (
+                  <span className="badge badge-green">🔥 {s.winStreak} win streak</span>
                 )}
               </div>
             </div>
@@ -695,7 +705,7 @@ export function Profile({ s }: ScreenProps) {
 
       {/* stats */}
       <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))' }}>
-        {([['Balance', s.points.toLocaleString(), 'var(--gold)'], ['ROI', '+' + me.roi + '%', 'var(--green)'], ['Rank', '#' + me.rank, 'var(--sky)'], ['Settled', String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
+        {([['Balance', s.points.toLocaleString(), 'var(--gold)'], ['ROI', '+' + me.roi + '%', 'var(--green)'], ['Rank', '#' + (me.rank ?? '—'), 'var(--sky)'], ['Settled', String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
           <div key={l} className="card card-pad stat"><span className="s-val tnum" style={{ color: c, fontSize: 22 }}>{v}</span><span className="s-lbl">{l}</span></div>
         ))}
       </div>
@@ -749,9 +759,9 @@ export function Profile({ s }: ScreenProps) {
                 roi: String(me.roi),
                 won: String(me.won),
                 settled: String(me.settled),
-                rank: String(me.rank),
-                tier: 'Gold',
-                streak: String(s.winStreak ?? WC.me.winStreak),
+                rank: String(me.rank ?? ''),
+                tier: s.tier,
+                streak: String(s.winStreak),
               });
               const url = typeof window !== 'undefined'
                 ? `${window.location.origin}/api/og/share?${params}`
@@ -768,9 +778,9 @@ export function Profile({ s }: ScreenProps) {
                 roi: String(me.roi),
                 won: String(me.won),
                 settled: String(me.settled),
-                rank: String(me.rank),
-                tier: 'Gold',
-                streak: String(s.winStreak ?? WC.me.winStreak),
+                rank: String(me.rank ?? ''),
+                tier: s.tier,
+                streak: String(s.winStreak),
               });
               if (typeof window !== 'undefined') {
                 window.open(`/api/og/share?${params}`, '_blank');
@@ -782,6 +792,7 @@ export function Profile({ s }: ScreenProps) {
 
       {/* achievements */}
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Achievements</div>
+      {achievements.length === 0 && <div className="card card-pad" style={{ textAlign: 'center' }}><p className="muted">No achievements unlocked yet.</p></div>}
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
         {achievements.map((a) => (
           <div key={a.name} className="card card-pad" style={{ opacity: a.unlocked ? 1 : .55, borderColor: a.unlocked ? 'rgba(255,200,61,.25)' : 'var(--line)' }}>
