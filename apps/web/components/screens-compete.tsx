@@ -233,6 +233,8 @@ export function Wallet({ s }: ScreenProps) {
 }
 
 /* ===================== PROFILE ===================== */
+type AchievementDisplay = { name: string; desc: string; icon: string; unlocked: boolean; prog?: string };
+
 export function Profile({ s }: ScreenProps) {
   const me = WC.me;
   const notifs: [string, boolean][] = [
@@ -243,10 +245,28 @@ export function Profile({ s }: ScreenProps) {
     ['Hot news', false],
   ];
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
+  const [achievements, setAchievements] = React.useState<AchievementDisplay[]>(WC.achievements);
   useEffect(() => {
     fetch('/api/v1/me/referral')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (j?.data) setReferral(j.data); })
+      .catch(() => { /* fall back to mock */ });
+  }, []);
+  useEffect(() => {
+    fetch('/api/v1/me/achievements')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j?.data) return;
+        setAchievements(
+          (j.data as { code: string; name: string; desc: string; icon: string; unlocked: boolean; progress: number; target: number }[]).map((a) => ({
+            name: a.name,
+            desc: a.desc,
+            icon: a.icon,
+            unlocked: a.unlocked,
+            prog: !a.unlocked ? `${a.progress}/${a.target}` : undefined,
+          })),
+        );
+      })
       .catch(() => { /* fall back to mock */ });
   }, []);
 
@@ -297,7 +317,7 @@ export function Profile({ s }: ScreenProps) {
       {/* achievements */}
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Achievements</div>
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
-        {WC.achievements.map((a) => (
+        {achievements.map((a) => (
           <div key={a.name} className="card card-pad" style={{ opacity: a.unlocked ? 1 : .55, borderColor: a.unlocked ? 'rgba(255,200,61,.25)' : 'var(--line)' }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: a.unlocked ? 'var(--gold-soft)' : 'var(--surface-2)', display: 'grid', placeItems: 'center' }}>
               <Icon name={a.icon} size={20} style={{ color: a.unlocked ? 'var(--gold)' : 'var(--muted)' }} />
