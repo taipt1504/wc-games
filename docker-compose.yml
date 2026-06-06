@@ -19,12 +19,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: wc_redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-wc_redis123}"]
     ports:
       - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-wc_redis123}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
