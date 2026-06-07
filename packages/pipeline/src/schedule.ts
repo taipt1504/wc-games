@@ -9,6 +9,7 @@
  */
 import type { PrismaClient } from '@wc/db';
 import type { LlmGateway } from '@wc/ai';
+import { publishEvent, channels } from '@wc/realtime';
 import { crawlAndStoreSquads } from './squad';
 
 export const LINEUP_LEAD_MS = 15 * 60_000; // T-15min
@@ -26,15 +27,22 @@ export function firstResultCheckDelayMs(kickoffAt: Date, now: number): number {
   return Math.max(0, kickoffAt.getTime() + FIRST_RESULT_CHECK_MS - now);
 }
 
+/** ms until betting should lock (kickoff − leadMinutes); 0 if already due/past. */
+export function lockBettingDelayMs(kickoffAt: Date, leadMinutes: number, now: number): number {
+  return Math.max(0, kickoffAt.getTime() - leadMinutes * 60_000 - now);
+}
+
 export type ResultAction = 'settle' | 'recheck' | 'stop';
 
-/** Decide what a result-check job should do, given the match's current (feed-driven) state. */
+/** Decide what a result-check job should do, given the match's current (feed-driven) state.
+ *  `maxAttempts` defaults to the constant; the worker passes the config-driven value. */
 export function decideResultCheck(
   match: { status: string; scoreHome90: number | null; scoreAway90: number | null },
   attempt: number,
+  maxAttempts: number = MAX_RESULT_ATTEMPTS,
 ): ResultAction {
   if (match.status === 'FINISHED' && match.scoreHome90 != null && match.scoreAway90 != null) return 'settle';
-  if (attempt >= MAX_RESULT_ATTEMPTS) return 'stop';
+  if (attempt >= maxAttempts) return 'stop';
   return 'recheck';
 }
 
@@ -50,5 +58,7 @@ export async function refreshMatchLineups(
     where: { id: { in: [match.homeTeamId, match.awayTeamId] } },
     select: { id: true, name: true },
   });
-  return crawlAndStoreSquads(prisma, gateway, teams);
+  const res = await crawlAndStoreSquads(prisma, gateway, teams);
+  await publishEvent(channels.matches, { type: 'match.update', matchId: Number(matchId) });
+  return res;
 }

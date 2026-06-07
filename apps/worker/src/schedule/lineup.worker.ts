@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Worker } from 'bullmq';
 import { prisma } from '@wc/db';
-import { refreshMatchLineups } from '@wc/pipeline';
+import { refreshMatchLineups, isJobEnabled, recordJobRun } from '@wc/pipeline';
 import { LlmGateway } from '../llm/llm-gateway';
 import { connection } from '../redis';
 
@@ -23,14 +23,22 @@ export class LineupWorker implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<LineupJob>(
       'lineup',
       async (job: Job<LineupJob>) => {
+        if (!(await isJobEnabled(prisma, 'lineup'))) {
+          await recordJobRun(prisma, 'lineup', 'SKIPPED', 'disabled');
+          return { skipped: true };
+        }
         const matchId = BigInt(job.data.matchId);
         const res = await refreshMatchLineups(prisma, this.llm, matchId);
+        await recordJobRun(prisma, 'lineup', 'OK', `match ${matchId}`);
         this.log.log(`lineup match ${matchId}: ${JSON.stringify(res)}`);
         return res;
       },
       { connection },
     );
-    this.worker.on('failed', (job, err) => this.log.error(`lineup job ${job?.id} failed: ${err.message}`));
+    this.worker.on('failed', (job, err) => {
+      this.log.error(`lineup job ${job?.id} failed: ${err.message}`);
+      void recordJobRun(prisma, 'lineup', 'ERROR', err.message);
+    });
     this.log.log('LineupWorker listening on queue "lineup".');
   }
 

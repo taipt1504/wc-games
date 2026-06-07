@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Queue, Worker } from 'bullmq';
 import { prisma } from '@wc/db';
-import { decideResultCheck, RESULT_RECHECK_MS } from '@wc/pipeline';
+import { decideResultCheck, getJobConfig, isJobEnabled, recordJobRun } from '@wc/pipeline';
 import { connection } from '../redis';
 
 interface ResultJob { matchId: string; attempt: number }
@@ -22,15 +22,20 @@ export class ResultCheckWorker implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<ResultJob>(
       'result-check',
       async (job: Job<ResultJob>) => {
+        if (!(await isJobEnabled(prisma, 'result_check'))) {
+          await recordJobRun(prisma, 'result_check', 'SKIPPED', 'disabled');
+          return { action: 'stop' as const, reason: 'disabled' };
+        }
         const matchId = BigInt(job.data.matchId);
         const attempt = job.data.attempt ?? 0;
+        const cfg = await getJobConfig(prisma, 'result_check');
         const match = await prisma.match.findUnique({
           where: { id: matchId },
           select: { status: true, scoreHome90: true, scoreAway90: true },
         });
         if (!match) return { action: 'stop' as const, reason: 'missing' };
 
-        const action = decideResultCheck(match, attempt);
+        const action = decideResultCheck(match, attempt, cfg.maxAttempts);
         if (action === 'settle') {
           await this.settleQ.add('settle', { matchId: matchId.toString() }, { jobId: `settle:${matchId}` });
           this.log.log(`result match ${matchId}: FINISHED → enqueued settle`);
@@ -38,17 +43,21 @@ export class ResultCheckWorker implements OnModuleInit, OnModuleDestroy {
           await this.resultQ.add(
             'check',
             { matchId: matchId.toString(), attempt: attempt + 1 },
-            { delay: RESULT_RECHECK_MS, jobId: `result:${matchId}:${attempt + 1}` },
+            { delay: cfg.recheckMinutes * 60_000, jobId: `result:${matchId}:${attempt + 1}` },
           );
-          this.log.log(`result match ${matchId}: not final (attempt ${attempt}) → re-check in 30m`);
+          this.log.log(`result match ${matchId}: not final (attempt ${attempt}) → re-check in ${cfg.recheckMinutes}m`);
         } else {
           this.log.warn(`result match ${matchId}: not final after ${attempt} attempts → needs admin confirm`);
         }
+        await recordJobRun(prisma, 'result_check', 'OK', `${action} match ${matchId}`);
         return { action };
       },
       { connection },
     );
-    this.worker.on('failed', (job, err) => this.log.error(`result-check job ${job?.id} failed: ${err.message}`));
+    this.worker.on('failed', (job, err) => {
+      this.log.error(`result-check job ${job?.id} failed: ${err.message}`);
+      void recordJobRun(prisma, 'result_check', 'ERROR', err.message);
+    });
     this.log.log('ResultCheckWorker listening on queue "result-check".');
   }
 

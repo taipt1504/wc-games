@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Worker } from 'bullmq';
 import { prisma } from '@wc/db';
-import { generateAndStoreNews, publishDueNews, crawlNewsSources, SAMPLE_SOURCES } from '@wc/pipeline';
+import { generateAndStoreNews, publishDueNews, crawlNewsSources, SAMPLE_SOURCES, getJobConfig, isJobEnabled, recordJobRun } from '@wc/pipeline';
 import { LlmGateway } from '../llm/llm-gateway';
 import { connection } from '../redis';
 
@@ -18,7 +18,8 @@ interface NewsGenerateJob {
 export class NewsWorker implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(NewsWorker.name);
   private worker?: Worker;
-  private publishTick?: ReturnType<typeof setInterval>;
+  private timer?: ReturnType<typeof setTimeout>;
+  private stopped = false;
 
   constructor(private readonly llm: LlmGateway) {}
 
@@ -40,19 +41,38 @@ export class NewsWorker implements OnModuleInit, OnModuleDestroy {
     );
     this.log.log('NewsWorker listening on queue "news".');
 
-    // Repeatable publish tick — auto-publish scheduled articles.
-    this.publishTick = setInterval(async () => {
-      try {
-        const n = await publishDueNews(prisma);
-        if (n > 0) this.log.log(`auto-published ${n} scheduled news article(s)`);
-      } catch (err) {
-        this.log.error(`publishDueNews error: ${(err as Error).message}`);
+    // Config-driven publish loop — auto-publish scheduled articles.
+    void this.loop();
+  }
+
+  /** Publish due articles; also the manual-trigger entry point. Returns a short status note. */
+  async runOnce(): Promise<string> {
+    try {
+      if (!(await isJobEnabled(prisma, 'news'))) {
+        await recordJobRun(prisma, 'news', 'SKIPPED', 'disabled');
+        return 'disabled';
       }
-    }, 60_000);
+      const n = await publishDueNews(prisma);
+      if (n > 0) this.log.log(`auto-published ${n} scheduled news article(s)`);
+      await recordJobRun(prisma, 'news', 'OK', `published ${n}`);
+      return `published ${n}`;
+    } catch (err) {
+      await recordJobRun(prisma, 'news', 'ERROR', (err as Error).message);
+      this.log.error(`publishDueNews error: ${(err as Error).message}`);
+      return 'error';
+    }
+  }
+
+  private async loop() {
+    if (this.stopped) return;
+    await this.runOnce();
+    const { publishIntervalSeconds } = await getJobConfig(prisma, 'news');
+    this.timer = setTimeout(() => void this.loop(), publishIntervalSeconds * 1000);
   }
 
   async onModuleDestroy() {
-    if (this.publishTick) clearInterval(this.publishTick);
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
     await this.worker?.close();
   }
 }

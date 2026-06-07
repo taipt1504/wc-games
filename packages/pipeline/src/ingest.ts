@@ -8,6 +8,7 @@
  * fixtures (no live API call in CI).
  */
 import type { PrismaClient, MatchRound, MatchStatus, Outcome } from '@wc/db';
+import { publishEvent, channels } from '@wc/realtime';
 
 // ─────────────────────────── Raw API shapes (worldcup26.ir) ───────────────────────────
 export interface WcTeam { id: string; name_en: string; fifa_code: string; flag: string; iso2: string; groups: string }
@@ -157,4 +158,49 @@ export async function ingestTournament(
   }
 
   return { teams: teams.length, venues: stadiums.length, matches: games.length };
+}
+
+/**
+ * Match-only sync from the worldcup26 feed — upserts fixtures + house odds WITHOUT touching
+ * teams/players/venues (unlike ingestTournament's wipe-then-load). Safe to run repeatedly and
+ * the right tool to re-populate matches without nuking AI-crawled players. Guards:
+ *   - existing match with source=ADMIN → skipped (never revert an admin-confirmed result)
+ *   - odds created only if missing (never clobber an admin-set line)
+ * Publishes match.update per touched match so connected clients refresh live (R3).
+ */
+export async function syncMatchesFromFeed(
+  prisma: PrismaClient,
+  fetchJson: FetchJson = defaultFetch,
+): Promise<{ created: number; updated: number; skipped: number }> {
+  const games = ((await fetchJson('games')) as { games: WcGame[] }).games;
+
+  const groups = await prisma.group.findMany({ select: { id: true, name: true } });
+  const groupId: Record<string, bigint> = {};
+  for (const g of groups) groupId[g.name] = g.id;
+
+  let created = 0, updated = 0, skipped = 0;
+  for (const game of games) {
+    const m = mapGame(game);
+    const existing = await prisma.match.findUnique({ where: { id: m.id }, select: { source: true } });
+    if (existing?.source === 'ADMIN') { skipped++; continue; }
+
+    const data = {
+      round: m.round,
+      groupId: m.groupLetter ? (groupId[m.groupLetter] ?? null) : null,
+      homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId, venueId: m.venueId,
+      kickoffAt: m.kickoffAt, status: m.status,
+      scoreHome90: m.scoreHome90, scoreAway90: m.scoreAway90, result90: m.result90,
+      source: 'API' as const,
+    };
+    await prisma.match.upsert({ where: { id: m.id }, create: { id: m.id, ...data }, update: data });
+    if (existing) updated++; else created++;
+
+    const odds = await prisma.matchOdds.findUnique({ where: { matchId: m.id } });
+    if (!odds) {
+      const o = houseOdds(m.id);
+      await prisma.matchOdds.create({ data: { matchId: m.id, mHome: o.mHome, mDraw: o.mDraw, mAway: o.mAway, source: 'ADMIN' } });
+    }
+    await publishEvent(channels.matches, { type: 'match.update', matchId: Number(m.id) });
+  }
+  return { created, updated, skipped };
 }

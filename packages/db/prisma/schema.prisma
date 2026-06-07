@@ -677,3 +677,17 @@ model CaseFile {
   status      String   @default("OPEN")
   createdAt   DateTime @default(now())
 }
+
+// Worker schedule-job registry — DB-backed thresholds + enable/disable + last-run status.
+// schedule.ts constants are the defaults/fallbacks; @wc/pipeline job-config reads through this.
+model ScheduleJob {
+  key           String    @id
+  label         String
+  enabled       Boolean   @default(true)
+  config        Json
+  lastRunAt     DateTime?
+  lastRunStatus String?
+  lastRunNote   String?
+  updatedBy     BigInt?
+  updatedAt     DateTime  @updatedAt
+}

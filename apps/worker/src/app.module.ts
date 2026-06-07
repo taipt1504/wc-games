@@ -6,11 +6,14 @@ import { LiveScoreWorker } from './livescore/livescore.worker';
 import { MatchSchedulerService } from './schedule/match-scheduler.service';
 import { LineupWorker } from './schedule/lineup.worker';
 import { ResultCheckWorker } from './schedule/result-check.worker';
+import { LockBettingWorker } from './schedule/lock-betting.worker';
+import { ControlWorker } from './schedule/control.worker';
 
 @Module({
   providers: [
     LlmGateway, SettlementWorker, NewsWorker, LiveScoreWorker,
     MatchSchedulerService, LineupWorker, ResultCheckWorker,
+    LockBettingWorker, ControlWorker,
   ],
 })
 export class AppModule {}

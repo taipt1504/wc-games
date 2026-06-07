@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  lineupDelayMs, firstResultCheckDelayMs, decideResultCheck,
+  lineupDelayMs, firstResultCheckDelayMs, decideResultCheck, lockBettingDelayMs,
   LINEUP_LEAD_MS, FIRST_RESULT_CHECK_MS, MAX_RESULT_ATTEMPTS,
 } from './schedule';
 
@@ -15,6 +15,18 @@ describe('lineupDelayMs', () => {
   it('clamps to 0 once the lead time has passed', () => {
     expect(lineupDelayMs(KICK, t(-5))).toBe(0); // already inside T-15
     expect(lineupDelayMs(KICK, t(120))).toBe(0); // long after kickoff
+  });
+});
+
+describe('lockBettingDelayMs', () => {
+  it('lead 0 → ms until kickoff', () => {
+    expect(lockBettingDelayMs(KICK, 0, KICK.getTime() - 60_000)).toBe(60_000);
+  });
+  it('lead 5 → locks 5min before kickoff', () => {
+    expect(lockBettingDelayMs(KICK, 5, t(-10))).toBe(5 * 60_000);
+  });
+  it('past the lock moment → 0 (run now)', () => {
+    expect(lockBettingDelayMs(KICK, 0, t(1))).toBe(0);
   });
 });
 

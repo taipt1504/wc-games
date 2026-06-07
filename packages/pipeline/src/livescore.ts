@@ -4,6 +4,7 @@
  * admin-confirmed (Phase 4); this only keeps scores/status fresh for display + the live feed.
  */
 import type { PrismaClient, MatchStatus, Outcome } from '@wc/db';
+import { publishEvent, channels } from '@wc/realtime';
 import { mapStatus, type WcGame, type FetchJson } from './ingest';
 
 export interface LiveUpdate {
@@ -55,6 +56,8 @@ export async function updateLiveScores(
       data: { status: u.status, scoreHome90: u.scoreHome90, scoreAway90: u.scoreAway90, result90: u.result90, source: 'API' },
     });
     updated++;
+    // Realtime: signal clients to re-fetch this match (best-effort).
+    await publishEvent(channels.matches, { type: 'match.update', matchId: Number(id) });
     if (u.status === 'FINISHED' && existing.status !== 'FINISHED') newlyFinished.push(Number(id));
   }
   return { updated, newlyFinished };
@@ -75,5 +78,6 @@ export async function syncOneMatchResult(
     where: { id: matchId },
     data: { status: u.status, scoreHome90: u.scoreHome90, scoreAway90: u.scoreAway90, result90: u.result90, source: 'API' },
   });
+  await publishEvent(channels.matches, { type: 'match.update', matchId: Number(matchId) });
   return { updated: true, status: u.status, scoreHome90: u.scoreHome90, scoreAway90: u.scoreAway90 };
 }
