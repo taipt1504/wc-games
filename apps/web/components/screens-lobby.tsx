@@ -1,9 +1,10 @@
 'use client';
 /* GOLAZO — Lobbies · Create · Lobby view · Borrow modal (ported from design screens-lobby.jsx) */
-import React, { useState, useEffect, useCallback } from 'react';
-import { WC, type Match, type Lobby, type Pick1X2, type Odds } from '@/lib/wc';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { type Lobby, type Pick1X2, type Odds } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
-import { Btn, Icon, Flag, Avatar, SecHead } from '@/components/ui';
+import { Btn, Icon, Flag, Avatar, SecHead, Portal } from '@/components/ui';
+import { type RealMatch } from '@/components/screens-match';
 
 /* ---- Scope preset type ---- */
 interface Scope {
@@ -32,6 +33,7 @@ interface BoardRow {
   userId: number;
   name: string;
   score: number;
+  balance: number;
   won: number;
   def: number;
   borrowed: number;
@@ -42,7 +44,7 @@ interface BoardRow {
 interface ChatMsg { who: string; text: string; t: string }
 
 /* ===================== LOBBY CARD (helper) ===================== */
-function LobbyCard({ l, s, joined }: { l: Lobby; s: ScreenProps['s']; joined?: boolean }) {
+function LobbyCard({ l, s, joined, onJoin }: { l: Lobby; s: ScreenProps['s']; joined?: boolean; onJoin?: (l: Lobby) => void }) {
   return (
     <div className="card card-pad card-hover pointer" onClick={() => s.go('lobby', { id: l.id })}>
       <div className="row between">
@@ -61,23 +63,48 @@ function LobbyCard({ l, s, joined }: { l: Lobby; s: ScreenProps['s']; joined?: b
         <span className="tiny muted">Host · {l.owner}</span>
         {joined
           ? <span className="badge badge-gold">You: #{l.you}</span>
-          : <Btn variant="primary" size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); s.toastMsg(`Joined ${l.name}!`, 'check', 'var(--green)'); s.go('lobby', { id: l.id }); }}>Join</Btn>}
+          : <Btn variant="primary" size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); onJoin?.(l); }}>{l.pwd ? 'Join 🔒' : 'Join'}</Btn>}
       </div>
     </div>
   );
 }
+
+type JoinTarget = { id: number; name: string } | { code: string };
 
 /* ===================== LOBBIES LIST ===================== */
 export function Lobbies({ s }: ScreenProps) {
   const [q, setQ] = useState('');
   const [code, setCode] = useState('');
   const [allLobbies, setAllLobbies] = useState<Lobby[]>([]);
-  useEffect(() => {
-    fetch('/api/v1/lobbies')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data) setAllLobbies(j.data); })
-      .catch(() => { /* network error — remain empty */ });
+  const [pwModal, setPwModal] = useState<{ target: JoinTarget; name: string; password: string; error: string } | null>(null);
+
+  const reload = useCallback(() => {
+    fetch('/api/v1/lobbies').then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.data) setAllLobbies(j.data); }).catch(() => {});
   }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const join = useCallback(async (target: JoinTarget, password?: string) => {
+    const url = 'id' in target ? `/api/v1/lobbies/${target.id}/join` : '/api/v1/lobbies/join-by-code';
+    const payload = 'id' in target ? { password } : { code: target.code, password };
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await res.json().catch(() => ({}));
+      const id = j?.data?.id as number | undefined;
+      if (res.ok) { setPwModal(null); s.toastMsg(j?.data?.alreadyMember ? 'Already a member' : 'Joined lobby!', 'check', 'var(--green)'); reload(); if (id) s.go('lobby', { id }); return; }
+      const errc = j?.error?.code;
+      if (errc === 'PASSWORD_REQUIRED') { setPwModal({ target, name: 'name' in target ? target.name : target.code, password: '', error: '' }); return; }
+      if (errc === 'WRONG_PASSWORD') { setPwModal((m) => (m ? { ...m, error: 'Wrong password — try again' } : m)); return; }
+      if (errc === 'ALREADY_MEMBER') { setPwModal(null); if (id) s.go('lobby', { id }); return; }
+      if (errc === 'INVALID_CODE') { s.toastMsg('Invite code not found', 'alert', 'var(--danger)'); return; }
+      if (errc === 'UNAUTHORIZED') { s.toastMsg('Sign in to join a lobby', 'lock', 'var(--gold)'); s.go('auth', { mode: 'signup' }); return; }
+      s.toastMsg('Could not join lobby', 'alert', 'var(--danger)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  }, [s, reload]);
+
+  // Auto-join from an invite link (?join=CODE → routed here as s.param.join).
+  const autoCode = s.param?.join as string | undefined;
+  useEffect(() => { if (autoCode) { setCode(autoCode); void join({ code: autoCode }); } }, [autoCode, join]);
+
   const match = (l: Lobby) => (l.name + l.owner + l.scope).toLowerCase().includes(q.toLowerCase());
   const joined = allLobbies.filter(l => l.joined && match(l));
   const discover = allLobbies.filter(l => !l.joined && match(l));
@@ -95,8 +122,9 @@ export function Lobbies({ s }: ScreenProps) {
         </div>
         <div className="card card-pad row gap-8" style={{ borderRadius: 'var(--r-pill)' }}>
           <Icon name="lock" size={16} className="muted" />
-          <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0', minWidth: 0 }} placeholder="Invite code or link" value={code} onChange={e => setCode(e.target.value)} />
-          <Btn variant="ghost" size="sm" onClick={() => code.trim() ? s.toastMsg('Joining via code…', 'check', 'var(--green)') : s.toastMsg('Paste a code or link first', 'alert', 'var(--gold)')}>Join</Btn>
+          <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0', minWidth: 0 }} placeholder="Invite code or link" value={code} onChange={e => setCode(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && code.trim()) void join({ code: code.trim() }); }} />
+          <Btn variant="ghost" size="sm" onClick={() => code.trim() ? void join({ code: code.trim() }) : s.toastMsg('Paste a code or link first', 'alert', 'var(--gold)')}>Join</Btn>
         </div>
       </div>
 
@@ -114,8 +142,27 @@ export function Lobbies({ s }: ScreenProps) {
         <span className="tiny muted">Open to anyone — no invite needed</span>
       </div>
       {discover.length
-        ? <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>{discover.map(l => <LobbyCard key={l.id} l={l} s={s} />)}</div>
+        ? <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>{discover.map(l => <LobbyCard key={l.id} l={l} s={s} onJoin={(lb) => join({ id: lb.id, name: lb.name })} />)}</div>
         : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No public lobbies match your search.</p></div>}
+
+      {/* password prompt (protected lobby / code) */}
+      {pwModal && (
+        <Portal><div className="overlay" onClick={() => setPwModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="card-pad-lg stack gap-12">
+              <div className="row between"><span className="eyebrow">Join lobby</span><button className="btn-icon" onClick={() => setPwModal(null)}><Icon name="x" size={18} /></button></div>
+              <p className="small t2" style={{ margin: 0 }}>“{pwModal.name}” is password-protected.</p>
+              <div className="field"><label className="label">Lobby password</label>
+                <input className="input" type="password" autoFocus value={pwModal.password}
+                  onChange={e => setPwModal(m => (m ? { ...m, password: e.target.value, error: '' } : m))}
+                  onKeyDown={e => { if (e.key === 'Enter' && pwModal.password) void join(pwModal.target, pwModal.password); }} />
+              </div>
+              {pwModal.error && <p className="tiny text-danger" style={{ margin: 0 }}>{pwModal.error}</p>}
+              <Btn variant="primary" className="btn-block" disabled={!pwModal.password} onClick={() => void join(pwModal.target, pwModal.password)}>Join</Btn>
+            </div>
+          </div>
+        </div></Portal>
+      )}
     </div>
   );
 }
@@ -124,18 +171,30 @@ export function Lobbies({ s }: ScreenProps) {
 export function LobbyCreate({ s }: ScreenProps) {
   const [borrow, setBorrow] = useState(true);
   const [def, setDef] = useState(1000);
-  const pool = [...WC.live, ...WC.upcoming].slice(0, 20);
-  const [sel, setSel] = useState<Set<number>>(() => new Set(pool.slice(0, 6).map(m => m.id)));
+  const [pool, setPool] = useState<RealMatch[]>([]);
+  const initRef = useRef(false);
+  useEffect(() => {
+    fetch('/api/v1/matches').then(r => (r.ok ? r.json() : null))
+      .then(j => setPool(((j?.data ?? []) as RealMatch[]).slice(0, 40)))
+      .catch(() => {});
+  }, []);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  useEffect(() => { if (!initRef.current && pool.length) { initRef.current = true; setSel(new Set(pool.slice(0, 6).map(m => m.id))); } }, [pool]);
   const [scope, setScope] = useState('custom');
   const [name, setName] = useState('The Lads 🍻');
+  const [password, setPassword] = useState('');
 
   const create = async () => {
     try {
       const res = await fetch('/api/v1/lobbies', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, scope: scope === 'whole' ? 'all' : scope, defaultPoints: def }),
+        body: JSON.stringify({ name, scope: scope === 'whole' ? 'all' : scope, defaultPoints: def, password: password.trim() || undefined }),
       });
-      if (res.ok) { s.toastMsg('Lobby created — invite link copied!', 'check'); s.go('lobbies'); }
+      if (res.ok) {
+        const j = await res.json().catch(() => ({}));
+        if (j?.data?.code) { try { await navigator.clipboard.writeText(`${window.location.origin}/?join=${j.data.code}`); } catch { /* clipboard may be blocked */ } }
+        s.toastMsg('Lobby created — invite link copied!', 'check'); s.go('lobbies');
+      }
       else {
         const j = await res.json().catch(() => ({}));
         s.toastMsg(j?.error?.code === 'UNAUTHORIZED' ? 'Sign in to create a lobby' : 'Could not create lobby', 'alert', 'var(--danger)');
@@ -150,7 +209,7 @@ export function LobbyCreate({ s }: ScreenProps) {
 
   const stages: Scope[] = [
     { k: 'whole', label: 'Whole tournament', pick: () => pool.map(m => m.id) },
-    { k: 'group', label: 'Group stage', pick: () => pool.filter(m => m.round === 'group').map(m => m.id) },
+    { k: 'group', label: 'Group stage', pick: () => pool.filter(m => m.round === 'GROUP').map(m => m.id) },
     { k: 'r32', label: 'Round of 32', future: true },
     { k: 'r16', label: 'Round of 16', future: true },
     { k: 'qf', label: 'Quarter-finals', future: true },
@@ -158,8 +217,8 @@ export function LobbyCreate({ s }: ScreenProps) {
     { k: 'final', label: 'Final', future: true },
   ];
   const utils: Scope[] = [
-    { k: 'today', label: 'Live + today', pick: () => [...WC.live, ...WC.upcoming.slice(0, 6)].map(m => m.id) },
-    { k: 'top', label: 'Top teams', pick: () => pool.filter(m => WC.byId(m.home).rank <= 12 || WC.byId(m.away).rank <= 12).map(m => m.id) },
+    { k: 'today', label: 'Today', pick: () => pool.filter(m => new Date(m.kickoffAt).toDateString() === new Date().toDateString()).map(m => m.id) },
+    { k: 'open', label: 'Open', pick: () => pool.filter(m => m.status === 'SCHEDULED').map(m => m.id) },
     { k: 'clear', label: 'Clear', pick: () => [] },
   ];
 
@@ -186,7 +245,7 @@ export function LobbyCreate({ s }: ScreenProps) {
       <SecHead title="Create a lobby" sub="Set the rules, pick the matches, invite your crew" />
       <div className="card card-pad-lg stack gap-18">
         <div className="field"><label className="label">Lobby name</label><input className="input" placeholder="Office League · ABC Corp" value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div className="field"><label className="label">Password <span className="muted tiny">(optional)</span></label><input className="input" placeholder="Set a join password" type="password" defaultValue="goal2026" /></div>
+        <div className="field"><label className="label">Password <span className="muted tiny">(optional)</span></label><input className="input" placeholder="Set a join password (leave blank for public)" type="password" value={password} onChange={e => setPassword(e.target.value)} /></div>
 
         {/* SCOPE = stage presets + match picker */}
         <div className="field">
@@ -211,8 +270,9 @@ export function LobbyCreate({ s }: ScreenProps) {
                 <div className="row gap-6">{utils.map(p => <button key={p.k} className="chip chip-sm" onClick={() => applyScope(p)}>{p.label}</button>)}</div>
               </div>
               <div className="card-2" style={{ borderRadius: 'var(--r-md)', maxHeight: 280, overflowY: 'auto' }}>
+                {pool.length === 0 && <div className="small muted" style={{ padding: 14, textAlign: 'center' }}>Loading fixtures…</div>}
                 {pool.map(m => {
-                  const home = WC.byId(m.home), away = WC.byId(m.away), on = sel.has(m.id);
+                  const on = sel.has(m.id);
                   return (
                     <button key={m.id} onClick={() => toggle(m.id)} className="row between full"
                       style={{ padding: '11px 14px', borderBottom: '1px solid var(--line)', background: on ? 'var(--green-soft)' : 'transparent', textAlign: 'left' }}>
@@ -220,10 +280,10 @@ export function LobbyCreate({ s }: ScreenProps) {
                         <span style={{ width: 20, height: 20, borderRadius: 6, flex: 'none', border: `2px solid ${on ? 'var(--green)' : 'var(--line-strong)'}`, background: on ? 'var(--green)' : 'transparent', display: 'grid', placeItems: 'center' }}>
                           {on && <Icon name="check" size={12} style={{ color: 'var(--on-accent)' }} />}
                         </span>
-                        <Flag team={home} size={20} /><span className="small nowrap" style={{ fontWeight: 600 }}>{home.code} v {away.code}</span>
-                        <span className="tiny muted hide-mobile">{m.stage}</span>
+                        {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={20} />}<span className="small nowrap" style={{ fontWeight: 600 }}>{m.home?.code ?? 'TBD'} v {m.away?.code ?? 'TBD'}</span>
+                        <span className="tiny muted hide-mobile">{m.round === 'GROUP' ? `Group ${m.group ?? ''}` : m.round}</span>
                       </div>
-                      <span className="tiny muted nowrap">{m.status === 'LIVE' ? <span className="text-magenta">● LIVE</span> : `${WC.fmtDate(m.date)}`}</span>
+                      <span className="tiny muted nowrap">{m.status === 'LIVE' ? <span className="text-magenta">● LIVE</span> : new Date(m.kickoffAt).toLocaleDateString()}</span>
                     </button>
                   );
                 })}
@@ -256,9 +316,19 @@ export function LobbyCreate({ s }: ScreenProps) {
   );
 }
 
+/* ---- Real lobby match shape (from GET /api/v1/lobbies/[id].matches) ---- */
+interface LobbyTeamLite { id: number; name: string; code: string | null; flagUrl: string | null }
+interface LobbyBetLite { outcome: Pick1X2 | null; stake: number; status: string }
+export interface LobbyMatch {
+  id: number; round: string; status: string; kickoffAt: string;
+  scoreHome: number | null; scoreAway: number | null;
+  home: LobbyTeamLite | null; away: LobbyTeamLite | null;
+  odds: { mHome: number; mDraw: number; mAway: number } | null;
+  bets: LobbyBetLite[];
+}
+
 /* ---- Host: adjust lobby odds for one match ---- */
-function LobbyOddsModal({ m, odds, onClose, onSave }: { m: Match; odds: Odds; onClose: () => void; onSave: (id: number, mh: number, md: number, ma: number) => void }) {
-  const home = WC.byId(m.home), away = WC.byId(m.away);
+function LobbyOddsModal({ m, odds, onClose, onSave }: { m: LobbyMatch; odds: Odds; onClose: () => void; onSave: (id: number, mh: number, md: number, ma: number) => void }) {
   const [mh, setMh] = useState(odds.mh);
   const [md, setMd] = useState(odds.md);
   const [ma, setMa] = useState(odds.ma);
@@ -266,15 +336,15 @@ function LobbyOddsModal({ m, odds, onClose, onSave }: { m: Match; odds: Odds; on
     <input className="input input-mono" type="number" step="0.01" min="0.1" value={v} onChange={e => set(Math.max(0.1, +e.target.value || 0.1))} style={{ textAlign: 'center', fontSize: 18 }} />
   );
   return (
-    <div className="overlay" onClick={onClose}>
+    <Portal><div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <div className="card-pad-lg">
           <div className="row between"><span className="eyebrow">Set lobby odds</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
-          <div className="row gap-8 mt-8"><Flag team={home} size={22} /><span className="small">{home.code} v {away.code}</span><span className="tiny muted">· {m.stage}</span></div>
+          <div className="row gap-8 mt-8"><span className="small" style={{ fontWeight: 600 }}>{m.home?.code ?? '?'} v {m.away?.code ?? '?'}</span><span className="tiny muted">· {m.round}</span></div>
           <div className="row gap-10 mt-16">
-            <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>1 · {home.code}</label>{numInput(mh, setMh)}</div>
+            <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>1 · {m.home?.code ?? 'H'}</label>{numInput(mh, setMh)}</div>
             <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>X · Draw</label>{numInput(md, setMd)}</div>
-            <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>2 · {away.code}</label>{numInput(ma, setMa)}</div>
+            <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>2 · {m.away?.code ?? 'A'}</label>{numInput(ma, setMa)}</div>
           </div>
           <div className="card-2 card-pad mt-16 small t2 row gap-8" style={{ borderRadius: 'var(--r-sm)' }}>
             <Icon name="alert" size={15} style={{ color: 'var(--gold)', flex: 'none' }} /><span>These odds apply only inside this lobby. Higher odds = bigger payouts for your members.</span>
@@ -282,19 +352,51 @@ function LobbyOddsModal({ m, odds, onClose, onSave }: { m: Match; odds: Odds; on
           <Btn variant="primary" size="lg" className="btn-block mt-16" onClick={() => onSave(m.id, mh, md, ma)}>Save odds</Btn>
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
-/* ---- Lobby workspace: matches with lobby-specific odds ---- */
-function LobbyMatches({ l, matches, isHost, odds, bets, onEdit, onBet }: {
-  l: Lobby;
-  matches: Match[];
+/* ---- Lobby bet slip: outcome + stake (multiple outcomes per match allowed) ---- */
+function LobbyBetSlip({ match, pick, oddsVal, balance, onClose, onConfirm }: { match: LobbyMatch; pick: Pick1X2; oddsVal: number; balance: number; onClose: () => void; onConfirm: (stake: number) => void }) {
+  const [stake, setStake] = useState(100);
+  const label = pick === '1' ? (match.home?.name ?? 'Home') : pick === '2' ? (match.away?.name ?? 'Away') : 'Draw';
+  const payout = Math.round(stake * (1 + oddsVal));
+  const over = stake > balance;
+  const quick = [50, 100, 250, 500];
+  return (
+    <Portal><div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+        <div className="card-pad-lg">
+          <div className="row between"><span className="eyebrow">Lobby bet slip</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
+          <div className="row between mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
+            <span className="small ellip">{match.home?.code ?? '?'} v {match.away?.code ?? '?'}</span>
+            <span className="badge badge-sky">{pick} · {label}</span>
+          </div>
+          <div className="field mt-16">
+            <div className="row between"><label className="label">Stake</label><span className="tiny muted">Lobby wallet <span className="tnum text-gold">{balance.toLocaleString()}</span></span></div>
+            <input className="input input-mono" type="number" min={1} value={stake} onChange={e => setStake(Math.max(1, +e.target.value || 1))} />
+            <div className="row gap-8 mt-4">{quick.map(q => <button key={q} className="chip chip-sm" onClick={() => setStake(q)}>{q}</button>)}<button className="chip chip-sm" onClick={() => setStake(Math.max(1, balance))}>Max</button></div>
+          </div>
+          <div className="card-2 card-pad mt-12" style={{ borderRadius: 'var(--r-sm)' }}>
+            <div className="row between small"><span className="t2">Odds</span><span className="tnum">×{(1 + oddsVal).toFixed(2)}</span></div>
+            <div className="row between mt-8"><span className="t2">Potential payout</span><span className="tnum text-green" style={{ fontWeight: 700 }}>{payout.toLocaleString()}</span></div>
+          </div>
+          {over && <p className="tiny text-danger mt-8" style={{ textAlign: 'center' }}>Stake exceeds your lobby wallet.</p>}
+          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={stake <= 0 || over} onClick={() => onConfirm(stake)}>Confirm bet · {stake} pts</Btn>
+        </div>
+      </div>
+    </div></Portal>
+  );
+}
+
+/* ---- Lobby workspace: real matches with lobby-specific odds + multi-outcome betting ---- */
+function LobbyMatches({ ownerName, matches, isHost, odds, onEdit, onBet }: {
+  ownerName: string;
+  matches: LobbyMatch[];
   isHost: boolean;
   odds: Record<number, Odds>;
-  bets: Record<number, Pick1X2>;
-  onEdit: (m: Match) => void;
-  onBet: (m: Match, pick: Pick1X2) => void;
+  onEdit: (m: LobbyMatch) => void;
+  onBet: (m: LobbyMatch, pick: Pick1X2, oddsVal: number) => void;
 }) {
   return (
     <div>
@@ -302,47 +404,55 @@ function LobbyMatches({ l, matches, isHost, odds, bets, onEdit, onBet }: {
         <div className="row gap-10">
           <Icon name={isHost ? 'gauge' : 'calendar'} size={18} style={{ color: isHost ? 'var(--sky)' : 'var(--muted)' }} />
           <div>
-            <div className="small" style={{ fontWeight: 700 }}>{isHost ? 'You set the odds for this lobby' : 'Bet on the host’s selected matches'}</div>
-            <div className="tiny muted">{isHost ? 'Tap "Odds" on any match to fine-tune 1 · X · 2 for your members.' : `Host ${l.owner} picked these ${matches.length} matches · uses your lobby wallet`}</div>
+            <div className="small" style={{ fontWeight: 700 }}>{isHost ? 'You host this lobby — set odds and bet too' : `Host ${ownerName}'s matches`}</div>
+            <div className="tiny muted">Tap 1 · X · 2 to bet (you can back more than one outcome). {isHost && 'Tap "Odds" to fine-tune.'} Uses your lobby wallet.</div>
           </div>
         </div>
       </div>
 
       <div className="stack gap-12">
         {matches.map(m => {
-          const home = WC.byId(m.home), away = WC.byId(m.away), o = odds[m.id] || m.odds;
-          const live = m.status === 'LIVE', fin = m.status === 'FINISHED', open = m.status === 'SCHEDULED';
-          const myPick = bets[m.id];
-          const cells: [Pick1X2, string, number][] = [['1', home.code, o.mh], ['X', 'Draw', o.md], ['2', away.code, o.ma]];
+          const o = odds[m.id] || (m.odds ? { mh: m.odds.mHome, md: m.odds.mDraw, ma: m.odds.mAway } : { mh: 0, md: 0, ma: 0 });
+          const open = m.status === 'SCHEDULED';
+          const live = m.status === 'LIVE', fin = m.status === 'FINISHED';
+          const betFor = (k: Pick1X2) => m.bets.find(b => b.outcome === k);
+          const cells: [Pick1X2, string, number][] = [['1', m.home?.code ?? 'H', o.mh], ['X', 'Draw', o.md], ['2', m.away?.code ?? 'A', o.ma]];
           return (
             <div key={m.id} className="card card-pad">
               <div className="row between" style={{ marginBottom: 12 }}>
-                <div className="row gap-8"><span className="badge badge-muted">{m.stage}</span>
-                  {live ? <span className="badge badge-magenta"><span className="live-dot"></span>{m.minute}&apos;</span>
-                    : fin ? <span className="badge badge-muted">FT {m.hs}-{m.as}</span>
-                      : <span className="small muted">{WC.fmtDate(m.date)} · {m.kickoff}</span>}
+                <div className="row gap-8"><span className="badge badge-muted">{m.round}</span>
+                  {live ? <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
+                    : fin ? <span className="badge badge-muted">FT {m.scoreHome}-{m.scoreAway}</span>
+                      : <span className="small muted">{new Date(m.kickoffAt).toLocaleDateString()}</span>}
                 </div>
                 {isHost && <Btn variant="ghost" size="sm" icon="trending" onClick={() => onEdit(m)}>Odds</Btn>}
               </div>
               <div className="row between gap-12" style={{ marginBottom: 12 }}>
-                {[home, away].map((t, i) => (
-                  <div key={t.id} className="row gap-8" style={{ flex: 1, minWidth: 0, justifyContent: i ? 'flex-end' : 'flex-start' }}>
-                    {i === 0 && <Flag team={t} size={26} />}
-                    <span className="ellip small" style={{ fontWeight: 600 }}>{t.name}</span>
-                    {i === 1 && <Flag team={t} size={26} />}
+                {[m.home, m.away].map((t, i) => (
+                  <div key={i} className="row gap-8" style={{ flex: 1, minWidth: 0, justifyContent: i ? 'flex-end' : 'flex-start' }}>
+                    {i === 0 && t && <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={26} />}
+                    <span className="ellip small" style={{ fontWeight: 600 }}>{t?.name ?? 'TBD'}</span>
+                    {i === 1 && t && <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={26} />}
                   </div>
                 ))}
               </div>
               <div className="row gap-8 full">
-                {cells.map(([k, lbl, v]) => (
-                  <button key={k} className={`odds ${myPick === k ? 'sel' : ''}`} disabled={!open || isHost}
-                    onClick={() => open && !isHost && onBet(m, k)}
-                    style={(!open || isHost) ? { opacity: isHost ? 1 : 0.5, cursor: isHost ? 'default' : 'not-allowed' } : undefined}>
-                    <span className="o-label">{k} · {lbl}</span><span className="o-val">{v.toFixed(2)}</span>
-                  </button>
-                ))}
+                {cells.map(([k, lbl, v]) => {
+                  const bet = betFor(k);
+                  return (
+                    <button key={k} className={`odds ${bet ? 'sel' : ''}`} disabled={!open || !!bet}
+                      onClick={() => open && !bet && onBet(m, k, v)}
+                      style={(!open) ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+                      <span className="o-label">{k} · {lbl}</span><span className="o-val">{v.toFixed(2)}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {myPick && <div className="tiny text-green mt-8 row gap-6"><Icon name="check" size={13} /> Your lobby bet: {myPick}</div>}
+              {m.bets.length > 0 && (
+                <div className="tiny text-green mt-8 row gap-8 wrap-w">
+                  {m.bets.map((b, i) => <span key={i} className="row gap-4"><Icon name="check" size={13} /> {b.outcome} · {b.stake} pts{b.status !== 'OPEN' ? ` (${b.status})` : ''}</span>)}
+                </div>
+              )}
             </div>
           );
         })}
@@ -437,9 +547,21 @@ function LobbyChat({ lobbyId }: { lobbyId: number }) {
   );
 }
 
-function LobbyMembers({ l, isHost, s, board }: { l: Lobby; isHost: boolean; s: ScreenProps['s']; board: BoardRow[] }) {
+function LobbyMembers({ l, isHost, s, board, onChanged }: { l: Lobby; isHost: boolean; s: ScreenProps['s']; board: BoardRow[]; onChanged: () => void }) {
   const [members, setMembers] = useState<BoardRow[]>(board);
+  const [adjust, setAdjust] = useState<{ userId: number; name: string; delta: number } | null>(null);
   useEffect(() => { setMembers(board); }, [board]);
+
+  const submitAdjust = async () => {
+    if (!adjust || !adjust.delta) return;
+    try {
+      const res = await fetch(`/api/v1/lobbies/${l.id}/members/${adjust.userId}/adjust`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ delta: adjust.delta }),
+      });
+      if (res.ok) { s.toastMsg(`${adjust.delta > 0 ? '+' : ''}${adjust.delta} pts → ${adjust.name}`, 'check', 'var(--green)'); setAdjust(null); onChanged(); }
+      else { const j = await res.json().catch(() => ({})); s.toastMsg(j?.error?.code === 'INSUFFICIENT_BALANCE' ? 'Would go below zero' : 'Could not adjust points', 'alert', 'var(--danger)'); }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
 
   const handleKick = async (userId: number) => {
     try {
@@ -481,7 +603,7 @@ function LobbyMembers({ l, isHost, s, board }: { l: Lobby; isHost: boolean; s: S
           </div>
           {isHost && !p.you
             ? <div className="row gap-6">
-                <Btn variant="ghost" size="sm">Set points</Btn>
+                <Btn variant="ghost" size="sm" onClick={() => setAdjust({ userId: p.userId, name: p.name, delta: 0 })}>Set points</Btn>
                 <Btn variant="ghost" size="sm" onClick={() => handleMakeHost(p.userId)}>Make host</Btn>
                 <button className="btn-icon btn-ghost" onClick={() => handleKick(p.userId)}><Icon name="x" size={15} /></button>
               </div>
@@ -489,6 +611,23 @@ function LobbyMembers({ l, isHost, s, board }: { l: Lobby; isHost: boolean; s: S
         </div>
       ))}
       {!members.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No members yet.</p></div>}
+
+      {adjust && (
+        <Portal><div className="overlay" onClick={() => setAdjust(null)}>
+          <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="card-pad-lg">
+              <div className="row between"><span className="eyebrow">Adjust points</span><button className="btn-icon" onClick={() => setAdjust(null)}><Icon name="x" size={18} /></button></div>
+              <p className="small t2 mt-12" style={{ margin: '8px 0 0' }}>Grant or deduct lobby points for <b>{adjust.name}</b> (recorded in the ledger).</p>
+              <div className="field mt-16">
+                <label className="label">Delta (+ grant / − deduct)</label>
+                <input className="input input-mono" type="number" value={adjust.delta} onChange={e => setAdjust(a => (a ? { ...a, delta: Math.trunc(+e.target.value || 0) } : a))} />
+                <div className="row gap-8 mt-4">{[100, 500, -100, -500].map(d => <button key={d} className="chip chip-sm" onClick={() => setAdjust(a => (a ? { ...a, delta: d } : a))}>{d > 0 ? `+${d}` : d}</button>)}</div>
+              </div>
+              <Btn variant="primary" className="btn-block mt-16" disabled={!adjust.delta} onClick={submitAdjust}>{adjust.delta > 0 ? `Grant ${adjust.delta}` : `Deduct ${-adjust.delta}`} points</Btn>
+            </div>
+          </div>
+        </div></Portal>
+      )}
     </div>
   );
 }
@@ -593,8 +732,10 @@ export function LobbyView({ s }: ScreenProps) {
   const [reqs, setReqs] = useState<Req[]>([]);
   const [tab, setTab] = useState('matches');
   const [odds, setOdds] = useState<Record<number, Odds>>({});
-  const [editM, setEditM] = useState<Match | null>(null);
-  const [bets, setBets] = useState<Record<number, Pick1X2>>({});
+  const [matches, setMatches] = useState<LobbyMatch[]>([]);
+  const [editM, setEditM] = useState<LobbyMatch | null>(null);
+  const [betSlip, setBetSlip] = useState<{ match: LobbyMatch; pick: Pick1X2; oddsVal: number } | null>(null);
+  const [borrowAmt, setBorrowAmt] = useState<number | null>(null);
 
   // Fetch lobby detail
   const fetchDetail = useCallback(() => {
@@ -606,11 +747,11 @@ export function LobbyView({ s }: ScreenProps) {
           setL(d);
           setIsHost(!!d.isHost);
           setBoard(d.board ?? []);
-          // Init odds from matches
-          const lobbyM = WC.lobbyMatches(d);
+          const ms: LobbyMatch[] = d.matches ?? [];
+          setMatches(ms);
           setOdds(prev => {
             const next = { ...prev };
-            lobbyM.forEach(m => { if (!next[m.id]) next[m.id] = { ...m.odds }; });
+            ms.forEach(m => { if (!next[m.id] && m.odds) next[m.id] = { mh: m.odds.mHome, md: m.odds.mDraw, ma: m.odds.mAway }; });
             return next;
           });
         }
@@ -641,8 +782,6 @@ export function LobbyView({ s }: ScreenProps) {
     );
   }
 
-  const lobbyMatchList = WC.lobbyMatches(l);
-
   const saveOdds = (id: number, mh: number, md: number, ma: number) => {
     setOdds(p => ({ ...p, [id]: { mh, md, ma } }));
     setEditM(null);
@@ -667,24 +806,27 @@ export function LobbyView({ s }: ScreenProps) {
       .catch(() => {});
   };
 
-  const placeBet = (m: Match, pick: Pick1X2) => {
-    setBets(b => ({ ...b, [m.id]: pick }));
-    s.toastMsg(`Lobby bet: ${pick} · uses your lobby wallet`, 'check', 'var(--green)');
-    const DEFAULT_STAKE = 100;
+  const openSlip = (m: LobbyMatch, pick: Pick1X2, oddsVal: number) => setBetSlip({ match: m, pick, oddsVal });
+  const confirmSlip = (stake: number) => {
+    if (!betSlip) return;
+    const { match, pick } = betSlip;
     fetch(`/api/v1/lobbies/${lid}/predictions`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ matchId: m.id, outcome: pick, stake: DEFAULT_STAKE }),
-    })
-      .then(r => {
-        if (!r.ok) r.json().then(j => s.toastMsg(j?.error?.code ?? 'Bet failed', 'alert', 'var(--danger)')).catch(() => {});
-      })
-      .catch(() => {});
+      body: JSON.stringify({ matchId: match.id, outcome: pick, stake }),
+    }).then(async r => {
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) { s.toastMsg(`Lobby bet placed · ${stake} on ${pick}`, 'check', 'var(--green)'); setBetSlip(null); fetchDetail(); }
+      else {
+        const c = j?.error?.code;
+        s.toastMsg(c === 'ALREADY_BET_OUTCOME' ? 'You already bet that outcome' : c === 'INSUFFICIENT_BALANCE' ? 'Not enough lobby points' : c === 'BET_LOCKED' ? 'Betting closed for this match' : 'Bet failed', 'alert', 'var(--danger)');
+      }
+    }).catch(() => s.toastMsg('Network error', 'alert', 'var(--danger)'));
   };
 
   const pendingCount = reqs.filter(r => r.state === 'pending').length;
 
   const tabs: [string, string][] = [
-    ['matches', `Matches · ${lobbyMatchList.length}`],
+    ['matches', `Matches · ${matches.length}`],
     ['board', 'Standings'],
     ['chat', 'Chat'],
     ['requests', 'Requests'],
@@ -693,6 +835,8 @@ export function LobbyView({ s }: ScreenProps) {
 
   const myRank = board.find(r => r.you)?.rank ?? null;
   const myScore = board.find(r => r.you)?.score ?? 0;
+  const myBalance = board.find(r => r.you)?.balance ?? 0;
+  const myBorrowed = board.find(r => r.you)?.borrowed ?? 0;
 
   return (
     <div className="page fade-up">
@@ -706,15 +850,19 @@ export function LobbyView({ s }: ScreenProps) {
             <div className="tiny muted mt-4">Host · {l.owner} · {l.members} members · {l.def} start · code <span className="mono">{l.code}</span></div>
           </div>
           <div className="row gap-8">
-            <Btn variant="ghost" size="sm" icon="share" onClick={() => s.toastMsg('Invite link copied!', 'check')}>Invite</Btn>
-            {!isHost && <Btn variant="gold" size="sm" icon="wallet" onClick={() => s.openBorrow()}>Borrow</Btn>}
+            <Btn variant="ghost" size="sm" icon="share" onClick={async () => {
+              const link = `${window.location.origin}/?join=${l.code}`;
+              try { await navigator.clipboard.writeText(link); s.toastMsg('Invite link copied!', 'check', 'var(--green)'); }
+              catch { s.toastMsg(`Invite link: ${link}`, 'share'); }
+            }}>Invite</Btn>
+            {!isHost && l.borrow && <Btn variant="gold" size="sm" icon="wallet" onClick={() => setBorrowAmt(200)}>Borrow</Btn>}
           </div>
         </div>
-        {/* lobby wallet strip */}
+        {/* lobby wallet strip — wallet = default + winnings + borrowed (spendable); score = default + winnings − borrowed (rank) */}
         <div className="row gap-20 mt-16 wrap-w">
-          <div className="stat"><span className="s-val tnum text-gold" style={{ fontSize: 22 }}>{myScore.toLocaleString()}</span><span className="s-lbl">Lobby wallet</span></div>
+          <div className="stat"><span className="s-val tnum text-gold" style={{ fontSize: 22 }}>{myBalance.toLocaleString()}</span><span className="s-lbl">Lobby wallet{myBorrowed > 0 ? ` (incl. ${myBorrowed} borrowed)` : ''}</span></div>
+          <div className="stat"><span className="s-val tnum text-green" style={{ fontSize: 22 }}>{myScore.toLocaleString()}</span><span className="s-lbl">Score</span></div>
           <div className="stat"><span className="s-val tnum" style={{ fontSize: 22 }}>{myRank != null ? `#${myRank}` : '—'}</span><span className="s-lbl">Your rank</span></div>
-          <div className="stat"><span className="s-val tnum text-sky" style={{ fontSize: 22 }}>{lobbyMatchList.length}</span><span className="s-lbl">Matches</span></div>
         </div>
       </div>
 
@@ -728,14 +876,36 @@ export function LobbyView({ s }: ScreenProps) {
       </div>
 
       <div className="mt-16">
-        {tab === 'matches' && <LobbyMatches l={l} matches={lobbyMatchList} isHost={isHost} odds={odds} bets={bets} onEdit={setEditM} onBet={placeBet} />}
+        {tab === 'matches' && <LobbyMatches ownerName={l.owner} matches={matches} isHost={isHost} odds={odds} onEdit={setEditM} onBet={openSlip} />}
         {tab === 'board' && <LobbyBoard board={board} />}
         {tab === 'chat' && <LobbyChat lobbyId={lid} />}
         {tab === 'requests' && <LobbyRequests s={s} l={l} isHost={isHost} reqs={reqs} onRefetch={fetchReqs} />}
-        {tab === 'members' && <LobbyMembers l={l} isHost={isHost} s={s} board={board} />}
+        {tab === 'members' && <LobbyMembers l={l} isHost={isHost} s={s} board={board} onChanged={fetchDetail} />}
       </div>
 
-      {editM && <LobbyOddsModal m={editM} odds={odds[editM.id] || editM.odds} onClose={() => setEditM(null)} onSave={saveOdds} />}
+      {editM && <LobbyOddsModal m={editM} odds={odds[editM.id] || (editM.odds ? { mh: editM.odds.mHome, md: editM.odds.mDraw, ma: editM.odds.mAway } : { mh: 1.5, md: 2, ma: 2.5 })} onClose={() => setEditM(null)} onSave={saveOdds} />}
+      {betSlip && <LobbyBetSlip match={betSlip.match} pick={betSlip.pick} oddsVal={betSlip.oddsVal} balance={myBalance} onClose={() => setBetSlip(null)} onConfirm={confirmSlip} />}
+      {borrowAmt !== null && (
+        <Portal><div className="overlay" onClick={() => setBorrowAmt(null)}>
+          <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <div className="card-pad-lg">
+              <div className="row between"><span className="eyebrow">Borrow points</span><button className="btn-icon" onClick={() => setBorrowAmt(null)}><Icon name="x" size={18} /></button></div>
+              <p className="t2 small mt-12">Request points from the host to keep betting. The host must approve.</p>
+              <div className="field mt-16">
+                <div className="row between"><label className="label">Amount</label><span className="tnum text-gold" style={{ fontWeight: 700 }}>{borrowAmt}</span></div>
+                <input type="range" min={50} max={1000} step={50} value={borrowAmt} onChange={e => setBorrowAmt(+e.target.value)} style={{ width: '100%', accentColor: 'var(--gold)' }} />
+              </div>
+              <Btn variant="gold" size="lg" className="btn-block mt-16" onClick={async () => {
+                try {
+                  const res = await fetch(`/api/v1/lobbies/${lid}/borrow`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ amount: borrowAmt }) });
+                  if (res.ok) { s.toastMsg('Borrow request sent to the host', 'check', 'var(--gold)'); setBorrowAmt(null); }
+                  else { const j = await res.json().catch(() => ({})); s.toastMsg(j?.error?.code === 'NOT_A_MEMBER' ? 'Join the lobby first' : 'Could not send request', 'alert', 'var(--danger)'); }
+                } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+              }}>Request {borrowAmt} points</Btn>
+            </div>
+          </div>
+        </div></Portal>
+      )}
     </div>
   );
 }

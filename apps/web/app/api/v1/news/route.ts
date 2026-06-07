@@ -23,6 +23,7 @@ export async function GET() {
     src: hostOf(a.sourceUrl),
     time: (a.publishedAt ?? a.createdAt).toISOString().slice(0, 10),
     excerpt: (a.body ?? '').slice(0, 160),
+    body: a.body ?? '',
   }));
   return NextResponse.json({ data });
 }

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Worker } from 'bullmq';
 import { prisma } from '@wc/db';
-import { generateAndStoreNews, publishDueNews, SAMPLE_SOURCES } from '@wc/pipeline';
+import { generateAndStoreNews, publishDueNews, crawlNewsSources, SAMPLE_SOURCES } from '@wc/pipeline';
 import { LlmGateway } from '../llm/llm-gateway';
 import { connection } from '../redis';
 
@@ -27,7 +27,8 @@ export class NewsWorker implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<NewsGenerateJob>(
       'news',
       async (job: Job<NewsGenerateJob>) => {
-        const sources = job.data.sources ?? SAMPLE_SOURCES;
+        let sources = job.data.sources ?? (await crawlNewsSources().catch(() => []));
+        if (sources.length === 0) sources = SAMPLE_SOURCES;
         const count = await generateAndStoreNews(prisma, this.llm, sources);
         this.log.log(`news generate job ${job.id}: stored ${count} drafts`);
         return { count };

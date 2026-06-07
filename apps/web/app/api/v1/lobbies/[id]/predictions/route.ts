@@ -34,6 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === 'NOT_A_MEMBER') return NextResponse.json({ error: { code: 'NOT_A_MEMBER' } }, { status: 403 });
+    if (msg === 'ALREADY_BET_OUTCOME') return NextResponse.json({ error: { code: 'ALREADY_BET_OUTCOME' } }, { status: 409 });
     if (msg === 'BET_LOCKED') return NextResponse.json({ error: { code: 'BET_LOCKED' } }, { status: 409 });
     if (msg === 'ODDS_UNAVAILABLE') return NextResponse.json({ error: { code: 'ODDS_UNAVAILABLE' } }, { status: 409 });
     if (msg === 'INSUFFICIENT_BALANCE') return NextResponse.json({ error: { code: 'INSUFFICIENT_BALANCE' } }, { status: 422 });

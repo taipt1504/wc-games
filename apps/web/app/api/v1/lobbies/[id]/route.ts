@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getLobbyStanding } from '@wc/lobby';
 import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/session';
+import { teamMap, outcomeToPick } from '@/lib/tournament';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         userId: Number(m.userId),
         name,
         score: standing.score,
+        balance: Number(standing.balance),
         won: Number(standing.winnings),
         def: Number(standing.defaultPoints),
         borrowed: Number(standing.borrowed),
@@ -69,6 +71,32 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const board = boardRows.map((r, i) => ({ ...r, rank: i + 1 }));
 
   const myRank = board.find((r) => r.you)?.rank ?? null;
+
+  // Real scoped matches with teams, odds (lobby override → house), and the caller's bets.
+  const [teams, lobbyOddsRows, myBets, matchRows] = await Promise.all([
+    teamMap(),
+    prisma.lobbyMatchOdds.findMany({ where: { lobbyId } }),
+    prisma.prediction.findMany({ where: { userId: user.id, contextType: 'LOBBY', contextId: lobbyId } }),
+    prisma.match.findMany({ where: { id: { in: matchIds.map((n) => BigInt(n)) } }, orderBy: { kickoffAt: 'asc' }, include: { odds: true } }),
+  ]);
+  const lobbyOdds = new Map(lobbyOddsRows.map((o) => [Number(o.matchId), o]));
+  const betsByMatch = new Map<number, { outcome: string | null; stake: number; status: string }[]>();
+  for (const b of myBets) {
+    const k = Number(b.matchId);
+    if (!betsByMatch.has(k)) betsByMatch.set(k, []);
+    betsByMatch.get(k)!.push({ outcome: outcomeToPick(b.outcome), stake: Number(b.stake), status: b.status });
+  }
+  const matches = matchRows.map((m) => {
+    const lo = lobbyOdds.get(Number(m.id));
+    const odds = lo ? { mHome: Number(lo.mHome), mDraw: Number(lo.mDraw), mAway: Number(lo.mAway) }
+      : m.odds ? { mHome: Number(m.odds.mHome), mDraw: Number(m.odds.mDraw), mAway: Number(m.odds.mAway) } : null;
+    return {
+      id: Number(m.id), round: m.round, status: m.status, kickoffAt: m.kickoffAt,
+      scoreHome: m.scoreHome90, scoreAway: m.scoreAway90,
+      home: teams.get(Number(m.homeTeamId)) ?? null, away: teams.get(Number(m.awayTeamId)) ?? null,
+      odds, bets: betsByMatch.get(Number(m.id)) ?? [],
+    };
+  });
 
   const data = {
     id: Number(lobby.id),
@@ -85,6 +113,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     public: !lobby.passwordHash,
     code: lobby.inviteToken,
     matchIds,
+    matches,
     you: myRank,
     board,
   };

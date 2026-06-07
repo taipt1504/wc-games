@@ -5,7 +5,9 @@ import {
   generateMatchPreview,
   deterministicPreview,
   AI_DISCLAIMER,
+  type PreviewTeam,
 } from '@wc/ai';
+import { groupStandings } from '@/lib/tournament';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,15 +45,27 @@ export async function GET(
     });
   }
 
-  // Generate preview
-  const home = { name: homeTeam.name, rank: homeTeam.fifaRank ?? 999 };
-  const away = { name: awayTeam.name, rank: awayTeam.fifaRank ?? 999 };
+  // Generate preview — ground on group + results so far (real data has no FIFA rank).
+  const standings = await groupStandings();
+  const byId = new Map(standings.flatMap((g) => g.teams.map((t) => [t.id, { group: g.name, row: t }] as const)));
+  const toPreview = (team: { id: bigint; name: string }): PreviewTeam => {
+    const e = byId.get(Number(team.id));
+    return {
+      name: team.name,
+      group: e?.group ?? null,
+      record: e
+        ? { played: e.row.played, won: e.row.won, drawn: e.row.drawn, lost: e.row.lost, gf: e.row.gf, ga: e.row.ga }
+        : { played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0 },
+    };
+  };
+  const home = toPreview(homeTeam);
+  const away = toPreview(awayTeam);
 
   const gw = createGatewayFromEnv(process.env as Record<string, string | undefined>);
   const t0 = Date.now();
   let preview;
   if (gw) {
-    preview = await generateMatchPreview(gw, { home, away }).catch(
+    preview = await generateMatchPreview(gw, { home, away, model: process.env.LLM_MODEL_PRIMARY }).catch(
       () => deterministicPreview({ home, away }),
     );
   } else {

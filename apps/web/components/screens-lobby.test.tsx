@@ -185,7 +185,7 @@ describe('LobbyView', () => {
     await screen.findByText('Office League · ABC Corp');
     fireEvent.click(screen.getByRole('button', { name: /Standings/i }));
     expect(screen.getByText('Member')).toBeInTheDocument();
-    expect(screen.getByText('Score')).toBeInTheDocument();
+    expect(screen.getAllByText('Score').length).toBeGreaterThan(0); // table header + wallet-strip stat
   });
 
   it('Standings tab renders board rows from fetched data', async () => {

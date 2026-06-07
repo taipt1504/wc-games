@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Leaderboard, MyBets, Wallet, Profile } from '@/components/screens-compete';
+import { Leaderboard, MyBets, Wallet, Profile, CosmeticShop } from '@/components/screens-compete';
 import type { Store } from '@/lib/store';
 import { WC } from '@/lib/wc';
 
@@ -222,5 +222,24 @@ describe('Profile', () => {
     render(<Profile s={mockStore()} />);
     expect(screen.getByText(/Refer/i)).toBeInTheDocument();
     expect(screen.getByText(/Share your form/i)).toBeInTheDocument();
+  });
+});
+
+describe('CosmeticShop', () => {
+  it('groups items by kind and shows equipped + affordability', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: [
+        { id: 1, code: 'ora', name: 'Ora Avatar', kind: 'avatar', price: 500, owned: false, equipped: false },
+        { id: 2, code: 'gold', name: 'Gold Frame', kind: 'frame', price: 300, owned: true, equipped: true },
+        { id: 3, code: 'night', name: 'Night Theme', kind: 'theme', price: 1200, owned: false, equipped: false },
+      ] }),
+    } as Response);
+    render(<CosmeticShop s={mockStore({ authed: true, points: 350 })} />);
+    expect(await screen.findByText('AVATARS')).toBeInTheDocument();
+    expect(screen.getByText('FRAMES')).toBeInTheDocument();
+    expect(screen.getByText('THEMES')).toBeInTheDocument();
+    expect(screen.getByText('Equipped')).toBeInTheDocument();
+    expect(screen.getByText(/Need 150 more/)).toBeInTheDocument();
   });
 });

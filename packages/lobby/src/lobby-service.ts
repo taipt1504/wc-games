@@ -120,7 +120,8 @@ export interface LobbyStanding {
   winnings: bigint; // net P&L from lobby bets (STAKE + SETTLE ledger)
   defaultPoints: bigint;
   borrowed: bigint;
-  score: number; // winnings + default − borrowed
+  balance: bigint; // actual spendable lobby wallet (default + winnings + borrowed + adjustments)
+  score: number; // winnings + default − borrowed (rank; borrow is debt)
 }
 
 // ===================== LOBBY-07: per-match odds override + lobby-context betting =====================
@@ -201,7 +202,7 @@ export async function placeLobbyBet(prisma: PrismaClient, input: PlaceLobbyBetIn
 
   // Load match and check status
   const match = await prisma.match.findUnique({ where: { id: input.matchId } });
-  if (!match || match.status !== 'SCHEDULED' || match.kickoffAt.getTime() <= Date.now()) throw new Error('BET_LOCKED');
+  if (!match || match.status !== 'SCHEDULED' || match.kickoffAt.getTime() <= Date.now() || match.bettingLocked) throw new Error('BET_LOCKED');
 
   // Resolve odds
   const odds = await getLobbyOdds(prisma, input.lobbyId, input.matchId);
@@ -209,6 +210,12 @@ export async function placeLobbyBet(prisma: PrismaClient, input: PlaceLobbyBetIn
 
   const outcome = PICK_TO_OUTCOME[input.pick];
   const multiplier = outcome === 'HOME' ? odds.mHome : outcome === 'DRAW' ? odds.mDraw : odds.mAway;
+
+  // One bet per outcome (hedging A/X/2 is allowed; the same outcome twice is not).
+  const dupe = await prisma.prediction.findFirst({
+    where: { userId: input.userId, contextType: 'LOBBY', contextId: input.lobbyId, matchId: input.matchId, market: '1X2', outcome, status: 'OPEN' },
+  });
+  if (dupe) throw new Error('ALREADY_BET_OUTCOME');
 
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findFirstOrThrow({
@@ -237,6 +244,30 @@ export async function placeLobbyBet(prisma: PrismaClient, input: PlaceLobbyBetIn
   });
 }
 
+/** Host grants/deducts a member's lobby points (FR-LOBBY host control). Audited via ADMIN_ADJ ledger. */
+export async function adjustMemberPoints(
+  prisma: PrismaClient,
+  lobbyId: bigint,
+  hostId: bigint,
+  memberUserId: bigint,
+  delta: bigint,
+): Promise<{ balance: bigint }> {
+  const lobby = await prisma.lobby.findUniqueOrThrow({ where: { id: lobbyId } });
+  if (lobby.ownerId !== hostId) throw new Error('NOT_HOST');
+  const membership = await prisma.lobbyMembership.findUnique({ where: { lobbyId_userId: { lobbyId, userId: memberUserId } } });
+  if (!membership) throw new Error('NOT_A_MEMBER');
+  return prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.findFirstOrThrow({ where: { userId: memberUserId, contextType: 'LOBBY', contextId: lobbyId } });
+    const newBal = wallet.balance + delta;
+    if (newBal < 0n) throw new Error('INSUFFICIENT_BALANCE');
+    await tx.wallet.update({ where: { id: wallet.id }, data: { balance: newBal } });
+    await tx.pointLedger.create({
+      data: { userId: memberUserId, contextType: 'LOBBY', contextId: lobbyId, type: 'ADMIN_ADJ', amount: delta, balanceAfter: newBal, refType: 'LOBBY', refId: lobbyId },
+    });
+    return { balance: newBal };
+  });
+}
+
 /** Compute a member's lobby standing. winnings = net of STAKE/SETTLE ledger in this lobby. */
 export async function getLobbyStanding(prisma: PrismaClient, lobbyId: bigint, userId: bigint): Promise<LobbyStanding> {
   const m = await prisma.lobbyMembership.findUniqueOrThrow({ where: { lobbyId_userId: { lobbyId, userId } } });
@@ -244,10 +275,12 @@ export async function getLobbyStanding(prisma: PrismaClient, lobbyId: bigint, us
     where: { userId, contextType: 'LOBBY', contextId: lobbyId, type: { in: ['STAKE', 'SETTLE'] } },
   });
   const winnings = betLedger.reduce((sum, l) => sum + l.amount, 0n);
+  const wallet = await prisma.wallet.findFirst({ where: { userId, contextType: 'LOBBY', contextId: lobbyId } });
   return {
     winnings,
     defaultPoints: m.defaultPoints,
     borrowed: m.borrowed,
+    balance: wallet?.balance ?? 0n,
     score: lobbyScore(Number(winnings), Number(m.defaultPoints), Number(m.borrowed)),
   };
 }

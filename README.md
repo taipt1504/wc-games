@@ -2,7 +2,7 @@
 
 Game dự đoán **FIFA World Cup 2026** — **point ảo, không cá cược tiền thật**. Full-stack TypeScript monorepo: Next.js 15 (web + API/BFF) + NestJS 11 worker + Prisma/PostgreSQL + Redis/BullMQ.
 
-> **Status:** feature-complete theo PRD §02 (MVP + v1 + v2). Gate: **322 tests pass 100%** (308 unit/integration + 14 E2E), `next build` + worker build sạch.
+> **Status:** feature-complete theo PRD §02 (MVP + v1 + v2) + tournament betting controls, auto match-update scheduler, admin manual-sync, full UI de-mock (100% live data). Gate: unit/integration + E2E suite, `next build` + worker build sạch.
 >
 > 📄 Tài liệu: [`docs/prd/`](./docs/prd/README.md) (PRD) · [`docs/solution-design/`](./docs/solution-design/README.md) (kiến trúc + ADR + service design) · [`docs/design/predict-wc-2026/`](./docs/design/predict-wc-2026/README.md) (Claude Design bundle — UI source of truth).
 
@@ -18,11 +18,11 @@ Game dự đoán **FIFA World Cup 2026** — **point ảo, không cá cược ti
 
 **Engagement & social** — streak điểm danh + chuỗi thắng; **missions** & **achievements** (tính từ dữ liệu thật); **referral**; **share card** (OG image); **duel 1v1**; **activity feed**; notification preferences.
 
-**Tournament data** — 48 đội + chi tiết + **đội hình 23 cầu thủ**; 12 bảng + BXH; lịch 104 trận; chi tiết trận (odds, bet distribution, formation pitch); bracket; **live scores** (poll + ingest).
+**Tournament data** — 48 đội + chi tiết + **đội hình 23 cầu thủ**; 12 bảng + BXH; lịch 104 trận **nhóm theo bảng/vòng**; chi tiết trận (live odds, lineups via formation pitch, AI preview, my-bets); bracket; **live scores** (poll + ingest); **auto match-update** (đội hình AI T-15m + dynamic result-check → auto-settle, admin override).
 
-**AI (Ora Pundit)** — match preview/smart-pick qua **9router** (Claude primary → OpenAI fallback) với **deterministic fallback** khi gateway chưa cấu hình; news AI draft → **review queue (human-in-the-loop)** → publish/auto-schedule.
+**AI (Ora Pundit)** — match preview/smart-pick qua **9router** (Claude primary → OpenAI fallback) với **deterministic fallback** khi gateway chưa cấu hình; **đội hình AI-crawl** (T-15m); **AI-propose odds**; news → **bài báo đầy đủ (5–7 đoạn)** AI draft → **review queue (human-in-the-loop)** → publish/auto-schedule.
 
-**Admin & Ops** — quản lý user (ban + audit IP/UA), **risk-engine** chống lạm dụng + investigation + case-file/escalate, tournament data + **score override & re-settle idempotent**, news review, **AI pipeline metrics**, cosmetic shop, predictor tiers.
+**Admin & Ops** — quản lý user (detail thật: ví/ledger/bets/ROI, ban + audit), **risk-engine** chống lạm dụng + investigation + case-file/escalate; tournament tách **Tournament / Teams&Groups**, match detail + **manual-sync** (result từ feed · odds editor + AI-propose · sync lineup) + bet-exposure + audit + **score override & re-settle idempotent** + **block betting** (server-enforced) + **reset data** (pre-tournament, confirm-gated); news review + detail; ops metrics thật; cosmetic shop; predictor tiers.
 
 ---
 
@@ -30,8 +30,10 @@ Game dự đoán **FIFA World Cup 2026** — **point ảo, không cá cược ti
 
 ```
 apps/
-  web/        Next.js 15 (App Router) — UI (client AppShell + store) + 56 API routes (BFF)
-  worker/     NestJS 11 — BullMQ workers (settle, news-gen, auto-publish) + LlmGateway (9router)
+  web/        Next.js 15 (App Router) — UI (client AppShell + store, URL-synced routing) + API routes (BFF)
+  worker/     NestJS 11 — BullMQ workers (settle, news-gen, auto-publish, lineup-crawl, result-check)
+              + MatchScheduler (auto-update: lineups T-15m, dynamic result-check → auto-settle)
+              + live-score poll + LlmGateway (9router)
 packages/
   core/       Pure scoring (payout 1X2, knockout/exact/underdog bonus, ROI, lobby score,
               check-in tiers, predictor tiers) — no I/O, unit-tested
@@ -67,7 +69,7 @@ pnpm dev                      # web + worker song song
 ```
 
 - Web: http://localhost:3000 · Health: `/api/health`
-- Worker log: `SettlementWorker listening on queue "settle"`.
+- Worker log: `SettlementWorker listening on queue "settle"`, `MatchScheduler: lineup (T-15m) + result-check (T+135m) jobs`, etc.
 
 > `.env` **duy nhất ở root** được nạp bởi web (`next.config.mjs`), worker (`main.ts`), Prisma (`dotenv -e ../../.env`). `@wc/db` build ra `dist` → web/worker import từ đó; luôn `pnpm setup` (hoặc `pnpm --filter @wc/db build`) trước `pnpm dev`.
 
@@ -118,7 +120,7 @@ pnpm --filter @wc/web start   # Next production server (sau next build)
 pnpm --filter @wc/worker start  # NestJS worker (settle/news/auto-publish) — cần Redis
 ```
 
-- **Migrations**: `packages/db/prisma/migrations/0_init` là baseline (44 bảng). Schema mới → `pnpm db:migrate` (tạo migration dev) rồi commit; prod chạy `pnpm db:deploy`.
+- **Migrations**: `packages/db/prisma/migrations/0_init` là baseline (44 bảng); kèm `add_lineup_fields`, `bet_per_outcome` (unique kèo theo từng outcome), `match_betting_locked` (admin block betting). Schema mới → `pnpm db:migrate` (tạo migration dev) rồi commit; prod chạy `pnpm db:deploy`.
 - **Catalogs** (missions, cosmetics) tự seed lazily lần truy cập đầu — không cần seed thủ công. `seed` chỉ nạp dữ liệu giải (reference data).
 - **Seed admin**: tạo user rồi set role trong DB (`UPDATE "User" SET role='ADMIN' WHERE email=…`) — chưa có CLI tạo admin.
 

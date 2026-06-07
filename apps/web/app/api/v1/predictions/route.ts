@@ -20,6 +20,7 @@ const ERR_STATUS: Record<string, number> = {
   MATCH_NOT_FOUND: 404,
   BET_LOCKED: 409,
   ODDS_UNAVAILABLE: 409,
+  ALREADY_BET_OUTCOME: 409,
   INSUFFICIENT_BALANCE: 422,
   INVALID_STAKE: 422,
   NO_POWERUP: 422,
@@ -58,6 +59,10 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    // Per-outcome unique constraint → user already has a bet on this exact outcome.
+    if ((e as { code?: string }).code === 'P2002') {
+      return NextResponse.json({ error: { code: 'ALREADY_BET_OUTCOME' } }, { status: 409 });
+    }
     const code = (e as Error).message;
     const status = ERR_STATUS[code];
     if (status) return NextResponse.json({ error: { code } }, { status });

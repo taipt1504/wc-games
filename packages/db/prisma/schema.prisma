@@ -276,8 +276,8 @@ model Prediction {
   user  User  @relation(fields: [userId], references: [id])
   match Match @relation(fields: [matchId], references: [id])
 
-  // 1 kèo 1X2 / trận / context
-  @@unique([userId, contextType, contextId, matchId, market])
+  // 1 bet per OUTCOME / match / context (allows hedging A/X/2 on the same fixture)
+  @@unique([userId, contextType, contextId, matchId, market, outcome], map: "prediction_ctx_match_market_outcome_uq")
   @@index([matchId, status])
   @@index([userId, contextType, contextId, createdAt])
 }
@@ -336,6 +336,8 @@ model Team {
   flagUrl String?
   fifaRank Int?
   groupId BigInt?
+  formation String? // e.g. "4-2-3-1" (AI-crawled lineup)
+  manager   String? // head coach (AI-crawled)
 
   group   Group?   @relation(fields: [groupId], references: [id])
   players Player[]
@@ -349,11 +351,12 @@ model Venue {
 }
 
 model Player {
-  id       BigInt  @id @default(autoincrement())
-  teamId   BigInt
-  name     String
-  position String?
-  number   Int?
+  id        BigInt  @id @default(autoincrement())
+  teamId    BigInt
+  name      String
+  position  String? // specific role: GK/RB/CB/LB/CDM/CM/CAM/RW/LW/ST/... (AI-crawled)
+  number    Int?
+  isStarter Boolean @default(false)
 
   team Team @relation(fields: [teamId], references: [id])
 
@@ -373,6 +376,7 @@ model Match {
   scoreAway90 Int?
   result90    Outcome?
   source      OddsSource?
+  bettingLocked Boolean   @default(false) // admin can block betting on this match (PRD §09)
   updatedAt   DateTime    @updatedAt
 
   odds        MatchOdds?

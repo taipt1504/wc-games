@@ -1,17 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { OddsRow, Btn, Pundit, Flag, TierPill } from '@/components/ui';
-import { matchById, byId } from '@/lib/wc';
-
-describe('OddsRow', () => {
-  it('renders three 1/X/2 odds buttons for a scheduled match', () => {
-    const m = matchById(27)!;
-    render(<OddsRow m={m} />);
-    expect(screen.getAllByRole('button')).toHaveLength(3);
-    expect(screen.getByText(/Draw/)).toBeInTheDocument();
-    expect(screen.getByText(m.odds.md.toFixed(2))).toBeInTheDocument();
-  });
-});
+import { Btn, Pundit, Flag, TierPill } from '@/components/ui';
+import { byId } from '@/lib/wc';
 
 describe('Btn', () => {
   it('renders children and variant class', () => {

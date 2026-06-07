@@ -1,11 +1,5 @@
-import type { Match, Bet, Pick1X2 } from '@/lib/wc';
+import type { Bet } from '@/lib/wc';
 import type { ToastData } from '@/components/ui';
-
-export interface BetSlipState {
-  match: Match;
-  pick: Pick1X2;
-  odds: number;
-}
 
 export interface LedgerEntry {
   type: string;
@@ -42,7 +36,6 @@ export interface Store {
   streak: number;
   winStreak: number;
   checkedIn: boolean;
-  betSlip: BetSlipState | null;
   borrowOpen: boolean;
   toast: ToastData | null;
   authed: boolean;
@@ -54,11 +47,6 @@ export interface Store {
   refreshUser: () => void;
   checkin: () => void;
   claimMission: (code: string) => Promise<void>;
-  pickFor: (mid: number) => string | undefined;
-  openBet: (match: Match, pick: Pick1X2, odds: number) => void;
-  setSlipPick: (pick: Pick1X2, odds: number) => void;
-  closeBet: () => void;
-  confirmBet: (stake: number, exact?: { home: number; away: number }, powerUp?: string) => void;
   openBorrow: () => void;
   closeBorrow: () => void;
 }

@@ -84,12 +84,20 @@ export async function placeBet(prisma: PrismaClient, input: PlaceBetInput): Prom
   return prisma.$transaction(async (tx) => {
     const match = await tx.match.findUnique({ where: { id: input.matchId }, include: { odds: true } });
     if (!match) throw new Error('MATCH_NOT_FOUND');
-    if (match.status !== 'SCHEDULED' || match.kickoffAt.getTime() <= Date.now()) throw new Error('BET_LOCKED');
+    if (match.status !== 'SCHEDULED' || match.kickoffAt.getTime() <= Date.now() || match.bettingLocked) throw new Error('BET_LOCKED');
     if (!match.odds) throw new Error('ODDS_UNAVAILABLE');
     if (input.stake <= 0n) throw new Error('INVALID_STAKE');
 
     const outcome = PICK_TO_OUTCOME[input.pick];
     const odds = outcome === 'HOME' ? match.odds.mHome : outcome === 'DRAW' ? match.odds.mDraw : match.odds.mAway;
+
+    // One bet per outcome (hedging 1/X/2 is allowed; the same outcome twice is not).
+    // GLOBAL contextId is NULL, so the DB unique index can't enforce this (Postgres treats NULLs as
+    // distinct) — guard at the app level, mirroring the LOBBY context.
+    const dupe = await tx.prediction.findFirst({
+      where: { userId: input.userId, contextType: 'GLOBAL', contextId: null, matchId: input.matchId, market: '1X2', outcome, status: 'OPEN' },
+    });
+    if (dupe) throw new Error('ALREADY_BET_OUTCOME');
 
     const wallet = await tx.wallet.findFirstOrThrow({
       where: { userId: input.userId, contextType: 'GLOBAL', contextId: null },

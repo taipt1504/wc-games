@@ -12,6 +12,7 @@ type NewsItem = {
   src: string;
   time: string;
   excerpt: string;
+  body?: string;
   hot?: boolean;
   match?: number;
 };
@@ -118,9 +119,7 @@ export function Article({ s }: ScreenProps) {
       </div>
 
       <div className="stack gap-16" style={{ fontSize: 16, lineHeight: 1.7, color: 'var(--text-2)' }}>
-        <p>{n.excerpt}</p>
-        <p>With the first multi-host World Cup now in full swing across the United States, Canada and Mexico, every result is reshaping the projected knockout picture. Coaches are juggling a longer group stage and the new 48-team math, where goal difference matters from the very first whistle.</p>
-        <p>Analysts point to squad depth as the deciding factor over a tournament this size. The teams managing minutes smartly through the group phase look best placed for the gauntlet ahead.</p>
+        {(n.body || n.excerpt || '').split(/\n\s*\n/).map((para, i) => para.trim() && <p key={i}>{para.trim()}</p>)}
       </div>
 
       {n.match && (

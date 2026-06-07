@@ -26,7 +26,7 @@ export interface AchievementRow { name: string; desc: string; unlocked: boolean;
 export interface LobbyBoardRow { rank: number; userId: number; name: string; score: number; won: number; def: number; borrowed: number; you: boolean }
 export interface LobbyChatRow { who: string; text: string; t: string }
 export interface BorrowReq { id: number; who: string; amount: number; balance: number; msg: string; t: string; score: number; repeat?: boolean }
-export interface NewsItem { id: number; tag: string; title: string; src: string; time: string; excerpt: string; hot?: boolean; match?: number }
+export interface NewsItem { id: number; tag: string; title: string; src: string; time: string; excerpt: string; body?: string; hot?: boolean; match?: number }
 export interface RiskLobby { id: number; name: string; members: number; risk: string; score: number; reasons: string[]; flagged: string }
 export interface AdminUser { id: number; name: string; email: string; pts: number; ip: string; status: string; flags: number; joined: string }
 export interface ReviewItem { id: number; title: string; tag: string; src: string; conf: number; status: string; warn?: boolean }

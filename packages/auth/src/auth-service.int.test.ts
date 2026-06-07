@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@wc/db';
-import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats, getNotificationPrefs, updateNotificationPrefs, NOTIFICATION_TYPES, changePassword, requestPasswordReset, resetPassword } from './auth-service';
+import { registerUser, verifyLogin, dailyCheckin, getOrCreateReferralCode, redeemReferral, referralStats, getNotificationPrefs, updateNotificationPrefs, NOTIFICATION_TYPES, changePassword, requestPasswordReset, resetPassword, findOrCreateOAuthUser, createAuthSession, rotateRefresh, revokeSession, hashToken } from './auth-service';
 
 const prisma = new PrismaClient();
 
@@ -15,6 +15,7 @@ async function clean() {
   await prisma.referralCode.deleteMany();
   await prisma.notificationPref.deleteMany();
   await prisma.passwordReset.deleteMany();
+  await prisma.authSession.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();
 }
@@ -262,5 +263,58 @@ describe('password reset flow (integration · Postgres)', () => {
 
   it('unknown token throws INVALID_TOKEN', async () => {
     await expect(resetPassword(prisma, 'deadbeef'.repeat(8), 'anotherPass99')).rejects.toThrow('INVALID_TOKEN');
+  });
+});
+
+describe('OAuth + refresh sessions (integration · Postgres)', () => {
+  beforeAll(async () => { await clean(); });
+
+  it('findOrCreateOAuthUser creates a user + 1000 wallet + SIGNUP ledger on first sign-in', async () => {
+    const u = await findOrCreateOAuthUser(prisma, { email: 'oauth@test.io' });
+    expect(u.email).toBe('oauth@test.io');
+    const w = await prisma.wallet.findFirstOrThrow({ where: { userId: u.id, contextType: 'GLOBAL' } });
+    expect(w.balance).toBe(1000n);
+    const led = await prisma.pointLedger.findFirstOrThrow({ where: { userId: u.id, type: 'SIGNUP' } });
+    expect(led.amount).toBe(1000n);
+  });
+
+  it('findOrCreateOAuthUser links an existing email instead of creating a second user', async () => {
+    const u2 = await findOrCreateOAuthUser(prisma, { email: 'oauth@test.io' });
+    const count = await prisma.user.count({ where: { email: 'oauth@test.io' } });
+    expect(count).toBe(1);
+    const walletCount = await prisma.wallet.count({ where: { userId: u2.id, contextType: 'GLOBAL' } });
+    expect(walletCount).toBe(1); // no duplicate signup bonus
+  });
+
+  it('rotateRefresh revokes the old session and mints a new one', async () => {
+    const u = await findOrCreateOAuthUser(prisma, { email: 'rot@test.io' });
+    await createAuthSession(prisma, u.id, hashToken('tok-A'), '1.1.1.1', 'jest');
+    const ru = await rotateRefresh(prisma, hashToken('tok-A'), hashToken('tok-B'), '1.1.1.1', 'jest');
+    expect(ru.id).toBe(u.id);
+    const old = await prisma.authSession.findFirstOrThrow({ where: { refreshTokenHash: hashToken('tok-A') } });
+    expect(old.revokedAt).not.toBeNull();
+    const fresh = await prisma.authSession.findFirstOrThrow({ where: { refreshTokenHash: hashToken('tok-B') } });
+    expect(fresh.revokedAt).toBeNull();
+  });
+
+  it('replaying an already-rotated token is REFRESH_REUSE and revokes the whole family', async () => {
+    // tok-A was rotated above (revoked); the live token is tok-B.
+    await expect(rotateRefresh(prisma, hashToken('tok-A'), hashToken('tok-C'), null, null)).rejects.toThrow('REFRESH_REUSE');
+    const live = await prisma.authSession.count({
+      where: { refreshTokenHash: hashToken('tok-B'), revokedAt: null },
+    });
+    expect(live).toBe(0); // reuse response nuked the live session too
+  });
+
+  it('rotateRefresh with an unknown token throws INVALID_REFRESH', async () => {
+    await expect(rotateRefresh(prisma, hashToken('nope'), hashToken('x'), null, null)).rejects.toThrow('INVALID_REFRESH');
+  });
+
+  it('revokeSession marks a live session revoked (logout)', async () => {
+    const u = await findOrCreateOAuthUser(prisma, { email: 'rev@test.io' });
+    await createAuthSession(prisma, u.id, hashToken('logout-tok'), null, null);
+    await revokeSession(prisma, hashToken('logout-tok'));
+    const s = await prisma.authSession.findFirstOrThrow({ where: { refreshTokenHash: hashToken('logout-tok') } });
+    expect(s.revokedAt).not.toBeNull();
   });
 });

@@ -3,8 +3,20 @@
    GOLAZO — shared primitives (ported from design components.jsx)
    Icon · Flag · Avatar · Btn · Pundit (Ora) · Spark · OddsRow · MatchCard · etc.
    ============================================================ */
-import React from 'react';
-import { byId, fmtDate, type Team, type Match, type Pick1X2 } from '@/lib/wc';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { byId, type Team } from '@/lib/wc';
+
+/**
+ * Render children at document.body — escapes transformed/animated ancestors (e.g. `.fade-up`)
+ * that would otherwise trap a position:fixed overlay. Use for modals inside animated pages.
+ */
+export function Portal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
 
 /* ---------------- ICONS ---------------- */
 export const ICONS: Record<string, string> = {
@@ -50,6 +62,7 @@ export const ICONS: Record<string, string> = {
   database: 'M12 3c5 0 8 1.5 8 3s-3 3-8 3-8-1.5-8-3 3-3 8-3ZM4 6v6c0 1.5 3 3 8 3s8-1.5 8-3V6M4 12v6c0 1.5 3 3 8 3s8-1.5 8-3v-6',
   refresh: 'M21 12a9 9 0 1 1-2.6-6.3M21 4v5h-5',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  'eye-off': 'M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.4 5.2A9.5 9.5 0 0 1 12 5c6 0 10 7 10 7a17.3 17.3 0 0 1-3.3 3.9M6.2 6.3A17 17 0 0 0 2 12s4 7 10 7a9.4 9.4 0 0 0 3-.5',
   ban: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM5.6 5.6l12.8 12.8',
   star: 'M12 3l2.6 6.3 6.8.5-5.2 4.4 1.6 6.6L12 17.8 6.2 21.3l1.6-6.6L2.6 9.8l6.8-.5L12 3Z',
 };
@@ -68,8 +81,23 @@ export function Icon({ name, size = 20, sw = 1.8, fill, style, className }: {
 }
 
 /* ---------------- FLAG CREST ---------------- */
-export function Flag({ team, size = 32, showCode }: { team: Team | number; size?: number; showCode?: boolean }) {
+// Renders a real flag image when `flagUrl` is given (real DB data), else the 3-stripe
+// colors crest from a WC mock Team. Both forms supported so de-mocked screens can pass
+// flagUrl while mock-backed screens keep passing `team` unchanged.
+export function Flag({ team, flagUrl, name, code, size = 32, showCode }: {
+  team?: Team | number; flagUrl?: string; name?: string; code?: string; size?: number; showCode?: boolean;
+}) {
+  if (flagUrl) {
+    return (
+      <div className="row gap-8" style={{ minWidth: 0 }}>
+        <img src={flagUrl} alt={name ?? code ?? ''} title={name} width={size} height={size}
+          style={{ width: size, height: size, objectFit: 'cover', borderRadius: 4, display: 'block', flex: 'none' }} />
+        {showCode && code && <span className="flag-code" style={{ fontSize: size * 0.42 }}>{code}</span>}
+      </div>
+    );
+  }
   const t = typeof team === 'number' ? byId(team) : team;
+  if (!t) return null;
   const c = t.colors;
   return (
     <div className="row gap-8" style={{ minWidth: 0 }}>
@@ -157,70 +185,6 @@ export function Spark({ data, w = 80, h = 28, color = 'var(--green)' }: { data: 
     <svg width={w} height={h} style={{ overflow: 'visible' }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-/* ---------------- ODDS BUTTON ROW ---------------- */
-export function OddsRow({ m, selected, onPick }: {
-  m: Match; selected?: string; onPick?: (k: Pick1X2, val: number) => void; compact?: boolean;
-}) {
-  const home = byId(m.home), away = byId(m.away);
-  const cells: { k: Pick1X2; label: string; val: number }[] = [
-    { k: '1', label: home.code, val: m.odds.mh },
-    { k: 'X', label: 'Draw', val: m.odds.md },
-    { k: '2', label: away.code, val: m.odds.ma },
-  ];
-  const locked = m.status !== 'SCHEDULED';
-  return (
-    <div className="row gap-8 full">
-      {cells.map((c) => (
-        <button key={c.k} className={`odds ${selected === c.k ? 'sel' : ''} ${c.val >= 2 ? 'up' : ''}`}
-          disabled={locked} onClick={(e) => { e.stopPropagation(); onPick?.(c.k, c.val); }}
-          style={locked ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
-          <span className="o-label">{c.k} · {c.label}</span>
-          <span className="o-val">{c.val.toFixed(2)}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ---------------- MATCH CARD ---------------- */
-export function MatchCard({ m, onOpen, onPick, picked, compact }: {
-  m: Match; onOpen?: (m: Match) => void; onPick?: (k: Pick1X2, val: number) => void; picked?: string; compact?: boolean;
-}) {
-  const home = byId(m.home), away = byId(m.away);
-  const live = m.status === 'LIVE', fin = m.status === 'FINISHED';
-  return (
-    <div className="card card-hover card-pad pointer fade-up" onClick={() => onOpen?.(m)}>
-      <div className="row between" style={{ marginBottom: 14 }}>
-        <div className="row gap-8">
-          <span className="badge badge-muted">{m.stage}</span>
-          {live && <span className="badge badge-magenta"><span className="live-dot" />{m.minute}&apos;</span>}
-          {fin && <span className="badge badge-muted">FT</span>}
-          {m.status === 'SCHEDULED' && <span className="small muted">{fmtDate(m.date)} · {m.kickoff}</span>}
-        </div>
-        <Icon name="chevR" size={18} className="muted" />
-      </div>
-      <div className="row between gap-12">
-        <div className="stack gap-10 grow" style={{ minWidth: 0 }}>
-          {[home, away].map((t, i) => {
-            const score = i === 0 ? m.hs : m.as;
-            const win = fin && ((i === 0 && m.hs! > m.as!) || (i === 1 && m.as! > m.hs!));
-            return (
-              <div key={t.id} className="row between gap-10">
-                <div className="row gap-10" style={{ minWidth: 0 }}>
-                  <Flag team={t} size={26} />
-                  <span className="ellip" style={{ fontWeight: win ? 700 : 500, color: win ? 'var(--text)' : 'var(--text-2)' }}>{t.name}</span>
-                </div>
-                {(live || fin) && <span className="tnum" style={{ fontSize: 19, fontWeight: 700, color: win ? 'var(--green)' : 'var(--text)' }}>{score}</span>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {!compact && <div style={{ marginTop: 14 }}><OddsRow m={m} selected={picked} onPick={onPick} /></div>}
-    </div>
   );
 }
 

@@ -1,10 +1,29 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/session';
 import { predictorTier, roiPercent } from '@wc/core';
 import { getGlobalLeaderboard } from '@wc/prediction';
 
 export const dynamic = 'force-dynamic';
+
+const PatchSchema = z.object({ username: z.string().min(2).max(30) });
+
+// PATCH /api/v1/me — edit profile display name (username). Unique → 409 on conflict.
+export async function PATCH(req: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 });
+  const parsed = PatchSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: { code: 'VALIDATION_ERROR', details: parsed.error.issues } }, { status: 422 });
+  const username = parsed.data.username.trim();
+  try {
+    await prisma.user.update({ where: { id: user.id }, data: { username } });
+    return NextResponse.json({ data: { username } });
+  } catch (e) {
+    if ((e as { code?: string }).code === 'P2002') return NextResponse.json({ error: { code: 'USERNAME_TAKEN' } }, { status: 409 });
+    throw e;
+  }
+}
 
 export async function GET() {
   const user = await getSessionUser();

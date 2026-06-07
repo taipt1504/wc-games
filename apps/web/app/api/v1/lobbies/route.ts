@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createLobby } from '@wc/lobby';
+import { hashSecret } from '@wc/auth';
 import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/session';
 
@@ -54,6 +55,7 @@ const CreateSchema = z.object({
   name: z.string().min(1).max(120),
   scope: z.string().optional(),
   defaultPoints: z.coerce.number().int().positive().max(1_000_000).default(1000),
+  password: z.string().min(4).max(64).optional(),
 });
 
 // POST — create a lobby (session user becomes owner).
@@ -66,11 +68,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: { code: 'VALIDATION_ERROR', details: parsed.error.issues } }, { status: 422 });
   }
   const inviteToken = globalThis.crypto.randomUUID().slice(0, 8).toUpperCase();
+  const passwordHash = parsed.data.password ? await hashSecret(parsed.data.password) : undefined;
   const lobby = await createLobby(prisma, user.id, {
     name: parsed.data.name,
     scope: SCOPE_MAP[parsed.data.scope ?? 'all'] ?? 'ALL',
     defaultPoints: BigInt(parsed.data.defaultPoints),
     inviteToken,
+    passwordHash,
   });
   return NextResponse.json({ data: { id: Number(lobby.id), name: lobby.name, code: lobby.inviteToken } }, { status: 201 });
 }

@@ -24,6 +24,14 @@ export interface SessionUser {
   role: string;
 }
 
+/** Generic secret hashing (e.g. lobby join passwords) — bcrypt, same policy as user passwords. */
+export async function hashSecret(plain: string): Promise<string> {
+  return bcrypt.hash(plain, BCRYPT_ROUNDS);
+}
+export async function verifySecret(plain: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(plain, hash);
+}
+
 /** Register: create user + GLOBAL wallet (1000) + SIGNUP ledger, atomically. */
 export async function registerUser(
   prisma: PrismaClient,
@@ -317,4 +325,99 @@ export async function referralStats(
   const code = await getOrCreateReferralCode(prisma, userId);
   const count = await prisma.referral.count({ where: { referrerId: userId, status: 'ACTIVATED' } });
   return { code, count };
+}
+
+// ─────────────────────────── OAUTH + REFRESH SESSIONS (AUTH design UC-02 / §7) ───────────────────────────
+
+const REFRESH_TTL_MS = 30 * DAY_MS; // 30d, mirrors the refresh cookie lifetime
+
+/** sha256 hex of a refresh token. Tokens are stored hashed at rest; never persist the raw value. */
+export function hashToken(raw: string): string {
+  return sha256(raw);
+}
+
+/**
+ * Find a user by email, or create one for OAuth sign-in (Google).
+ * Existing email → linked (logged in). New email → created with an unusable random password
+ * (set one later via reset) + GLOBAL wallet 1000 + SIGNUP ledger, mirroring registerUser.
+ * Throws 'BANNED' for a banned account.
+ */
+export async function findOrCreateOAuthUser(
+  prisma: PrismaClient,
+  input: { email: string; username?: string },
+): Promise<SessionUser> {
+  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  if (existing) {
+    if (existing.status === 'BANNED') throw new Error('BANNED');
+    return { id: existing.id, email: existing.email, role: existing.role };
+  }
+  const passwordHash = await bcrypt.hash(randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { email: input.email, username: input.username, passwordHash },
+    });
+    await tx.wallet.create({ data: { userId: user.id, contextType: 'GLOBAL', balance: SIGNUP_BONUS } });
+    await tx.pointLedger.create({
+      data: {
+        userId: user.id, contextType: 'GLOBAL', type: 'SIGNUP',
+        amount: SIGNUP_BONUS, balanceAfter: SIGNUP_BONUS, refType: 'USER', refId: user.id,
+      },
+    });
+    return { id: user.id, email: user.email, role: user.role };
+  });
+}
+
+/** Persist a new refresh session row (login/register/oauth). Caller stores the raw token in a cookie. */
+export async function createAuthSession(
+  prisma: PrismaClient,
+  userId: bigint,
+  refreshTokenHash: string,
+  ip: string | null,
+  userAgent: string | null,
+  now: Date = new Date(),
+): Promise<void> {
+  await prisma.authSession.create({
+    data: { userId, refreshTokenHash, ip, userAgent, expiresAt: new Date(now.getTime() + REFRESH_TTL_MS) },
+  });
+}
+
+/**
+ * Rotate a refresh token: revoke the presented session and issue a new one.
+ * Throws 'INVALID_REFRESH' (unknown/expired), 'BANNED', or 'REFRESH_REUSE' — a replay of an
+ * already-revoked token revokes the user's whole session family (theft response, PRD §7).
+ */
+export async function rotateRefresh(
+  prisma: PrismaClient,
+  oldRefreshTokenHash: string,
+  newRefreshTokenHash: string,
+  ip: string | null,
+  userAgent: string | null,
+  now: Date = new Date(),
+): Promise<SessionUser> {
+  const session = await prisma.authSession.findFirst({ where: { refreshTokenHash: oldRefreshTokenHash } });
+  if (!session) throw new Error('INVALID_REFRESH');
+  if (session.revokedAt) {
+    await prisma.authSession.updateMany({ where: { userId: session.userId, revokedAt: null }, data: { revokedAt: now } });
+    throw new Error('REFRESH_REUSE');
+  }
+  if (session.expiresAt < now) throw new Error('INVALID_REFRESH');
+  const user = await prisma.user.findUnique({ where: { id: session.userId } });
+  if (!user) throw new Error('INVALID_REFRESH');
+  if (user.status === 'BANNED') throw new Error('BANNED');
+  await prisma.$transaction([
+    prisma.authSession.update({ where: { id: session.id }, data: { revokedAt: now } }),
+    prisma.authSession.create({
+      data: { userId: session.userId, refreshTokenHash: newRefreshTokenHash, ip, userAgent, expiresAt: new Date(now.getTime() + REFRESH_TTL_MS) },
+    }),
+  ]);
+  return { id: user.id, email: user.email, role: user.role };
+}
+
+/** Revoke the live session matching this refresh-token hash (logout). No-op if absent. */
+export async function revokeSession(
+  prisma: PrismaClient,
+  refreshTokenHash: string,
+  now: Date = new Date(),
+): Promise<void> {
+  await prisma.authSession.updateMany({ where: { refreshTokenHash, revokedAt: null }, data: { revokedAt: now } });
 }

@@ -45,7 +45,8 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
     await page.getByRole('button', { name: /Claim your 1,000 points/i }).click();
     const email = `e2e_${Date.now()}_${tag}@golazo.test`;
     await page.getByPlaceholder('you@email.com').fill(email);
-    await page.locator('input[type="password"]').fill('password123');
+    await page.getByPlaceholder('Your password').fill('password123');
+    await page.getByPlaceholder('Re-enter password').fill('password123');
     await page.getByRole('button', { name: /Claim 1,000 points & play/i }).click();
   }
 
@@ -90,7 +91,8 @@ test.describe('GOLAZO — real flow (live API + Postgres)', () => {
     await page.goto('/');
     await page.getByRole('button', { name: /Claim your 1,000 points/i }).click();
     await page.getByPlaceholder('you@email.com').fill(`${handle}@golazo.test`);
-    await page.locator('input[type="password"]').fill('password123');
+    await page.getByPlaceholder('Your password').fill('password123');
+    await page.getByPlaceholder('Re-enter password').fill('password123');
     await page.getByRole('button', { name: /Claim 1,000 points & play/i }).click();
     await expect(page.getByText("Today's matches")).toBeVisible();
 
@@ -160,7 +162,8 @@ test.describe('GOLAZO — exact-score knockout bonus (FR-SCORE-03)', () => {
     await page.goto('/');
     await page.getByRole('button', { name: /Claim your 1,000 points/i }).click();
     await page.getByPlaceholder('you@email.com').fill(email);
-    await page.locator('input[type="password"]').fill('password123');
+    await page.getByPlaceholder('Your password').fill('password123');
+    await page.getByPlaceholder('Re-enter password').fill('password123');
     await page.getByRole('button', { name: /Claim 1,000 points & play/i }).click();
     await expect(page.getByText("Today's matches")).toBeVisible();
 

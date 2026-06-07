@@ -40,11 +40,14 @@ export async function respondDuel(
 
 export interface ResolveResult {
   winnerId: bigint | null;
-  challengerNet: bigint;
-  opponentNet: bigint;
+  challengerRoi: number; // % ROI on bets settled since the duel started
+  opponentRoi: number;
 }
 
-/** Resolve an ACTIVE duel: winner = higher GLOBAL net profit (totalReturned - totalStaked). */
+/**
+ * Resolve an ACTIVE duel as an ROI race: winner = higher ROI on GLOBAL bets settled AFTER the
+ * challenge was issued (the "race" window). ROI = (returned - staked) / staked. Tie → no winner.
+ */
 export async function resolveDuel(
   prisma: PrismaClient,
   duelId: bigint,
@@ -52,27 +55,24 @@ export async function resolveDuel(
   const duel = await prisma.duel.findUniqueOrThrow({ where: { id: duelId } });
   if (duel.status !== 'ACTIVE') throw new Error('NOT_ACTIVE');
 
-  const [cStats, oStats] = await Promise.all([
-    prisma.predictionUserStats.findUnique({ where: { userId: duel.challengerId } }),
-    prisma.predictionUserStats.findUnique({ where: { userId: duel.opponentId } }),
-  ]);
+  const roiSince = async (userId: bigint): Promise<number> => {
+    const preds = await prisma.prediction.findMany({
+      where: { userId, contextType: 'GLOBAL', status: { in: ['WON', 'LOST'] }, settledAt: { gte: duel.createdAt } },
+      select: { stake: true, payout: true },
+    });
+    const staked = preds.reduce((a, p) => a + Number(p.stake), 0);
+    const returned = preds.reduce((a, p) => a + Number(p.payout ?? 0), 0);
+    return staked > 0 ? Math.round(((returned - staked) / staked) * 1000) / 10 : 0;
+  };
 
-  const challengerNet = (cStats?.totalReturned ?? 0n) - (cStats?.totalStaked ?? 0n);
-  const opponentNet = (oStats?.totalReturned ?? 0n) - (oStats?.totalStaked ?? 0n);
-
+  const [challengerRoi, opponentRoi] = await Promise.all([roiSince(duel.challengerId), roiSince(duel.opponentId)]);
   const winnerId =
-    challengerNet > opponentNet
-      ? duel.challengerId
-      : opponentNet > challengerNet
-        ? duel.opponentId
+    challengerRoi > opponentRoi ? duel.challengerId
+      : opponentRoi > challengerRoi ? duel.opponentId
         : null;
 
-  await prisma.duel.update({
-    where: { id: duelId },
-    data: { status: 'DONE', winnerId },
-  });
-
-  return { winnerId, challengerNet, opponentNet };
+  await prisma.duel.update({ where: { id: duelId }, data: { status: 'DONE', winnerId } });
+  return { winnerId, challengerRoi, opponentRoi };
 }
 
 export interface DuelWithDisplay {

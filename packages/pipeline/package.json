@@ -13,7 +13,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "dotenv -e ../../.env -- vitest run",
-    "seed": "dotenv -e ../../.env -- tsx src/seed-cli.ts"
+    "seed": "dotenv -e ../../.env -- tsx src/seed-cli.ts",
+    "ingest": "dotenv -e ../../.env -- tsx src/ingest-cli.ts",
+    "crawl-players": "dotenv -e ../../.env -- tsx src/crawl-players-cli.ts"
   },
   "dependencies": {
     "@wc/ai": "workspace:*",

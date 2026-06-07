@@ -20,7 +20,8 @@ export async function POST(req: Request) {
   const { email, username, password, ref } = parsed.data;
   try {
     const user = await registerUser(prisma, { email, username, password });
-    await createSession(user);
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null;
+    await createSession(prisma, user, { ip, userAgent: req.headers.get('user-agent') });
     if (ref) {
       try { await redeemReferral(prisma, user.id, ref); } catch { /* never break signup */ }
     }

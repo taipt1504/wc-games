@@ -1,14 +1,19 @@
 'use client';
 /* GOLAZO — Landing · Auth · Home (ported from design screens-core.jsx) */
 import React, { useState, useEffect } from 'react';
-import { WC, type Match } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
-import { Btn, Icon, MatchCard, Pundit, SecHead, Avatar, TIER_C } from '@/components/ui';
+import { Btn, Icon, Pundit, SecHead, Avatar, TIER_C } from '@/components/ui';
+import { MatchBetCard, type RealMatch } from '@/components/screens-match';
 import { checkinReward } from '@wc/core';
 
 /* ===================== LANDING ===================== */
 export function Landing({ s }: ScreenProps) {
-  const feat = [WC.matchById(23), WC.matchById(27), WC.matchById(31)].filter(Boolean) as Match[];
+  const [feat, setFeat] = useState<RealMatch[]>([]);
+  useEffect(() => {
+    fetch('/api/v1/matches').then(r => (r.ok ? r.json() : null))
+      .then(j => { const all = (j?.data ?? []) as RealMatch[]; setFeat(all.filter(mm => mm.status === 'SCHEDULED' && mm.odds).slice(0, 3)); })
+      .catch(() => {});
+  }, []);
   return (
     <div className="landing">
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '40px 24px 20px', textAlign: 'center' }}>
@@ -34,7 +39,7 @@ export function Landing({ s }: ScreenProps) {
           <button className="chip" onClick={() => s.go('schedule')}>All matches →</button>
         </div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-          {feat.map((m) => <MatchCard key={m.id} m={m} onOpen={() => s.go('match', { id: m.id })} onPick={(pick, odds) => s.openBet(m, pick, odds)} />)}
+          {feat.map((m) => <MatchBetCard key={m.id} m={m} s={s} />)}
         </div>
       </div>
 
@@ -95,12 +100,49 @@ export function Landing({ s }: ScreenProps) {
   );
 }
 
+/* Password input with a show/hide toggle (PRD review §auth). */
+function PasswordInput({ value, onChange, placeholder, autoComplete }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; autoComplete?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="rel">
+      <input
+        className="input"
+        type={show ? 'text' : 'password'}
+        value={value}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ paddingRight: 44 }}
+      />
+      <button
+        type="button"
+        aria-label={show ? 'Hide password' : 'Show password'}
+        onClick={() => setShow((v) => !v)}
+        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'grid', placeItems: 'center', padding: 6 }}
+      >
+        <Icon name={show ? 'eye-off' : 'eye'} size={18} />
+      </button>
+    </div>
+  );
+}
+
 /* ===================== AUTH ===================== */
 export function Auth({ s }: ScreenProps) {
   const [mode, setMode] = useState<string>((s.param?.mode as string) || 'signup');
   const signup = mode === 'signup';
-  const [email, setEmail] = useState('alex@email.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  function handleSubmit() {
+    if (signup && password !== confirm) {
+      s.toastMsg('Passwords do not match', 'alert', 'var(--danger)');
+      return;
+    }
+    s.login(email, password, mode);
+  }
 
   // Forgot-password inline flow state
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -181,9 +223,10 @@ export function Auth({ s }: ScreenProps) {
           <h2 className="h2">{signup ? 'Create your account' : 'Welcome back'}</h2>
           <p className="small muted mt-4">{signup ? 'It takes 30 seconds. 1,000 points are waiting.' : 'Pick up your streak where you left off.'}</p>
           <div className="stack gap-16" style={{ marginTop: 24 }}>
-            {signup && <div className="field"><label className="label">Username</label><input className="input" placeholder="midfield_maestro" defaultValue="alexr" /></div>}
+            {signup && <div className="field"><label className="label">Username</label><input className="input" placeholder="midfield_maestro" /></div>}
             <div className="field"><label className="label">Email</label><input className="input" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-            <div className="field"><label className="label">Password</label><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+            <div className="field"><label className="label">Password</label><PasswordInput value={password} onChange={setPassword} placeholder="Your password" autoComplete={signup ? 'new-password' : 'current-password'} /></div>
+            {signup && <div className="field"><label className="label">Confirm password</label><PasswordInput value={confirm} onChange={setConfirm} placeholder="Re-enter password" autoComplete="new-password" /></div>}
             {!signup && (
               <div className="row between">
                 <label className="row gap-8 small t2"><input type="checkbox" defaultChecked /> Remember me</label>
@@ -202,15 +245,15 @@ export function Auth({ s }: ScreenProps) {
                 ) : (
                   <>
                     <p className="small t2">Reset link sent! Enter your new password below.</p>
-                    <div className="field"><label className="label">New password</label><input className="input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" /></div>
+                    <div className="field"><label className="label">New password</label><PasswordInput value={newPassword} onChange={setNewPassword} placeholder="At least 8 characters" autoComplete="new-password" /></div>
                     <Btn variant="primary" size="sm" disabled={resetLoading || !newPassword} onClick={handleReset}>{resetLoading ? 'Resetting…' : 'Reset password'}</Btn>
                   </>
                 )}
               </div>
             )}
-            <Btn variant="primary" size="lg" className="btn-block" onClick={() => s.login(email, password, mode)}>{signup ? 'Claim 1,000 points & play' : 'Log in'}</Btn>
+            <Btn variant="primary" size="lg" className="btn-block" onClick={handleSubmit}>{signup ? 'Claim 1,000 points & play' : 'Log in'}</Btn>
             <div className="row center gap-12"><div className="hr grow" /><span className="tiny muted">OR</span><div className="hr grow" /></div>
-            <Btn variant="ghost" className="btn-block" onClick={() => s.toastMsg('Social login coming soon', 'alert', 'var(--sky)')}>Continue with Google</Btn>
+            <Btn variant="ghost" className="btn-block" onClick={() => { window.location.href = '/api/v1/auth/google'; }}>Continue with Google</Btn>
             <p className="tiny muted" style={{ textAlign: 'center' }}>By continuing you agree these are virtual points for entertainment, with no cash value.</p>
           </div>
         </div>
@@ -222,13 +265,17 @@ export function Auth({ s }: ScreenProps) {
 /* ===================== HOME ===================== */
 export function Home({ s }: ScreenProps) {
   const me = s.me;
-  const today = [WC.matchById(23), WC.matchById(24), WC.matchById(27), WC.matchById(31), WC.matchById(33)].filter(Boolean) as Match[];
-  const smart: Record<number, string> = { 23: '1', 27: '2', 31: 'X' };
+  const [today, setToday] = useState<RealMatch[]>([]);
+  useEffect(() => {
+    fetch('/api/v1/matches').then(r => (r.ok ? r.json() : null))
+      .then(j => { const all = (j?.data ?? []) as RealMatch[]; setToday(all.filter(mm => mm.status === 'SCHEDULED' && mm.odds).slice(0, 5)); })
+      .catch(() => {});
+  }, []);
   return (
     <div className="page fade-up">
       <div className="row between wrap gap-16" style={{ marginBottom: 22 }}>
         <div>
-          <div className="eyebrow">Matchday · {WC.fmtDate(new Date('2026-06-13'))}</div>
+          <div className="eyebrow">Matchday{today[0] ? ` · ${new Date(today[0].kickoffAt).toLocaleDateString()}` : ''}</div>
           <h1 className="h1" style={{ marginTop: 6 }}>Hey {me.name.split(' ')[0]} 👋</h1>
         </div>
         <CheckinCard s={s} />
@@ -245,12 +292,8 @@ export function Home({ s }: ScreenProps) {
         <div>
           <SecHead title="Today's matches" sub="Lock your picks before kickoff" action={<button className="chip" onClick={() => s.go('schedule')}>Full schedule →</button>} />
           <div className="stack gap-12">
-            {today.map((m) => (
-              <div key={m.id} className="rel">
-                {smart[m.id] && <span className="badge badge-sky" style={{ position: 'absolute', top: 14, right: 44, zIndex: 2 }}><Icon name="sparkles" size={12} />Ora: {smart[m.id]}</span>}
-                <MatchCard m={m} onOpen={(mm) => s.go('match', { id: mm.id })} onPick={(pick, odds) => s.openBet(m, pick, odds)} picked={s.pickFor(m.id)} />
-              </div>
-            ))}
+            {today.map((m) => <MatchBetCard key={m.id} m={m} s={s} />)}
+            {today.length === 0 && <div className="card card-pad" style={{ textAlign: 'center' }}><p className="muted small">No upcoming matches.</p></div>}
           </div>
         </div>
         <div className="stack gap-20">
@@ -396,13 +439,13 @@ function MiniBoard({ s }: ScreenProps) {
 
 function PunditPromo({ s }: ScreenProps) {
   return (
-    <div className="card card-pad pointer card-hover" onClick={() => s.go('match', { id: 23 })} style={{ background: 'linear-gradient(120deg, var(--sky-soft), transparent)' }}>
+    <div className="card card-pad pointer card-hover" onClick={() => s.go('schedule')} style={{ background: 'linear-gradient(120deg, var(--sky-soft), transparent)' }}>
       <div className="row gap-14">
         <Pundit size={64} mood="think" glow />
         <div>
           <div className="row gap-8"><span className="badge badge-sky">AI Pundit</span></div>
-          <div className="h3" style={{ marginTop: 8, fontSize: 17 }}>Ora&apos;s pick of the day</div>
-          <p className="tiny t2 mt-4">&quot;France&apos;s press is overwhelming Switzerland&apos;s build-up. I lean home — but value sits on the draw.&quot;</p>
+          <div className="h3" style={{ marginTop: 8, fontSize: 17 }}>Ora previews every match</div>
+          <p className="tiny t2 mt-4">Open any fixture for an AI-generated preview, grounded on real tournament data.</p>
         </div>
       </div>
     </div>

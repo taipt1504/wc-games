@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
-import { Btn, Icon, Flag, Avatar, SecHead, TierPill, TIER_C } from '@/components/ui';
+import { Btn, Icon, Flag, Avatar, SecHead, TierPill, TIER_C, Portal } from '@/components/ui';
+
+/* Signed formatters — show a real minus for negatives (never "+-6.3%") + sign-aware colour. */
+const sgnPct = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
+const sgnNum = (n: number) => `${n >= 0 ? '+' : ''}${n.toLocaleString()}`;
+const sgnCol = (n: number) => (n >= 0 ? 'var(--green)' : 'var(--danger)');
 
 /* ===================== LOCAL SUB-COMPONENTS ===================== */
 
@@ -35,7 +40,7 @@ export function Leaderboard({ s }: ScreenProps) {
 
   return (
     <div className="page fade-up">
-      <SecHead title="Leaderboard" sub="Ranked by ROI% on settled bets · minimum 10 settled to qualify" />
+      <SecHead title="Leaderboard" sub="Ranked by ROI% on settled bets" />
       <div className="row gap-8 wrap-w" style={{ marginBottom: 18 }}>
         {scopes.map(([k, l]) => (
           <button key={k} className={`chip ${scope === k ? 'active' : ''}`} onClick={() => setScope(k)}>{l}</button>
@@ -63,9 +68,9 @@ export function Leaderboard({ s }: ScreenProps) {
               <div><div style={{ fontWeight: 700 }}>Your global rank</div><div className="tiny muted">Top 14% · {s.me.settled} settled bets</div></div>
             </div>
             <div className="row gap-20">
-              <div className="stat"><span className="s-val tnum text-green">+{s.me.roi}%</span><span className="s-lbl">ROI</span></div>
+              <div className="stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">ROI</span></div>
               <div className="stat"><span className="s-val tnum">{s.me.won}/{s.me.settled}</span><span className="s-lbl">Won</span></div>
-              <TierPill tier="Gold" />
+              <TierPill tier={s.tier || 'Bronze'} />
             </div>
           </div>
         </div>
@@ -84,8 +89,8 @@ export function Leaderboard({ s }: ScreenProps) {
                 <div className="display" style={{ fontSize: 22, color: ['#FFC83D', '#AEB8D0', '#c08457'][i] }}>{['🥇', '🥈', '🥉'][i]}</div>
                 <Avatar initials={p.name.slice(0, 2).toUpperCase()} size={48} color={TIER_C[p.tier]} ring={TIER_C[p.tier]} />
                 <div className="small" style={{ fontWeight: 700, marginTop: 8 }}>{p.name}</div>
-                <div className="tnum text-green" style={{ fontWeight: 700, fontSize: 18 }}>+{p.roi}%</div>
-                <div className="tiny muted">+{p.net.toLocaleString()} net</div>
+                <div className="tnum" style={{ fontWeight: 700, fontSize: 18, color: sgnCol(p.roi) }}>{sgnPct(p.roi)}</div>
+                <div className="tiny muted">{sgnNum(p.net)} net</div>
               </div>
             ))}
           </div>
@@ -110,8 +115,8 @@ export function Leaderboard({ s }: ScreenProps) {
                       <td className="tnum muted">{p.rank}</td>
                       <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span style={{ fontWeight: 600 }}>{p.name}</span></div></td>
                       <td><TierPill tier={p.tier} /></td>
-                      <td style={{ textAlign: 'right' }} className="tnum text-green">+{p.roi}%</td>
-                      <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">+{p.net.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', color: sgnCol(p.roi) }} className="tnum">{sgnPct(p.roi)}</td>
+                      <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">{sgnNum(p.net)}</td>
                       <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">{p.won}/{p.settled}</td>
                     </tr>
                   ))}
@@ -286,8 +291,15 @@ function ParlayBuilder({ s }: ScreenProps) {
 }
 
 /* ===================== MY BETS ===================== */
+interface BetMatchLite { name: string; code: string | null; flagUrl: string | null }
 export function MyBets({ s }: ScreenProps) {
   const [f, setF] = useState('all');
+  const [mmap, setMmap] = useState<Map<number, { home: BetMatchLite | null; away: BetMatchLite | null }>>(new Map());
+  useEffect(() => {
+    fetch('/api/v1/matches').then(r => (r.ok ? r.json() : null))
+      .then(j => setMmap(new Map(((j?.data ?? []) as { id: number; home: BetMatchLite | null; away: BetMatchLite | null }[]).map(m => [m.id, { home: m.home, away: m.away }]))))
+      .catch(() => {});
+  }, []);
   let list = s.bets.slice().reverse();
   if (f === 'open') list = list.filter((b) => b.status === 'OPEN' || b.status === 'LIVE');
   if (f === 'won') list = list.filter((b) => b.status === 'WON');
@@ -300,7 +312,7 @@ export function MyBets({ s }: ScreenProps) {
     <div className="page fade-up">
       <SecHead title="My bets" sub="Every prediction, settled or live" />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', marginBottom: 18 }}>
-        <div className="card card-pad stat"><span className="s-val tnum text-green">+{s.me.roi}%</span><span className="s-lbl">ROI</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">ROI</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{Math.round(won / (settled.length || 1) * 100)}%</span><span className="s-lbl">Win rate</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{settled.length}</span><span className="s-lbl">Settled</span></div>
         <div className="card card-pad stat"><span className="s-val tnum" style={{ color: net >= 0 ? 'var(--green)' : 'var(--danger)' }}>{net >= 0 ? '+' : ''}{net}</span><span className="s-lbl">Net points</span></div>
@@ -314,16 +326,15 @@ export function MyBets({ s }: ScreenProps) {
 
       <div className="stack gap-10">
         {list.map((b, i) => {
-          const m = WC.matchById(b.mid);
-          if (!m) return null;
-          const home = WC.byId(m.home), away = WC.byId(m.away);
+          const mm = mmap.get(b.mid);
           const c = b.status === 'WON' ? 'green' : b.status === 'LOST' ? 'danger' : b.status === 'LIVE' ? 'magenta' : 'sky';
           const profit = (b.payout || 0) - b.stake;
           return (
-            <div key={i} className="card card-pad card-hover pointer" onClick={() => s.go('match', { id: m.id })}>
+            <div key={i} className="card card-pad card-hover pointer" onClick={() => s.go('match', { id: b.mid })}>
               <div className="row between">
                 <div className="row gap-10" style={{ minWidth: 0 }}>
-                  <Flag team={home} size={24} /><span className="small ellip">{home.code} v {away.code}</span>
+                  {mm?.home && <Flag flagUrl={mm.home.flagUrl ?? undefined} name={mm.home.name} code={mm.home.code ?? undefined} size={24} />}
+                  <span className="small ellip">{mm?.home?.code ?? '?'} v {mm?.away?.code ?? '?'}</span>
                   <span className="badge badge-muted">{b.pick}</span>
                 </div>
                 <span className={`badge badge-${c}`}>{b.status === 'LIVE' ? <><span className="live-dot"></span>LIVE</> : b.status}</span>
@@ -414,9 +425,25 @@ interface ShopItem {
   equipped: boolean;
 }
 
-const KIND_ICON: Record<string, string> = { avatar: 'star', frame: 'shield', theme: 'target' };
+const SHOP_ACCENTS = ['var(--gold)', 'var(--sky)', 'var(--green)', 'var(--magenta)', 'var(--purple)'];
+function accentFor(code: string): string {
+  let h = 0;
+  for (let i = 0; i < code.length; i++) h = (h + code.charCodeAt(i)) % 997;
+  return SHOP_ACCENTS[h % SHOP_ACCENTS.length];
+}
+function initialsOf(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+}
+const SHOP_SECTIONS: [string, string][] = [['avatar', 'Avatars'], ['frame', 'Frames'], ['theme', 'Themes']];
 
-function CosmeticShop({ s }: ScreenProps) {
+function ShopPreview({ kind, code, name }: { kind: string; code: string; name: string }) {
+  const accent = accentFor(code);
+  if (kind === 'theme') return <div style={{ width: 52, height: 52, borderRadius: 12, background: `linear-gradient(135deg, ${accent}, var(--bg-2))`, border: '1px solid var(--line-strong)' }} />;
+  if (kind === 'frame') return <Avatar initials={initialsOf(name)} color="var(--surface-2)" ring={accent} size={52} />;
+  return <Avatar initials={initialsOf(name)} color={accent} size={52} />;
+}
+
+export function CosmeticShop({ s }: ScreenProps) {
   const [items, setItems] = React.useState<ShopItem[]>([]);
 
   function fetchShop() {
@@ -457,26 +484,45 @@ function CosmeticShop({ s }: ScreenProps) {
 
   if (!s.authed) return null;
 
+  const sections: [string, ShopItem[]][] = [];
+  for (const [k, label] of SHOP_SECTIONS) {
+    const list = items.filter((i) => i.kind === k);
+    if (list.length) sections.push([label, list]);
+  }
+  const other = items.filter((i) => !['avatar', 'frame', 'theme'].includes(i.kind));
+  if (other.length) sections.push(['More', other]);
+
   return (
     <div>
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Cosmetic shop</div>
-      <div className="stack gap-8">
-        {items.length === 0 && <div className="card card-pad"><span className="tiny muted">Loading items…</span></div>}
-        {items.map((item) => (
-          <div key={item.code} className="card card-pad row between wrap gap-12">
-            <div className="row gap-10">
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', flex: 'none' }}>
-                <Icon name={KIND_ICON[item.kind] ?? 'star'} size={18} style={{ color: 'var(--gold)' }} />
-              </div>
-              <div>
-                <div className="small" style={{ fontWeight: 700 }}>{item.name}</div>
-                <div className="tiny muted">{item.kind} · <span className="tnum">{Number(item.price)} pts</span></div>
-              </div>
-            </div>
-            <div className="row gap-8">
-              {item.owned
-                ? <Btn variant={item.equipped ? 'primary' : 'ghost'} size="sm" onClick={() => handleEquip(item.id)}>{item.equipped ? 'Equipped' : 'Equip'}</Btn>
-                : <Btn variant="gold" size="sm" onClick={() => handleBuy(item.code)}>Buy</Btn>}
+      <div className="row between mt-24" style={{ marginBottom: 12 }}>
+        <span className="eyebrow">Cosmetic shop</span>
+        <span className="badge badge-gold tnum">◇ {s.points.toLocaleString()} pts</span>
+      </div>
+      {items.length === 0 && <div className="card card-pad"><span className="tiny muted">Loading items…</span></div>}
+      <div className="stack gap-18">
+        {sections.map(([label, list]) => (
+          <div key={label}>
+            <div className="tiny muted" style={{ fontWeight: 700, letterSpacing: '.06em', marginBottom: 8 }}>{label.toUpperCase()}</div>
+            <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
+              {list.map((item) => {
+                const price = Number(item.price);
+                const afford = s.points >= price;
+                return (
+                  <div key={item.code} className="card card-pad stack center gap-8" style={{ textAlign: 'center', borderColor: item.equipped ? 'rgba(43,224,138,.4)' : 'var(--line)' }}>
+                    <ShopPreview kind={item.kind} code={item.code} name={item.name} />
+                    <div className="small" style={{ fontWeight: 700 }}>{item.name}</div>
+                    <span className="badge badge-gold tnum">★ {price} pts</span>
+                    {item.owned
+                      ? <Btn variant={item.equipped ? 'primary' : 'ghost'} size="sm" className="btn-block" disabled={item.equipped} onClick={() => handleEquip(item.id)}>{item.equipped ? 'Equipped' : 'Equip'}</Btn>
+                      : (
+                        <>
+                          <Btn variant="gold" size="sm" className="btn-block" disabled={!afford} onClick={() => handleBuy(item.code)}>Buy</Btn>
+                          {!afford && <span className="tiny muted">Need {(price - s.points).toLocaleString()} more</span>}
+                        </>
+                      )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -531,6 +577,21 @@ export function Profile({ s }: ScreenProps) {
   const [meId, setMeId] = React.useState<string | null>(null);
   const [powerUpInventory, setPowerUpInventory] = React.useState<Record<string, number>>({});
   const [buyingPowerUp, setBuyingPowerUp] = React.useState<string | null>(null);
+  const [editing, setEditing] = React.useState(false);
+  const [editName, setEditName] = React.useState('');
+  const [savingName, setSavingName] = React.useState(false);
+
+  const saveName = async () => {
+    const username = editName.trim();
+    if (!username || savingName) return;
+    setSavingName(true);
+    try {
+      const res = await fetch('/api/v1/me', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username }) });
+      setSavingName(false);
+      if (res.ok) { s.toastMsg('Profile updated', 'check', 'var(--green)'); setEditing(false); s.refreshUser(); }
+      else { const j = await res.json().catch(() => ({})); s.toastMsg(j?.error?.code === 'USERNAME_TAKEN' ? 'That name is taken' : 'Could not update profile', 'alert', 'var(--danger)'); }
+    } catch { setSavingName(false); s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
 
   useEffect(() => {
     fetch('/api/v1/me')
@@ -639,7 +700,12 @@ export function Profile({ s }: ScreenProps) {
 
   async function handleResolve(duelId: string) {
     const res = await fetch(`/api/v1/duels/${duelId}/resolve`, { method: 'POST' });
-    if (res.ok) fetchDuels();
+    if (res.ok) {
+      const j = await res.json().catch(() => ({}));
+      const d = j?.data;
+      if (d) s.toastMsg(`ROI race: ${sgnPct(d.challengerRoi ?? 0)} vs ${sgnPct(d.opponentRoi ?? 0)}`, 'trophy', 'var(--gold)');
+      fetchDuels();
+    } else s.toastMsg('Could not resolve duel', 'alert', 'var(--danger)');
   }
 
   async function handleChangePassword() {
@@ -699,13 +765,25 @@ export function Profile({ s }: ScreenProps) {
               </div>
             </div>
           </div>
-          <Btn variant="ghost" size="sm" icon="edit">Edit</Btn>
+          <Btn variant="ghost" size="sm" icon="edit" onClick={() => { setEditName(me.name); setEditing(true); }}>Edit</Btn>
         </div>
       </div>
 
+      {editing && (
+        <Portal><div className="overlay" onClick={() => setEditing(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="card-pad-lg">
+              <div className="row between"><span className="eyebrow">Edit profile</span><button className="btn-icon" onClick={() => setEditing(false)}><Icon name="x" size={18} /></button></div>
+              <div className="field mt-16"><label className="label">Display name</label><input className="input" value={editName} maxLength={30} onChange={(e) => setEditName(e.target.value)} /></div>
+              <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={!editName.trim() || savingName} onClick={saveName}>{savingName ? 'Saving…' : 'Save'}</Btn>
+            </div>
+          </div>
+        </div></Portal>
+      )}
+
       {/* stats */}
       <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))' }}>
-        {([['Balance', s.points.toLocaleString(), 'var(--gold)'], ['ROI', '+' + me.roi + '%', 'var(--green)'], ['Rank', '#' + (me.rank ?? '—'), 'var(--sky)'], ['Settled', String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
+        {([['Balance', s.points.toLocaleString(), 'var(--gold)'], ['ROI', sgnPct(me.roi), sgnCol(me.roi)], ['Rank', '#' + (me.rank ?? '—'), 'var(--sky)'], ['Settled', String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
           <div key={l} className="card card-pad stat"><span className="s-val tnum" style={{ color: c, fontSize: 22 }}>{v}</span><span className="s-lbl">{l}</span></div>
         ))}
       </div>
@@ -745,13 +823,18 @@ export function Profile({ s }: ScreenProps) {
           <div className="row gap-8"><Icon name="users" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Refer &amp; earn</span></div>
           <p className="tiny t2 mt-8">Invite a friend — you both get +300 points. {referral ? `${referral.count} friend${referral.count !== 1 ? 's' : ''} referred so far.` : 'You both get +300 points when they place their first bet.'}</p>
           <div className="row gap-8 mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
-            <span className="tnum small grow ellip">{referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : 'golazo.gg/r/alexr'}</span>
-            <Btn variant="primary" size="sm" onClick={() => s.toastMsg('Invite link copied!', 'check')}>Copy</Btn>
+            <span className="tnum small grow ellip">{referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : 'Generating your invite link…'}</span>
+            <Btn variant="primary" size="sm" disabled={!referral} onClick={() => {
+              const url = referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : '';
+              if (url && typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(() => s.toastMsg('Invite link copied!', 'check', 'var(--green)')).catch(() => s.toastMsg('Copy failed', 'alert', 'var(--danger)'));
+              } else s.toastMsg('No invite link yet', 'alert', 'var(--gold)');
+            }}>Copy</Btn>
           </div>
         </div>
         <div className="card card-pad" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
           <div className="row gap-8"><Icon name="share" size={18} style={{ color: 'var(--green)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Share your form</span></div>
-          <p className="tiny t2 mt-8">&quot;I&apos;m +{me.roi}% ROI and {me.won} bets up at the World Cup.&quot; Make a share card.</p>
+          <p className="tiny t2 mt-8">&quot;I&apos;m {sgnPct(me.roi)} ROI and {me.won} bets up at the World Cup.&quot; Make a share card.</p>
           <div className="row gap-8 mt-12">
             <Btn variant="ghost" size="sm" icon="share" onClick={() => {
               const params = new URLSearchParams({
@@ -812,10 +895,11 @@ export function Profile({ s }: ScreenProps) {
         <div className="stack gap-10">
           {/* challenge form */}
           <div className="card card-pad">
-            <div className="row gap-8" style={{ marginBottom: 12 }}><Icon name="target" size={18} style={{ color: 'var(--magenta)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Challenge someone</span></div>
+            <div className="row gap-8" style={{ marginBottom: 8 }}><Icon name="target" size={18} style={{ color: 'var(--magenta)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Challenge someone</span></div>
+            <p className="tiny muted" style={{ marginBottom: 12 }}>Head-to-head <b>ROI race</b>: whoever earns the higher ROI on bets settled <i>from when the challenge is issued</i> until it's resolved wins. Opponent must accept, then either player can resolve any time — bragging rights only, no points at stake.</p>
             <div className="stack gap-8">
               <div className="field"><label className="label">Opponent user ID</label><input className="input" value={duelOpponentId} onChange={(e) => setDuelOpponentId(e.target.value)} placeholder="e.g. 42" /></div>
-              <div className="field"><label className="label">Scope</label><input className="input" value={duelScope} onChange={(e) => setDuelScope(e.target.value)} placeholder="GLOBAL" /></div>
+              <div className="field"><label className="label">Label <span className="muted tiny">(optional)</span></label><input className="input" value={duelScope} onChange={(e) => setDuelScope(e.target.value)} placeholder="e.g. Group stage showdown" /></div>
               <Btn variant="primary" size="sm" disabled={!duelOpponentId} onClick={handleChallenge}>Send challenge</Btn>
             </div>
           </div>
@@ -831,7 +915,8 @@ export function Profile({ s }: ScreenProps) {
                 <div className="row between wrap gap-8">
                   <div>
                     <div className="small" style={{ fontWeight: 700 }}>{d.challengerName} <span className="muted">vs</span> {d.opponentName}</div>
-                    <div className="tiny muted">Scope: {d.scope}</div>
+                    {d.scope && d.scope !== 'GLOBAL' && <div className="tiny muted">{d.scope}</div>}
+                    <div className="tiny muted">Higher ROI since the challenge wins</div>
                     {d.status === 'DONE' && d.winnerId && <div className="tiny" style={{ color: 'var(--green)' }}>Winner: {d.winnerId === d.challengerId ? d.challengerName : d.opponentName}</div>}
                     {d.status === 'DONE' && !d.winnerId && <div className="tiny muted">Result: tie</div>}
                   </div>

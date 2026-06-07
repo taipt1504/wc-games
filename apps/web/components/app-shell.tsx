@@ -3,11 +3,12 @@
    GOLAZO — App shell · client router · global store (ported from app.jsx)
    ============================================================ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { WC, type Match, type Bet, type Pick1X2 } from '@/lib/wc';
-import type { Store, BetSlipState, LedgerEntry, MeProfile } from '@/lib/store';
+import { WC, type Bet } from '@/lib/wc';
+import { apiFetch } from '@/lib/api';
+import type { Store, LedgerEntry, MeProfile } from '@/lib/store';
 import { Btn, Icon, Avatar, Pundit, Toast, type ToastData } from '@/components/ui';
 import { Landing, Auth, Home } from '@/components/screens-core';
-import { Schedule, MatchDetail, BetSlip } from '@/components/screens-match';
+import { Schedule, MatchDetail } from '@/components/screens-match';
 import { Leaderboard, MyBets, Wallet, Profile } from '@/components/screens-compete';
 import { Teams, TeamDetail, Groups, Bracket } from '@/components/screens-tournament';
 import { Lobbies, LobbyCreate, LobbyView, BorrowModal } from '@/components/screens-lobby';
@@ -44,10 +45,26 @@ const ME_DEFAULT: MeProfile = {
   rank: WC.me.rank, roi: WC.me.roi, won: WC.me.won, lost: WC.me.lost, settled: WC.me.settled, joined: WC.me.joined,
 };
 
+/* URL <-> route+param sync so reload/back/forward preserve the screen (SPA, single Next page). */
+function routeToUrl(route: string, param: Record<string, unknown>): string {
+  if (route === 'home' || route === 'landing') return '/';
+  const sp = new URLSearchParams({ screen: route });
+  for (const [k, v] of Object.entries(param)) if (v != null) sp.set(k, String(v));
+  return `/?${sp.toString()}`;
+}
+function urlToRoute(): { route: string; param: Record<string, unknown> } | null {
+  const sp = new URLSearchParams(window.location.search);
+  const screen = sp.get('screen');
+  if (!screen) return null;
+  const param: Record<string, unknown> = {};
+  sp.forEach((v, k) => { if (k !== 'screen' && k !== 'auth_error' && k !== 'join') param[k] = v; });
+  return { route: screen, param };
+}
+
 export default function AppShell() {
   const [route, setRoute] = useState('landing');
+  const skipPush = useRef(false);
   const [param, setParam] = useState<Record<string, unknown>>({});
-  const [, setStack] = useState<{ route: string; param: Record<string, unknown> }[]>([]);
   const [authed, setAuthed] = useState(false);
   const authedRef = useRef(false);
   const [me, setMe] = useState<MeProfile>(ME_DEFAULT);
@@ -59,12 +76,32 @@ export default function AppShell() {
   const [streak, setStreak] = useState(WC.me.streak);
   const [winStreak, setWinStreak] = useState(WC.me.winStreak);
   const [checkedIn, setCheckedIn] = useState(false);
-  const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
   const [borrowOpen, setBorrowOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [booting, setBooting] = useState(true);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { window.scrollTo(0, 0); }, [route, param]);
+
+  // Push the current screen into the URL so reload/back/forward restore it.
+  useEffect(() => {
+    if (booting) return;
+    if (skipPush.current) { skipPush.current = false; return; }
+    const url = routeToUrl(route, param);
+    if (url !== window.location.pathname + window.location.search) window.history.pushState({}, '', url);
+  }, [route, param, booting]);
+
+  // Browser back/forward → restore screen from the URL (without re-pushing).
+  useEffect(() => {
+    const onPop = () => {
+      const r = urlToRoute();
+      skipPush.current = true;
+      if (r && (!GATED.includes(r.route) || authedRef.current)) { setRoute(r.route); setParam(r.param); }
+      else { setRoute(authedRef.current ? 'home' : 'landing'); setParam({}); }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const toastMsg = useCallback((msg: string, icon?: string, color?: string) => {
     setToast({ msg, icon, color });
@@ -73,28 +110,17 @@ export default function AppShell() {
   }, []);
 
   const go = useCallback((r: string, p: Record<string, unknown> = {}) => {
-    if (!authedRef.current && GATED.includes(r)) {
-      setStack((st) => [...st, { route, param }]);
-      setRoute('auth'); setParam({ mode: 'signup' });
-      return;
-    }
-    setStack((st) => [...st, { route, param }]);
+    if (!authedRef.current && GATED.includes(r)) { setRoute('auth'); setParam({ mode: 'signup' }); return; }
     setRoute(r); setParam(p);
-  }, [route, param]);
-
-  const back = useCallback(() => {
-    setStack((st) => {
-      if (!st.length) { setRoute('home'); setParam({}); return st; }
-      const prev = st[st.length - 1];
-      setRoute(prev.route); setParam(prev.param);
-      return st.slice(0, -1);
-    });
   }, []);
+
+  // Single history model: in-app Back = browser Back (popstate restores the screen from the URL).
+  const back = useCallback(() => { window.history.back(); }, []);
 
   const refreshUser = useCallback(async () => {
     try {
       const [meR, betsR, ledR] = await Promise.all([
-        fetch('/api/v1/me'), fetch('/api/v1/me/predictions'), fetch('/api/v1/me/ledger'),
+        apiFetch('/api/v1/me'), apiFetch('/api/v1/me/predictions'), apiFetch('/api/v1/me/ledger'),
       ]);
       if (meR.ok) {
         const j = await meR.json(); const d = j.data;
@@ -110,8 +136,48 @@ export default function AppShell() {
     } catch { /* keep current state on network error */ }
   }, []);
 
+  // Rehydrate the session on load: the access JWT cookie persists (apiFetch silently rotates
+  // the refresh token when it has expired), so a valid /me means the user is still logged in
+  // after a refresh (F5 must not log them out). Also surfaces any OAuth redirect error.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const authError = params.get('auth_error');
+      const joinCode = params.get('join'); // invite link → auto-join after auth
+      const fromUrl = urlToRoute(); // deep link to a screen (captured before we clean the URL)
+      if (authError) {
+        const msg = authError === 'google_not_configured' ? 'Google login isn’t configured yet'
+          : authError === 'banned' ? 'This account is banned'
+            : 'Google sign-in failed';
+        toastMsg(msg, 'alert', 'var(--danger)');
+      }
+      const setTarget = (r: string, p: Record<string, unknown>) => {
+        skipPush.current = true; setRoute(r); setParam(p);
+        window.history.replaceState({}, '', routeToUrl(r, p));
+      };
+      try {
+        const res = await apiFetch('/api/v1/me');
+        if (!cancelled && res.ok) {
+          authedRef.current = true;
+          setAuthed(true);
+          if (joinCode) setTarget('lobbies', { join: joinCode });
+          else setTarget(fromUrl?.route ?? 'home', fromUrl?.param ?? {});
+          void refreshUser();
+        } else if (!cancelled) {
+          // guest: restore a public deep link; gated screens fall back to the landing page
+          if (fromUrl && !GATED.includes(fromUrl.route)) setTarget(fromUrl.route, fromUrl.param);
+          else setTarget('landing', {});
+          if (joinCode) toastMsg('Sign in to join the lobby from your invite link', 'lock', 'var(--gold)');
+        }
+      } catch { /* stay logged out on network error */ }
+      finally { if (!cancelled) setBooting(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshUser, toastMsg]);
+
   const store: Store = {
-    route, param, me, points, role, tier, bets, ledger, streak, winStreak, checkedIn, betSlip, borrowOpen, toast, authed,
+    route, param, me, points, role, tier, bets, ledger, streak, winStreak, checkedIn, borrowOpen, toast, authed,
     go, back, toastMsg, refreshUser,
     login: async (email?: string, password?: string, mode?: string) => {
       const endpoint = mode === 'login' ? 'login' : 'register';
@@ -131,7 +197,7 @@ export default function AppShell() {
           );
           return;
         }
-        authedRef.current = true; setAuthed(true); setStack([]); setRoute('home'); setParam({}); void refreshUser();
+        authedRef.current = true; setAuthed(true); setRoute('home'); setParam({}); void refreshUser();
         toastMsg(endpoint === 'register' ? 'Welcome! +1,000 points added 🎉' : 'Welcome back!', 'star', 'var(--gold)');
       } catch {
         toastMsg('Network error — try again', 'alert', 'var(--danger)');
@@ -141,7 +207,7 @@ export default function AppShell() {
       void fetch('/api/v1/auth/logout', { method: 'POST' });
       authedRef.current = false; setAuthed(false);
       setRole('USER'); setMe(ME_DEFAULT); setPoints(0); setBets([]); setLedger([]); setStreak(0); setWinStreak(0); setTier(WC.me.tier); setCheckedIn(false);
-      setStack([]); setRoute('landing'); setParam({});
+      setRoute('landing'); setParam({});
     },
     checkin: async () => {
       if (checkedIn) return;
@@ -167,53 +233,20 @@ export default function AppShell() {
         }
       } catch { toastMsg('Network error', 'alert', 'var(--danger)'); }
     },
-    pickFor: (mid: number) => bets.find((x) => x.mid === mid && x.status === 'OPEN')?.pick,
-    openBet: (match: Match, pick: Pick1X2, odds: number) => {
-      if (!authedRef.current) { toastMsg('Sign up free to place a bet', 'lock', 'var(--gold)'); go('auth', { mode: 'signup' }); return; }
-      setBetSlip({ match, pick, odds });
-    },
-    setSlipPick: (pick: Pick1X2, odds: number) => setBetSlip((b) => (b ? { ...b, pick, odds } : b)),
-    closeBet: () => setBetSlip(null),
-    confirmBet: async (stake: number, exact?: { home: number; away: number }, powerUp?: string) => {
-      if (!betSlip) return;
-      const { match, pick, odds } = betSlip;
-      try {
-        const res = await fetch('/api/v1/predictions', {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ matchId: match.id, outcome: pick, stake, exactHome: exact?.home, exactAway: exact?.away, powerUp: powerUp || undefined }),
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          setBetSlip(null);
-          toastMsg(j?.error?.code ? `Bet failed: ${j.error.code}` : 'Bet failed', 'alert', 'var(--danger)');
-          return;
-        }
-      } catch {
-        setBetSlip(null);
-        toastMsg('Network error — bet not placed', 'alert', 'var(--danger)');
-        return;
-      }
-      setPoints((p) => p - stake);
-      setBets((bs) => {
-        const ex = bs.findIndex((b) => b.mid === match.id && b.status === 'OPEN');
-        const nb: Bet = { mid: match.id, pick, stake, odds, status: 'OPEN' };
-        if (ex >= 0) { const cp = bs.slice(); cp[ex] = nb; return cp; }
-        return [...bs, nb];
-      });
-      setBetSlip(null);
-      toastMsg(`Bet placed · ${stake} pts on ${pick}`, 'check', 'var(--green)');
-      void refreshUser(); // sync balance + bets + ledger from the DB
-    },
     openBorrow: () => setBorrowOpen(true),
     closeBorrow: () => setBorrowOpen(false),
   };
+
+  if (booting) {
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><span className="rail-logo" style={{ padding: 0, fontSize: 28 }}>GOLAZO</span></div>;
+  }
 
   const Screen = ROUTES[route] || Home;
   const full = FULLBLEED.includes(route);
   const active = navKey(route);
 
   if (full) {
-    return (<><Screen s={store} /><BetSlip s={store} /><Toast toast={toast} /></>);
+    return (<><Screen s={store} /><Toast toast={toast} /></>);
   }
 
   if (!authed) {
@@ -221,7 +254,7 @@ export default function AppShell() {
       <div>
         <header className="pubbar">
           <div className="pubbar-inner">
-            <span className="rail-logo pointer" style={{ padding: 0, fontSize: 24 }} onClick={() => { setStack([]); setRoute('landing'); }}>GOLAZO</span>
+            <span className="rail-logo pointer" style={{ padding: 0, fontSize: 24 }} onClick={() => { setRoute('landing'); setParam({}); }}>GOLAZO</span>
             <nav className="pub-nav">
               {PUB_NAV.map(([k, l]) => <span key={k} className={`pub-link ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{l}</span>)}
             </nav>
@@ -250,7 +283,6 @@ export default function AppShell() {
             </div>
           </div>
         )}
-        <BetSlip s={store} />
         <Toast toast={toast} />
       </div>
     );
@@ -306,7 +338,6 @@ export default function AppShell() {
         ))}
       </nav>
 
-      <BetSlip s={store} />
       <BorrowModal s={store} />
       <Toast toast={toast} />
     </div>

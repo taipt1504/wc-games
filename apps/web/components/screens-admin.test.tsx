@@ -78,6 +78,38 @@ describe('Admin', () => {
     expect(screen.getByText('Tournament management')).toBeInTheDocument();
   });
 
+  it('clicking a match row opens the real match detail page', async () => {
+    const M = {
+      id: 1, round: 'GROUP', group: 'A', status: 'SCHEDULED', kickoffAt: '2026-06-11T18:00:00.000Z',
+      home: { id: 1, name: 'Mexico', code: 'MEX', flagUrl: null },
+      away: { id: 2, name: 'South Africa', code: 'RSA', flagUrl: null },
+      scoreHome: null, scoreAway: null, result: null,
+      odds: { mHome: 1.6, mDraw: 2.3, mAway: 2.08 }, bettingLocked: false, venue: { name: 'Estadio Azteca' },
+    };
+    global.fetch = makeFetch({ '/api/v1/matches': [M], '/api/v1/matches/1': M, '/api/v1/admin/users': [STUB_USER] }) as unknown as typeof fetch;
+    render(<Admin s={mockStore()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /Tournament/i })[0]);
+    fireEvent.click(await screen.findByText(/MEX v RSA/i)); // open match detail
+    expect(await screen.findByText(/Back to fixtures/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Estadio Azteca/i)).toBeInTheDocument(); // real /matches/:id data
+    expect(screen.getByText(/House odds/i)).toBeInTheDocument();
+  });
+
+  it('match detail shows the data-sync panel', async () => {
+    const M = {
+      id: 1, round: 'GROUP', group: 'A', status: 'SCHEDULED', kickoffAt: '2026-06-11T18:00:00.000Z',
+      home: { id: 1, name: 'Mexico', code: 'MEX', flagUrl: null }, away: { id: 2, name: 'South Africa', code: 'RSA', flagUrl: null },
+      scoreHome: null, scoreAway: null, result: null, odds: { mHome: 1.6, mDraw: 2.3, mAway: 2.08 }, bettingLocked: false, venue: { name: 'Azteca' },
+    };
+    global.fetch = makeFetch({ '/api/v1/matches': [M], '/api/v1/matches/1': M, '/api/v1/admin/users': [STUB_USER] }) as unknown as typeof fetch;
+    render(<Admin s={mockStore()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /Tournament/i })[0]);
+    fireEvent.click(await screen.findByText(/MEX v RSA/i));
+    expect(await screen.findByText(/Data sync/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sync result/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sync lineup/i })).toBeInTheDocument();
+  });
+
   it('clicking Users tab shows User management heading', () => {
     render(<Admin s={mockStore()} />);
     const usersBtn = screen.getAllByRole('button', { name: /^Users$/i })[0];
@@ -92,11 +124,11 @@ describe('Admin', () => {
     expect(screen.getByText('Lobby risk queue')).toBeInTheDocument();
   });
 
-  it('clicking Review queue tab shows News review queue heading', () => {
+  it('clicking News tab shows the news management heading', () => {
     render(<Admin s={mockStore()} />);
-    const reviewBtn = screen.getAllByRole('button', { name: /Review queue/i })[0];
+    const reviewBtn = screen.getAllByRole('button', { name: /^News$/i })[0];
     fireEvent.click(reviewBtn);
-    expect(screen.getByText('News review queue')).toBeInTheDocument();
+    expect(screen.getByText(/AI-drafted stories/i)).toBeInTheDocument();
   });
 
   it('clicking AI pipeline tab shows AI & data pipeline heading', () => {
@@ -140,6 +172,22 @@ describe('Admin', () => {
     // rows[0] is header, rows[1] is first data row
     fireEvent.click(rows[1]);
     expect(screen.getByText(/Back to users/i)).toBeInTheDocument();
+  });
+
+  it('user detail shows real ledger + balance from the endpoint', async () => {
+    const DETAIL = {
+      id: 1, email: 'test@test.com', name: 'TestUser', role: 'USER', status: 'active', joined: '2024-01-01',
+      balance: 1450, winRate: 60, roi: 12, settled: 5, won: 3,
+      ledger: [{ type: 'SETTLE', amount: 283, balanceAfter: 1450, when: '2026-06-07T10:00:00Z' }],
+      bets: [{ matchId: 1, pick: '1', stake: 100, odds: 1.8, status: 'WON' }],
+    };
+    global.fetch = makeFetch({ '/api/v1/admin/users': [STUB_USER], '/api/v1/admin/users/1': DETAIL, '/api/v1/matches': [] }) as unknown as typeof fetch;
+    render(<Admin s={mockStore()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Users$/i })[0]);
+    await screen.findByText('TestUser');
+    fireEvent.click(screen.getAllByRole('row')[1]);
+    expect(await screen.findByText(/SETTLE/)).toBeInTheDocument(); // real ledger entry
+    expect(screen.getByText('1,450')).toBeInTheDocument(); // real balance KPI
   });
 
   it('overview shows empty risk flag state when no flags fetched', async () => {
