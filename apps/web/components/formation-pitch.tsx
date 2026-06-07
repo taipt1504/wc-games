@@ -1,7 +1,8 @@
 'use client';
-/* GOLAZO — FormationPitch: starting XI on a pitch (manager + bench), shared by user + admin. */
+/* World Cup Games — FormationPitch: starting XI on a pitch (manager + bench), shared by user + admin. */
 import React from 'react';
 import { Icon } from '@/components/ui';
+import { useT } from '@/lib/i18n/hooks';
 
 export interface LineupPlayer { name: string; position: string | null; number: number | null; starter?: boolean }
 
@@ -37,6 +38,7 @@ function Chip({ p }: { p: LineupPlayer }) {
 }
 
 export function FormationPitch({ players, formation, manager }: { players: LineupPlayer[]; formation?: string | null; manager?: string | null }) {
+  const { t } = useT();
   const starters = players.filter((p) => p.starter);
   const onPitch = starters.length > 0 ? starters : players; // fallback: render whole squad by band
   const bench = starters.length > 0 ? players.filter((p) => !p.starter) : [];
@@ -74,7 +76,7 @@ export function FormationPitch({ players, formation, manager }: { players: Lineu
 
       {bench.length > 0 && (
         <div>
-          <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>BENCH</div>
+          <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{t('tournament.bench')}</div>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 8 }}>
             {bench.map((p, i) => (
               <div key={i} className="card-2" style={{ borderRadius: 'var(--r-xs)', padding: '8px 12px', textAlign: 'center' }}>

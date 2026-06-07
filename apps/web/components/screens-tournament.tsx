@@ -1,9 +1,10 @@
 'use client';
-/* GOLAZO — Teams · Team detail · Groups · Bracket — real data from /api/v1 (Phase 2A-2). */
+/* World Cup Games — Teams · Team detail · Groups · Bracket — real data from /api/v1 (Phase 2A-2). */
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, SecHead } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
+import { useT } from '@/lib/i18n/hooks';
 
 /* ---- API shapes (apps/web/app/api/v1) ---- */
 interface ApiTeam { id: number; name: string; code: string | null; flagUrl: string | null; fifaRank: number | null; group: string | null }
@@ -39,29 +40,30 @@ function useJson<T>(url: string | null): { data: T | null; loading: boolean } {
 
 /* ===================== TEAMS ===================== */
 export function Teams({ s }: ScreenProps) {
+  const { t } = useT();
   const [group, setGroup] = useState('all');
   const { data: teams, loading } = useJson<ApiTeam[]>('/api/v1/teams');
-  const list = (teams ?? []).filter((t) => group === 'all' || t.group === group);
+  const list = (teams ?? []).filter((tm) => group === 'all' || tm.group === group);
 
   return (
     <div className="page fade-up">
-      <SecHead title="Teams" sub="All 48 nations at World Cup 2026" />
+      <SecHead title={t('tournament.teamsTitle')} sub={t('tournament.teamsSub')} />
       <div className="row gap-8 wrap-w" style={{ marginBottom: 18 }}>
-        <button className={`chip ${group === 'all' ? 'active' : ''}`} onClick={() => setGroup('all')}>All</button>
+        <button className={`chip ${group === 'all' ? 'active' : ''}`} onClick={() => setGroup('all')}>{t('tournament.all')}</button>
         {GROUPS.map((g) => (
-          <button key={g} className={`chip ${group === g ? 'active' : ''}`} onClick={() => setGroup(g)}>Grp {g}</button>
+          <button key={g} className={`chip ${group === g ? 'active' : ''}`} onClick={() => setGroup(g)}>{t('tournament.grp', { g })}</button>
         ))}
       </div>
-      {loading ? <p className="muted small">Loading teams…</p>
-        : list.length === 0 ? <p className="muted small">No teams found.</p>
+      {loading ? <p className="muted small">{t('tournament.loadingTeams')}</p>
+        : list.length === 0 ? <p className="muted small">{t('tournament.noTeams')}</p>
           : (
             <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(168px,1fr))' }}>
-              {list.map((t) => (
-                <div key={t.id} className="card card-pad card-hover pointer" onClick={() => s.go('team', { id: t.id })}>
-                  <div className="row between"><Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={40} /><span className="badge badge-muted">Grp {t.group ?? '—'}</span></div>
-                  <div className="h3 mt-12" style={{ fontSize: 16 }}>{t.name}</div>
+              {list.map((tm) => (
+                <div key={tm.id} className="card card-pad card-hover pointer" onClick={() => s.go('team', { id: tm.id })}>
+                  <div className="row between"><Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={40} /><span className="badge badge-muted">{t('tournament.grp', { g: tm.group ?? '—' })}</span></div>
+                  <div className="h3 mt-12" style={{ fontSize: 16 }}>{tm.name}</div>
                   <div className="row between mt-4">
-                    <span className="tiny muted">{t.fifaRank ? `FIFA #${t.fifaRank}` : t.code}</span>
+                    <span className="tiny muted">{tm.fifaRank ? t('tournament.fifaShort', { n: tm.fifaRank }) : tm.code}</span>
                   </div>
                 </div>
               ))}
@@ -73,70 +75,71 @@ export function Teams({ s }: ScreenProps) {
 
 /* ===================== TEAM DETAIL ===================== */
 export function TeamDetail({ s }: ScreenProps) {
+  const { t, fmt } = useT();
   const id = Number(s.param.id);
-  const { data: t, loading } = useJson<ApiTeamDetail>(`/api/v1/teams/${id}`);
+  const { data: tm, loading } = useJson<ApiTeamDetail>(`/api/v1/teams/${id}`);
 
-  if (loading) return <div className="page page-narrow fade-up"><p className="muted small">Loading…</p></div>;
-  if (!t) return <div className="page page-narrow fade-up"><button className="chip" onClick={() => s.back()}><Icon name="chevL" size={14} /> Back</button><p className="muted small mt-16">Team not found.</p></div>;
+  if (loading) return <div className="page page-narrow fade-up"><p className="muted small">{t('common.loading')}</p></div>;
+  if (!tm) return <div className="page page-narrow fade-up"><button className="chip" onClick={() => s.back()}><Icon name="chevL" size={14} /> {t('common.back')}</button><p className="muted small mt-16">{t('tournament.teamNotFound')}</p></div>;
 
   // Record from this team's FINISHED group matches (PRD §15: derived from results).
   let w = 0, d = 0, l = 0, gf = 0, ga = 0;
-  for (const m of t.matches) {
+  for (const m of tm.matches) {
     if (m.round !== 'GROUP' || m.status !== 'FINISHED' || m.scoreHome == null || m.scoreAway == null) continue;
-    const isHome = m.home?.id === t.id;
+    const isHome = m.home?.id === tm.id;
     const own = isHome ? m.scoreHome : m.scoreAway;
     const opp = isHome ? m.scoreAway : m.scoreHome;
     gf += own; ga += opp;
     if (own > opp) w++; else if (own < opp) l++; else d++;
   }
   const pts = w * 3 + d, gd = gf - ga;
-  const fixtures = t.matches.slice(0, 6);
+  const fixtures = tm.matches.slice(0, 6);
 
   return (
     <div className="page page-narrow fade-up">
-      <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back</button>
+      <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> {t('common.back')}</button>
       <div className="panel card-pad-lg">
         <div className="row gap-16">
-          <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={72} />
+          <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={72} />
           <div>
-            <h1 className="h2">{t.name}</h1>
+            <h1 className="h2">{tm.name}</h1>
             <div className="row gap-8 mt-8">
-              <span className="badge badge-muted">Group {t.group ?? '—'}</span>
-              {t.fifaRank && <span className="badge badge-sky">FIFA #{t.fifaRank}</span>}
-              {t.code && <span className="badge badge-muted">{t.code}</span>}
+              <span className="badge badge-muted">{t('tournament.group', { g: tm.group ?? '—' })}</span>
+              {tm.fifaRank && <span className="badge badge-sky">{t('tournament.fifaShort', { n: tm.fifaRank })}</span>}
+              {tm.code && <span className="badge badge-muted">{tm.code}</span>}
             </div>
           </div>
         </div>
         <div className="row gap-20 mt-16">
-          <div className="stat"><span className="s-val tnum">{w}-{d}-{l}</span><span className="s-lbl">W-D-L</span></div>
-          <div className="stat"><span className="s-val tnum">{pts}</span><span className="s-lbl">Points</span></div>
-          <div className="stat"><span className="s-val tnum">{gd > 0 ? '+' : ''}{gd}</span><span className="s-lbl">Goal diff</span></div>
+          <div className="stat"><span className="s-val tnum">{w}-{d}-{l}</span><span className="s-lbl">{t('tournament.wdl')}</span></div>
+          <div className="stat"><span className="s-val tnum">{pts}</span><span className="s-lbl">{t('tournament.points')}</span></div>
+          <div className="stat"><span className="s-val tnum">{gd > 0 ? '+' : ''}{gd}</span><span className="s-lbl">{t('tournament.goalDiff')}</span></div>
         </div>
       </div>
 
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Fixtures</div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('tournament.fixtures')}</div>
       <div className="stack gap-8">
-        {fixtures.length === 0 ? <p className="muted small">No fixtures yet.</p> : fixtures.map((m) => (
+        {fixtures.length === 0 ? <p className="muted small">{t('tournament.noFixtures')}</p> : fixtures.map((m) => (
           <div key={m.id} className="card card-pad row between" style={{ padding: '10px 14px' }}>
             <div className="row gap-10" style={{ minWidth: 0 }}>
-              <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? 'Group' : m.round}</span>
-              <span className="small ellip">{m.home?.code ?? m.home?.name ?? 'TBD'} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? 'TBD'}</span>
+              <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? t('round.groupPrefix') : m.round}</span>
+              <span className="small ellip">{m.home?.code ?? m.home?.name ?? t('match.tbd')} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny muted">
-              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : new Date(m.kickoffAt).toLocaleDateString()}
+              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : fmt.date(m.kickoffAt)}
             </span>
           </div>
         ))}
       </div>
 
       <div className="row between mt-24" style={{ marginBottom: 12 }}>
-        <span className="eyebrow">Squad</span>
-        {t.players.length > 0 && <span className="badge badge-sky" title="Squad compiled by AI from public sources">AI-assisted</span>}
+        <span className="eyebrow">{t('tournament.squad')}</span>
+        {tm.players.length > 0 && <span className="badge badge-sky" title={t('tournament.squadTitle')}>{t('tournament.aiAssisted')}</span>}
       </div>
-      {t.players.length === 0 ? (
-        <div className="card card-pad row gap-10"><Icon name="users" size={18} className="muted" /><p className="small muted" style={{ margin: 0 }}>Squad coming soon.</p></div>
+      {tm.players.length === 0 ? (
+        <div className="card card-pad row gap-10"><Icon name="users" size={18} className="muted" /><p className="small muted" style={{ margin: 0 }}>{t('tournament.squadSoon')}</p></div>
       ) : (
-        <FormationPitch players={t.players} formation={t.formation} manager={t.manager} />
+        <FormationPitch players={tm.players} formation={tm.formation} manager={tm.manager} />
       )}
     </div>
   );
@@ -144,30 +147,31 @@ export function TeamDetail({ s }: ScreenProps) {
 
 /* ===================== GROUPS ===================== */
 export function Groups({ s }: ScreenProps) {
+  const { t } = useT();
   const { data: groups, loading } = useJson<ApiGroup[]>('/api/v1/groups');
   return (
     <div className="page fade-up">
-      <SecHead title="Group standings" sub="12 groups · top 2 plus best thirds advance" />
-      {loading ? <p className="muted small">Loading standings…</p> : (
+      <SecHead title={t('tournament.groupsTitle')} sub={t('tournament.groupsSub')} />
+      {loading ? <p className="muted small">{t('tournament.loadingStandings')}</p> : (
         <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))' }}>
           {(groups ?? []).map((g) => (
             <div key={g.name} className="card" style={{ overflow: 'hidden' }}>
               <div className="row between card-pad" style={{ paddingBottom: 10 }}>
-                <span className="h3">Group {g.name}</span>
-                <span className="tiny muted">Matchday 1–3</span>
+                <span className="h3">{t('tournament.group', { g: g.name })}</span>
+                <span className="tiny muted">{t('tournament.matchday')}</span>
               </div>
               <table className="tbl">
                 <thead>
-                  <tr><th>#</th><th>Team</th><th style={{ textAlign: 'center' }}>P</th><th style={{ textAlign: 'center' }}>GD</th><th style={{ textAlign: 'center' }}>Pts</th></tr>
+                  <tr><th>{t('tournament.colRank')}</th><th>{t('tournament.colTeam')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colP')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colPts')}</th></tr>
                 </thead>
                 <tbody>
-                  {g.teams.map((t, i) => (
-                    <tr key={t.id} className={i < 2 ? 'hl' : ''} style={{ cursor: 'pointer' }} onClick={() => s.go('team', { id: t.id })}>
+                  {g.teams.map((tm, i) => (
+                    <tr key={tm.id} className={i < 2 ? 'hl' : ''} style={{ cursor: 'pointer' }} onClick={() => s.go('team', { id: tm.id })}>
                       <td className="tnum" style={{ color: i < 2 ? 'var(--green)' : 'var(--muted)' }}>{i + 1}</td>
-                      <td><div className="row gap-8"><Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={22} /><span className="small ellip" style={{ fontWeight: 600 }}>{t.code ?? t.name}</span></div></td>
-                      <td className="tnum t2" style={{ textAlign: 'center' }}>{t.played}</td>
-                      <td className="tnum t2" style={{ textAlign: 'center' }}>{t.gd > 0 ? '+' : ''}{t.gd}</td>
-                      <td className="tnum" style={{ textAlign: 'center', fontWeight: 700 }}>{t.pts}</td>
+                      <td><div className="row gap-8"><Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={22} /><span className="small ellip" style={{ fontWeight: 600 }}>{tm.code ?? tm.name}</span></div></td>
+                      <td className="tnum t2" style={{ textAlign: 'center' }}>{tm.played}</td>
+                      <td className="tnum t2" style={{ textAlign: 'center' }}>{tm.gd > 0 ? '+' : ''}{tm.gd}</td>
+                      <td className="tnum" style={{ textAlign: 'center', fontWeight: 700 }}>{tm.pts}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -184,6 +188,7 @@ export function Groups({ s }: ScreenProps) {
 interface BracketPicks { CHAMPION?: number; FINALISTS?: number[]; SEMIS?: number[] }
 
 export function Bracket({ s }: ScreenProps) {
+  const { t } = useT();
   const { data: groups } = useJson<ApiGroup[]>('/api/v1/groups');
   const { data: allTeams } = useJson<ApiTeam[]>('/api/v1/teams');
 
@@ -220,25 +225,25 @@ export function Bracket({ s }: ScreenProps) {
     setSaving(true);
     try {
       const res = await fetch('/api/v1/me/bracket', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ picks }) });
-      if (res.ok) { s.toastMsg('Bracket saved!', 'trophy', 'var(--gold)'); setPanelOpen(false); }
+      if (res.ok) { s.toastMsg(t('tournament.bracketSaved'), 'trophy', 'var(--gold)'); setPanelOpen(false); }
       else {
         const json = await res.json().catch(() => ({}));
         const code = json?.error?.code ?? 'ERROR';
-        if (code === 'BRACKET_LOCKED') s.toastMsg('Bracket is locked', 'lock', 'var(--muted)');
-        else s.toastMsg('Could not save bracket', 'alert', 'var(--red)');
+        if (code === 'BRACKET_LOCKED') s.toastMsg(t('tournament.bracketLocked'), 'lock', 'var(--muted)');
+        else s.toastMsg(t('tournament.bracketSaveFail'), 'alert', 'var(--red)');
       }
-    } catch { s.toastMsg('Could not save bracket', 'alert', 'var(--red)'); }
+    } catch { s.toastMsg(t('tournament.bracketSaveFail'), 'alert', 'var(--red)'); }
     finally { setSaving(false); }
   }
 
   function BracketMatch({ a, b, hot }: { a: ApiStanding | null; b: ApiStanding | null; hot?: boolean }) {
     return (
       <div className="card card-pad" style={{ padding: '10px 12px', minWidth: 180, borderColor: hot ? 'rgba(255,77,141,.35)' : 'var(--line)' }}>
-        {[a, b].map((t, i) => (
+        {[a, b].map((tm, i) => (
           <div key={i} className="row between" style={{ padding: '3px 0' }}>
             <div className="row gap-8" style={{ minWidth: 0 }}>
-              {t ? <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={20} /> : <span style={{ width: 20 }} />}
-              <span className="small ellip" style={{ fontWeight: i === 0 ? 700 : 500 }}>{t?.code ?? 'TBD'}</span>
+              {tm ? <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={20} /> : <span style={{ width: 20 }} />}
+              <span className="small ellip" style={{ fontWeight: i === 0 ? 700 : 500 }}>{tm?.code ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny" style={{ color: 'var(--muted)' }}>–</span>
           </div>
@@ -247,12 +252,12 @@ export function Bracket({ s }: ScreenProps) {
     );
   }
 
-  function Col({ title, count, start }: { title: string; count: number; start: number }) {
+  function Col({ title, count, start, final }: { title: string; count: number; start: number; final?: boolean }) {
     return (
       <div className="stack" style={{ justifyContent: 'space-around', gap: 14, minWidth: 196 }}>
         <div className="eyebrow" style={{ textAlign: 'center' }}>{title}</div>
         {Array.from({ length: count }).map((_, i) => (
-          <BracketMatch key={i} a={pick(start + i * 2)} b={pick(start + i * 2 + 1)} hot={i === 0 && title === 'Final'} />
+          <BracketMatch key={i} a={pick(start + i * 2)} b={pick(start + i * 2 + 1)} hot={i === 0 && final} />
         ))}
       </div>
     );
@@ -262,20 +267,20 @@ export function Bracket({ s }: ScreenProps) {
 
   return (
     <div className="page fade-up">
-      <SecHead title="Knockout bracket" sub="Round of 32 → Final · projected from current standings" />
+      <SecHead title={t('tournament.bracketTitle')} sub={t('tournament.bracketSub')} />
       <div className="card card-pad" style={{ overflowX: 'auto' }}>
         <div className="row" style={{ gap: 28, alignItems: 'stretch', minWidth: 1100, padding: '8px 0' }}>
-          <Col title="Round of 32" count={8} start={0} />
-          <Col title="Round of 16" count={4} start={4} />
-          <Col title="Quarter-finals" count={2} start={8} />
-          <Col title="Semi-finals" count={2} start={2} />
-          <Col title="Final" count={1} start={0} />
+          <Col title={t('round.R32')} count={8} start={0} />
+          <Col title={t('round.R16')} count={4} start={4} />
+          <Col title={t('round.QF')} count={2} start={8} />
+          <Col title={t('round.SF')} count={2} start={2} />
+          <Col title={t('round.FINAL')} count={1} start={0} final />
           <div className="stack center" style={{ minWidth: 140, justifyContent: 'center' }}>
-            <div className="eyebrow" style={{ marginBottom: 10 }}>Champion</div>
+            <div className="eyebrow" style={{ marginBottom: 10 }}>{t('tournament.champion')}</div>
             <div className="card card-pad" style={{ textAlign: 'center', background: 'linear-gradient(150deg,var(--gold-soft),transparent)', borderColor: 'rgba(255,200,61,.4)' }}>
               <Icon name="trophy" size={28} style={{ color: 'var(--gold)' }} />
               {champion && <Flag flagUrl={champion.flagUrl ?? undefined} name={champion.name} code={champion.code ?? undefined} size={40} />}
-              <div className="small mt-8" style={{ fontWeight: 700 }}>{champion?.name ?? 'TBD'}</div>
+              <div className="small mt-8" style={{ fontWeight: 700 }}>{champion?.name ?? t('match.tbd')}</div>
             </div>
           </div>
         </div>
@@ -284,24 +289,24 @@ export function Bracket({ s }: ScreenProps) {
         <div className="row gap-12">
           <Pundit size={48} mood="idle" />
           <div>
-            <div style={{ fontWeight: 700 }}>Predict the whole bracket</div>
-            <div className="tiny t2">Fill every knockout tie and earn bonus points for each correct round.</div>
+            <div style={{ fontWeight: 700 }}>{t('tournament.predictWhole')}</div>
+            <div className="tiny t2">{t('tournament.predictSub')}</div>
           </div>
         </div>
-        <Btn variant="primary" size="sm" onClick={() => { if (!s.authed) { s.go('auth', { mode: 'signup' }); return; } setPanelOpen((o) => !o); }}>Open predictor</Btn>
+        <Btn variant="primary" size="sm" onClick={() => { if (!s.authed) { s.go('auth', { mode: 'signup' }); return; } setPanelOpen((o) => !o); }}>{t('tournament.openPredictor')}</Btn>
       </div>
 
       {panelOpen && s.authed && (
-        <div className="card card-pad mt-16 fade-up" aria-label="Bracket predictor panel">
+        <div className="card card-pad mt-16 fade-up" aria-label={t('tournament.predictorPanel')}>
           <div className="row between" style={{ marginBottom: 16 }}>
-            <span className="h3">Your bracket picks</span>
-            <button className="chip" onClick={() => setPanelOpen(false)}><Icon name="x" size={14} /> Close</button>
+            <span className="h3">{t('tournament.yourPicks')}</span>
+            <button className="chip" onClick={() => setPanelOpen(false)}><Icon name="x" size={14} /> {t('common.close')}</button>
           </div>
-          <PickSection label="Champion" subtitle="Pick 1 team" teams={allTeams ?? []} selected={picks.CHAMPION !== undefined ? [picks.CHAMPION] : []} onToggle={(id) => toggleChip('CHAMPION', id)} />
-          <PickSection label="Finalists" subtitle="Pick up to 2 teams" teams={allTeams ?? []} selected={picks.FINALISTS ?? []} onToggle={(id) => toggleChip('FINALISTS', id, 2)} />
-          <PickSection label="Semi-finalists" subtitle="Pick up to 4 teams" teams={allTeams ?? []} selected={picks.SEMIS ?? []} onToggle={(id) => toggleChip('SEMIS', id, 4)} />
+          <PickSection label={t('tournament.champion')} subtitle={t('tournament.championSub')} teams={allTeams ?? []} selected={picks.CHAMPION !== undefined ? [picks.CHAMPION] : []} onToggle={(id) => toggleChip('CHAMPION', id)} />
+          <PickSection label={t('tournament.finalists')} subtitle={t('tournament.finalistsSub')} teams={allTeams ?? []} selected={picks.FINALISTS ?? []} onToggle={(id) => toggleChip('FINALISTS', id, 2)} />
+          <PickSection label={t('tournament.semis')} subtitle={t('tournament.semisSub')} teams={allTeams ?? []} selected={picks.SEMIS ?? []} onToggle={(id) => toggleChip('SEMIS', id, 4)} />
           <div className="row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
-            <Btn variant="primary" size="sm" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save picks'}</Btn>
+            <Btn variant="primary" size="sm" onClick={handleSave} disabled={saving}>{saving ? t('tournament.saving') : t('tournament.savePicks')}</Btn>
           </div>
         </div>
       )}
@@ -317,10 +322,10 @@ function PickSection({ label, subtitle, teams, selected, onToggle }: {
       <div className="eyebrow" style={{ marginBottom: 4 }}>{label}</div>
       <div className="tiny muted" style={{ marginBottom: 10 }}>{subtitle}</div>
       <div className="row gap-8 wrap-w">
-        {teams.map((t) => (
-          <button key={t.id} className={`chip ${selected.includes(t.id) ? 'active' : ''}`} onClick={() => onToggle(t.id)} title={t.name}>
-            <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={16} />
-            <span style={{ marginLeft: 4 }}>{t.code ?? t.name}</span>
+        {teams.map((tm) => (
+          <button key={tm.id} className={`chip ${selected.includes(tm.id) ? 'active' : ''}`} onClick={() => onToggle(tm.id)} title={tm.name}>
+            <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={16} />
+            <span style={{ marginLeft: 4 }}>{tm.code ?? tm.name}</span>
           </button>
         ))}
       </div>

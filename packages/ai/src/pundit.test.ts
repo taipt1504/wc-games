@@ -85,4 +85,21 @@ describe('generateNewsDraft', () => {
     expect(d.title).not.toBe('Japan stun Germany');
     expect(d.body).toContain('Germany');
   });
+
+  it('parses the Vietnamese translation when present (EN + VI both stored)', async () => {
+    const gw = fakeGateway('{"title":"Spain see off Germany","body":"Spain edged Germany.","titleVi":"Tây Ban Nha vượt qua Đức","bodyVi":"Tây Ban Nha thắng sát nút trước Đức."}');
+    const d = await generateNewsDraft(gw, { sourceTitle: 'Spain edge Germany' });
+    expect(d.title).toBe('Spain see off Germany');
+    expect(d.titleVi).toBe('Tây Ban Nha vượt qua Đức');
+    expect(d.bodyVi).toContain('Tây Ban Nha');
+    // system prompt asks for a Vietnamese translation
+    expect(gw.complete.mock.calls[0][0].messages[0].content).toMatch(/vietnamese translation/i);
+  });
+
+  it('leaves VI undefined when the model returns EN-only (consumers fall back to EN)', async () => {
+    const gw = fakeGateway('{"title":"Brazil cruise past Nigeria","body":"Brazil were comfortable."}');
+    const d = await generateNewsDraft(gw, { sourceTitle: 'Brazil beat Nigeria' });
+    expect(d.titleVi).toBeUndefined();
+    expect(d.bodyVi).toBeUndefined();
+  });
 });

@@ -1,9 +1,10 @@
 'use client';
-/* GOLAZO — Leaderboard · My Bets · Wallet · Profile (ported from design screens-compete.jsx) */
+/* World Cup Games — Leaderboard · My Bets · Wallet · Profile (ported from design screens-compete.jsx) */
 import React, { useState, useEffect } from 'react';
 import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead, TierPill, TIER_C, Portal } from '@/components/ui';
+import { useT } from '@/lib/i18n/hooks';
 
 /* Signed formatters — show a real minus for negatives (never "+-6.3%") + sign-aware colour. */
 const sgnPct = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
@@ -25,6 +26,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 
 /* ===================== LEADERBOARD ===================== */
 export function Leaderboard({ s }: ScreenProps) {
+  const { t } = useT();
   const [scope, setScope] = useState('global');
   const guest = !s.authed;
   const [rows, setRows] = useState(WC.leaderboard);
@@ -35,12 +37,12 @@ export function Leaderboard({ s }: ScreenProps) {
       .catch(() => { /* fall back to empty display */ });
   }, []);
   const scopes: [string, string][] = guest
-    ? [['global', 'Global'], ['week', 'This week']]
-    : [['global', 'Global'], ['week', 'This week'], ['tier', 'My tier · Gold']];
+    ? [['global', t('leaderboard.scopeGlobal')], ['week', t('leaderboard.scopeWeek')]]
+    : [['global', t('leaderboard.scopeGlobal')], ['week', t('leaderboard.scopeWeek')], ['tier', t('leaderboard.scopeTier')]];
 
   return (
     <div className="page fade-up">
-      <SecHead title="Leaderboard" sub="Ranked by ROI% on settled bets" />
+      <SecHead title={t('leaderboard.title')} sub={t('leaderboard.sub')} />
       <div className="row gap-8 wrap-w" style={{ marginBottom: 18 }}>
         {scopes.map(([k, l]) => (
           <button key={k} className={`chip ${scope === k ? 'active' : ''}`} onClick={() => setScope(k)}>{l}</button>
@@ -53,11 +55,11 @@ export function Leaderboard({ s }: ScreenProps) {
           <div className="row gap-14">
             <Icon name="trophy" size={28} style={{ color: 'var(--gold)' }} />
             <div>
-              <div className="h3">Where would you rank?</div>
-              <div className="small t2 mt-4">Sign up free, get 1,000 points, and start climbing toward the top 1%.</div>
+              <div className="h3">{t('leaderboard.guestTitle')}</div>
+              <div className="small t2 mt-4">{t('leaderboard.guestDesc')}</div>
             </div>
           </div>
-          <Btn variant="gold" size="lg" onClick={() => s.go('auth', { mode: 'signup' })}>Join the board →</Btn>
+          <Btn variant="gold" size="lg" onClick={() => s.go('auth', { mode: 'signup' })}>{t('leaderboard.guestCta')}</Btn>
         </div>
       ) : (
         /* your rank card */
@@ -65,11 +67,11 @@ export function Leaderboard({ s }: ScreenProps) {
           <div className="row between wrap gap-12">
             <div className="row gap-14">
               <div className="display" style={{ fontSize: 32, color: 'var(--gold)' }}>#{s.me.rank ?? '—'}</div>
-              <div><div style={{ fontWeight: 700 }}>Your global rank</div><div className="tiny muted">Top 14% · {s.me.settled} settled bets</div></div>
+              <div><div style={{ fontWeight: 700 }}>{t('leaderboard.yourRank')}</div><div className="tiny muted">{t('leaderboard.topPct', { n: s.me.settled })}</div></div>
             </div>
             <div className="row gap-20">
-              <div className="stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">ROI</span></div>
-              <div className="stat"><span className="s-val tnum">{s.me.won}/{s.me.settled}</span><span className="s-lbl">Won</span></div>
+              <div className="stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">{t('leaderboard.roi')}</span></div>
+              <div className="stat"><span className="s-val tnum">{s.me.won}/{s.me.settled}</span><span className="s-lbl">{t('leaderboard.won')}</span></div>
               <TierPill tier={s.tier || 'Bronze'} />
             </div>
           </div>
@@ -78,7 +80,7 @@ export function Leaderboard({ s }: ScreenProps) {
 
       {rows.length === 0 ? (
         <div className="card card-pad-lg" style={{ textAlign: 'center', marginBottom: 18 }}>
-          <p className="muted">Leaderboard is empty — check back once bets have settled.</p>
+          <p className="muted">{t('leaderboard.empty')}</p>
         </div>
       ) : (
         <>
@@ -90,7 +92,7 @@ export function Leaderboard({ s }: ScreenProps) {
                 <Avatar initials={p.name.slice(0, 2).toUpperCase()} size={48} color={TIER_C[p.tier]} ring={TIER_C[p.tier]} />
                 <div className="small" style={{ fontWeight: 700, marginTop: 8 }}>{p.name}</div>
                 <div className="tnum" style={{ fontWeight: 700, fontSize: 18, color: sgnCol(p.roi) }}>{sgnPct(p.roi)}</div>
-                <div className="tiny muted">{sgnNum(p.net)} net</div>
+                <div className="tiny muted">{sgnNum(p.net)} {t('leaderboard.net')}</div>
               </div>
             ))}
           </div>
@@ -102,11 +104,11 @@ export function Leaderboard({ s }: ScreenProps) {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>Player</th>
-                    <th>Tier</th>
-                    <th style={{ textAlign: 'right' }}>ROI</th>
-                    <th style={{ textAlign: 'right' }} className="hide-mobile">Net</th>
-                    <th style={{ textAlign: 'right' }} className="hide-mobile">W/Settled</th>
+                    <th>{t('leaderboard.colPlayer')}</th>
+                    <th>{t('leaderboard.colTier')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('leaderboard.roi')}</th>
+                    <th style={{ textAlign: 'right' }} className="hide-mobile">{t('leaderboard.colNet')}</th>
+                    <th style={{ textAlign: 'right' }} className="hide-mobile">{t('leaderboard.colWonSettled')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -142,6 +144,7 @@ interface ParlayRecord {
 }
 
 function ParlayBuilder({ s }: ScreenProps) {
+  const { t } = useT();
   const [legs, setLegs] = React.useState<ParlayLegDraft[]>([{ matchId: '', outcome: 'HOME' }, { matchId: '', outcome: 'HOME' }]);
   const [stake, setStake] = React.useState('100');
   const [parlays, setParlays] = React.useState<ParlayRecord[]>([]);
@@ -165,9 +168,9 @@ function ParlayBuilder({ s }: ScreenProps) {
 
   async function handleSubmit() {
     const stakeNum = parseInt(stake, 10);
-    if (isNaN(stakeNum) || stakeNum <= 0) { s.toastMsg('Invalid stake', 'alert', 'var(--danger)'); return; }
+    if (isNaN(stakeNum) || stakeNum <= 0) { s.toastMsg(t('bets.invalidStake'), 'alert', 'var(--danger)'); return; }
     if (legs.some((l) => !l.matchId || isNaN(parseInt(l.matchId, 10)))) {
-      s.toastMsg('Fill all match IDs', 'alert', 'var(--danger)'); return;
+      s.toastMsg(t('bets.fillIds'), 'alert', 'var(--danger)'); return;
     }
     setSubmitting(true);
     try {
@@ -181,22 +184,22 @@ function ParlayBuilder({ s }: ScreenProps) {
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok) {
-        s.toastMsg('Parlay placed!', 'check', 'var(--green)');
+        s.toastMsg(t('bets.parlayPlaced'), 'check', 'var(--green)');
         void s.refreshUser();
         setLegs([{ matchId: '', outcome: 'HOME' }, { matchId: '', outcome: 'HOME' }]);
         setStake('100');
         fetchParlays();
       } else {
         const code = j?.error?.code;
-        const msg = code === 'TOO_FEW_LEGS' ? 'Need ≥ 2 legs'
-          : code === 'INSUFFICIENT_BALANCE' ? 'Not enough points'
-            : code === 'BET_LOCKED' ? 'A match is locked'
-              : code === 'ODDS_UNAVAILABLE' ? 'Odds unavailable for a match'
-                : code === 'DUPLICATE_MATCH' ? 'Duplicate match in legs'
-                  : 'Parlay failed';
+        const msg = code === 'TOO_FEW_LEGS' ? t('bets.errFewLegs')
+          : code === 'INSUFFICIENT_BALANCE' ? t('bets.errBalance')
+            : code === 'BET_LOCKED' ? t('bets.errLocked')
+              : code === 'ODDS_UNAVAILABLE' ? t('bets.errOdds')
+                : code === 'DUPLICATE_MATCH' ? t('bets.errDup')
+                  : t('bets.errGeneric');
         s.toastMsg(msg, 'alert', 'var(--danger)');
       }
-    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    } catch { s.toastMsg(t('bets.network'), 'alert', 'var(--danger)'); }
     finally { setSubmitting(false); }
   }
 
@@ -204,14 +207,14 @@ function ParlayBuilder({ s }: ScreenProps) {
 
   return (
     <div>
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Parlay / Combo bets</div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('bets.parlayHeader')}</div>
 
       {/* builder */}
       <div className="card card-pad">
         <div className="row gap-8" style={{ marginBottom: 12 }}>
           <Icon name="target" size={18} style={{ color: 'var(--magenta)' }} />
-          <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Build a combo</span>
-          <span className="tiny muted ml-4">All legs must win to pay out</span>
+          <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('bets.buildCombo')}</span>
+          <span className="tiny muted ml-4">{t('bets.allMustWin')}</span>
         </div>
         <div className="stack gap-8">
           {legs.map((leg, i) => (
@@ -219,7 +222,7 @@ function ParlayBuilder({ s }: ScreenProps) {
               <input
                 className="input"
                 style={{ width: 100, flex: 'none' }}
-                placeholder="Match ID"
+                placeholder={t('bets.matchIdPh')}
                 value={leg.matchId}
                 onChange={(e) => updateLeg(i, 'matchId', e.target.value)}
               />
@@ -229,22 +232,22 @@ function ParlayBuilder({ s }: ScreenProps) {
                 value={leg.outcome}
                 onChange={(e) => updateLeg(i, 'outcome', e.target.value)}
               >
-                <option value="HOME">Home win</option>
-                <option value="DRAW">Draw</option>
-                <option value="AWAY">Away win</option>
+                <option value="HOME">{t('bets.homeWin')}</option>
+                <option value="DRAW">{t('bets.draw')}</option>
+                <option value="AWAY">{t('bets.awayWin')}</option>
               </select>
               {legs.length > 2 && (
                 <Btn variant="ghost" size="sm" onClick={() => removeLeg(i)}>×</Btn>
               )}
             </div>
           ))}
-          <Btn variant="ghost" size="sm" onClick={addLeg}>+ Add leg</Btn>
+          <Btn variant="ghost" size="sm" onClick={addLeg}>{t('bets.addLeg')}</Btn>
           <div className="field">
-            <label className="label">Stake (points)</label>
+            <label className="label">{t('bets.stakePoints')}</label>
             <input className="input" type="number" min={1} value={stake} onChange={(e) => setStake(e.target.value)} />
           </div>
           <Btn variant="primary" disabled={submitting} onClick={handleSubmit}>
-            {submitting ? 'Placing…' : 'Place parlay'}
+            {submitting ? t('bets.placing') : t('bets.placeParlay')}
           </Btn>
         </div>
       </div>
@@ -259,8 +262,8 @@ function ParlayBuilder({ s }: ScreenProps) {
               <div key={p.id} className="card card-pad">
                 <div className="row between wrap gap-8">
                   <div>
-                    <div className="small" style={{ fontWeight: 700 }}>Parlay #{p.id} · {p.legs.length} legs</div>
-                    <div className="tiny muted">Stake {p.stake} pts</div>
+                    <div className="small" style={{ fontWeight: 700 }}>{t('bets.parlayN', { id: p.id, n: p.legs.length })}</div>
+                    <div className="tiny muted">{t('bets.stakeN', { stake: p.stake })}</div>
                   </div>
                   <div className="row gap-8">
                     <span className={`badge badge-${c}`}>{p.status}</span>
@@ -276,7 +279,7 @@ function ParlayBuilder({ s }: ScreenProps) {
                     const lc = l.result === 'WON' ? 'green' : l.result === 'LOST' ? 'danger' : 'muted';
                     return (
                       <span key={l.id} className={`badge badge-${lc}`} style={{ fontSize: 11 }}>
-                        Match {l.matchId} {l.outcome} @{parseFloat(l.oddsSnapshot).toFixed(2)}
+                        {t('bets.matchLeg', { id: l.matchId, outcome: l.outcome, odds: parseFloat(l.oddsSnapshot).toFixed(2) })}
                       </span>
                     );
                   })}
@@ -293,6 +296,7 @@ function ParlayBuilder({ s }: ScreenProps) {
 /* ===================== MY BETS ===================== */
 interface BetMatchLite { name: string; code: string | null; flagUrl: string | null }
 export function MyBets({ s }: ScreenProps) {
+  const { t } = useT();
   const [f, setF] = useState('all');
   const [mmap, setMmap] = useState<Map<number, { home: BetMatchLite | null; away: BetMatchLite | null }>>(new Map());
   useEffect(() => {
@@ -310,16 +314,16 @@ export function MyBets({ s }: ScreenProps) {
 
   return (
     <div className="page fade-up">
-      <SecHead title="My bets" sub="Every prediction, settled or live" />
+      <SecHead title={t('bets.title')} sub={t('bets.sub')} />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', marginBottom: 18 }}>
-        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">ROI</span></div>
-        <div className="card card-pad stat"><span className="s-val tnum">{Math.round(won / (settled.length || 1) * 100)}%</span><span className="s-lbl">Win rate</span></div>
-        <div className="card card-pad stat"><span className="s-val tnum">{settled.length}</span><span className="s-lbl">Settled</span></div>
-        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: net >= 0 ? 'var(--green)' : 'var(--danger)' }}>{net >= 0 ? '+' : ''}{net}</span><span className="s-lbl">Net points</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">{t('bets.roi')}</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum">{Math.round(won / (settled.length || 1) * 100)}%</span><span className="s-lbl">{t('bets.winRate')}</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum">{settled.length}</span><span className="s-lbl">{t('bets.settled')}</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: net >= 0 ? 'var(--green)' : 'var(--danger)' }}>{net >= 0 ? '+' : ''}{net}</span><span className="s-lbl">{t('bets.netPoints')}</span></div>
       </div>
 
       <div className="row gap-8 wrap-w" style={{ marginBottom: 16 }}>
-        {([['all', 'All'], ['open', 'Open & live'], ['won', 'Won'], ['lost', 'Lost']] as [string, string][]).map(([k, l]) => (
+        {([['all', t('bets.fAll')], ['open', t('bets.fOpen')], ['won', t('bets.fWon')], ['lost', t('bets.fLost')]] as [string, string][]).map(([k, l]) => (
           <button key={k} className={`chip ${f === k ? 'active' : ''}`} onClick={() => setF(k)}>{l}</button>
         ))}
       </div>
@@ -337,18 +341,18 @@ export function MyBets({ s }: ScreenProps) {
                   <span className="small ellip">{mm?.home?.code ?? '?'} v {mm?.away?.code ?? '?'}</span>
                   <span className="badge badge-muted">{b.pick}</span>
                 </div>
-                <span className={`badge badge-${c}`}>{b.status === 'LIVE' ? <><span className="live-dot"></span>LIVE</> : b.status}</span>
+                <span className={`badge badge-${c}`}>{b.status === 'LIVE' ? <><span className="live-dot"></span>{t('bets.live')}</> : b.status}</span>
               </div>
               <div className="row between mt-12">
-                <span className="tiny muted">Stake <span className="tnum">{b.stake}</span> @ <span className="tnum">{b.odds.toFixed(2)}</span></span>
+                <span className="tiny muted">{t('bets.stake')} <span className="tnum">{b.stake}</span> @ <span className="tnum">{b.odds.toFixed(2)}</span></span>
                 {(b.status === 'WON' || b.status === 'LOST')
                   ? <span className="tnum" style={{ fontWeight: 700, color: profit >= 0 ? 'var(--green)' : 'var(--danger)' }}>{profit >= 0 ? '+' : ''}{profit} pts</span>
-                  : <span className="tiny t2">Potential <span className="tnum text-green">+{Math.round(b.stake * b.odds)}</span></span>}
+                  : <span className="tiny t2">{t('bets.potential')} <span className="tnum text-green">+{Math.round(b.stake * b.odds)}</span></span>}
               </div>
             </div>
           );
         })}
-        {!list.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No bets here yet.</p></div>}
+        {!list.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('bets.empty')}</p></div>}
       </div>
       <ParlayBuilder s={s} />
     </div>
@@ -357,6 +361,7 @@ export function MyBets({ s }: ScreenProps) {
 
 /* ===================== WALLET ===================== */
 export function Wallet({ s }: ScreenProps) {
+  const { t } = useT();
   const ICON: Record<string, [string, string]> = {
     SIGNUP: ['star', 'var(--gold)'],
     CHECKIN: ['fire', 'var(--gold)'],
@@ -368,26 +373,26 @@ export function Wallet({ s }: ScreenProps) {
 
   return (
     <div className="page page-narrow fade-up">
-      <SecHead title="Point wallet" sub="Every point change, fully traceable" />
+      <SecHead title={t('wallet.title')} sub={t('wallet.sub')} />
       {/* balance hero */}
       <div className="panel card-pad-lg" style={{ background: 'linear-gradient(150deg, var(--gold-soft), var(--surface))', borderColor: 'rgba(255,200,61,.25)' }}>
         <div className="row between">
           <div>
-            <div className="eyebrow">Available balance</div>
+            <div className="eyebrow">{t('wallet.avail')}</div>
             <div className="display tnum" style={{ fontSize: 48, color: 'var(--gold)', marginTop: 6 }}>{s.points.toLocaleString()}</div>
           </div>
           <Icon name="wallet" size={40} style={{ color: 'var(--gold)', opacity: .5 }} />
         </div>
         <div className="row gap-12 mt-16">
-          <Btn variant="ghost" size="sm" icon="ball" onClick={() => s.go('schedule')}>Place a bet</Btn>
-          <Btn variant="ghost" size="sm" icon="users" onClick={() => s.go('profile')}>Refer a friend</Btn>
+          <Btn variant="ghost" size="sm" icon="ball" onClick={() => s.go('schedule')}>{t('wallet.placeBet')}</Btn>
+          <Btn variant="ghost" size="sm" icon="users" onClick={() => s.go('profile')}>{t('wallet.refer')}</Btn>
         </div>
       </div>
 
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Transaction history</div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('wallet.txHistory')}</div>
       <div className="card" style={{ overflow: 'hidden' }}>
         {s.ledger.length === 0 ? (
-          <div className="card-pad" style={{ textAlign: 'center' }}><p className="muted">No transactions yet.</p></div>
+          <div className="card-pad" style={{ textAlign: 'center' }}><p className="muted">{t('wallet.noTx')}</p></div>
         ) : s.ledger.map((tx, i, arr) => {
           const [icon, color] = ICON[tx.type] || ['dollar', 'var(--text-2)'];
           return (
@@ -434,7 +439,8 @@ function accentFor(code: string): string {
 function initialsOf(name: string): string {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
 }
-const SHOP_SECTIONS: [string, string][] = [['avatar', 'Avatars'], ['frame', 'Frames'], ['theme', 'Themes']];
+// [kind, i18n label key]
+const SHOP_SECTIONS: [string, string][] = [['avatar', 'shop.secAvatars'], ['frame', 'shop.secFrames'], ['theme', 'shop.secThemes']];
 
 function ShopPreview({ kind, code, name }: { kind: string; code: string; name: string }) {
   const accent = accentFor(code);
@@ -444,6 +450,7 @@ function ShopPreview({ kind, code, name }: { kind: string; code: string; name: s
 }
 
 export function CosmeticShop({ s }: ScreenProps) {
+  const { t } = useT();
   const [items, setItems] = React.useState<ShopItem[]>([]);
 
   function fetchShop() {
@@ -467,9 +474,9 @@ export function CosmeticShop({ s }: ScreenProps) {
     } else {
       const j = await res.json().catch(() => ({}));
       const code2 = j?.error?.code;
-      if (code2 === 'INSUFFICIENT_BALANCE') s.toastMsg('Not enough points', 'alert', 'var(--danger)');
-      else if (code2 === 'ALREADY_OWNED')   s.toastMsg('Already owned', 'alert', 'var(--danger)');
-      else                                  s.toastMsg('Purchase failed', 'alert', 'var(--danger)');
+      if (code2 === 'INSUFFICIENT_BALANCE') s.toastMsg(t('shop.notEnough'), 'alert', 'var(--danger)');
+      else if (code2 === 'ALREADY_OWNED')   s.toastMsg(t('shop.alreadyOwned'), 'alert', 'var(--danger)');
+      else                                  s.toastMsg(t('shop.purchaseFailed'), 'alert', 'var(--danger)');
     }
   }
 
@@ -485,20 +492,20 @@ export function CosmeticShop({ s }: ScreenProps) {
   if (!s.authed) return null;
 
   const sections: [string, ShopItem[]][] = [];
-  for (const [k, label] of SHOP_SECTIONS) {
+  for (const [k, labelKey] of SHOP_SECTIONS) {
     const list = items.filter((i) => i.kind === k);
-    if (list.length) sections.push([label, list]);
+    if (list.length) sections.push([t(labelKey), list]);
   }
   const other = items.filter((i) => !['avatar', 'frame', 'theme'].includes(i.kind));
-  if (other.length) sections.push(['More', other]);
+  if (other.length) sections.push([t('shop.secMore'), other]);
 
   return (
     <div>
       <div className="row between mt-24" style={{ marginBottom: 12 }}>
-        <span className="eyebrow">Cosmetic shop</span>
-        <span className="badge badge-gold tnum">◇ {s.points.toLocaleString()} pts</span>
+        <span className="eyebrow">{t('shop.title')}</span>
+        <span className="badge badge-gold tnum">◇ {t('shop.pts', { n: s.points.toLocaleString() })}</span>
       </div>
-      {items.length === 0 && <div className="card card-pad"><span className="tiny muted">Loading items…</span></div>}
+      {items.length === 0 && <div className="card card-pad"><span className="tiny muted">{t('shop.loading')}</span></div>}
       <div className="stack gap-18">
         {sections.map(([label, list]) => (
           <div key={label}>
@@ -511,13 +518,13 @@ export function CosmeticShop({ s }: ScreenProps) {
                   <div key={item.code} className="card card-pad stack center gap-8" style={{ textAlign: 'center', borderColor: item.equipped ? 'rgba(43,224,138,.4)' : 'var(--line)' }}>
                     <ShopPreview kind={item.kind} code={item.code} name={item.name} />
                     <div className="small" style={{ fontWeight: 700 }}>{item.name}</div>
-                    <span className="badge badge-gold tnum">★ {price} pts</span>
+                    <span className="badge badge-gold tnum">★ {t('shop.pts', { n: price })}</span>
                     {item.owned
-                      ? <Btn variant={item.equipped ? 'primary' : 'ghost'} size="sm" className="btn-block" disabled={item.equipped} onClick={() => handleEquip(item.id)}>{item.equipped ? 'Equipped' : 'Equip'}</Btn>
+                      ? <Btn variant={item.equipped ? 'primary' : 'ghost'} size="sm" className="btn-block" disabled={item.equipped} onClick={() => handleEquip(item.id)}>{item.equipped ? t('shop.equipped') : t('shop.equip')}</Btn>
                       : (
                         <>
-                          <Btn variant="gold" size="sm" className="btn-block" disabled={!afford} onClick={() => handleBuy(item.code)}>Buy</Btn>
-                          {!afford && <span className="tiny muted">Need {(price - s.points).toLocaleString()} more</span>}
+                          <Btn variant="gold" size="sm" className="btn-block" disabled={!afford} onClick={() => handleBuy(item.code)}>{t('shop.buy')}</Btn>
+                          {!afford && <span className="tiny muted">{t('shop.needMore', { n: (price - s.points).toLocaleString() })}</span>}
                         </>
                       )}
                   </div>
@@ -534,13 +541,13 @@ export function CosmeticShop({ s }: ScreenProps) {
 /* ===================== PROFILE ===================== */
 type AchievementDisplay = { name: string; desc: string; icon: string; unlocked: boolean; prog?: string };
 
-// Notification rows: [label, api-type-key, default]
+// Notification rows: [i18n label key, api-type-key, default]
 const NOTIF_ROWS: [string, string, boolean][] = [
-  ['Bet lock reminders', 'betLock', true],
-  ['Bet results', 'results', true],
-  ['Streak at risk', 'streakAtRisk', true],
-  ['Lobby & borrow alerts', 'lobbyAlerts', false],
-  ['Hot news', 'news', false],
+  ['profile.nrBetLock', 'betLock', true],
+  ['profile.nrResults', 'results', true],
+  ['profile.nrStreak', 'streakAtRisk', true],
+  ['profile.nrLobby', 'lobbyAlerts', false],
+  ['profile.nrNews', 'news', false],
 ];
 
 type NotifPrefs = Record<string, boolean>;
@@ -562,6 +569,7 @@ interface DuelDisplay {
 }
 
 export function Profile({ s }: ScreenProps) {
+  const { t } = useT();
   const me = s.me;
   const [referral, setReferral] = React.useState<{ code: string; count: number } | null>(null);
   const [achievements, setAchievements] = React.useState<AchievementDisplay[]>([]);
@@ -588,9 +596,9 @@ export function Profile({ s }: ScreenProps) {
     try {
       const res = await fetch('/api/v1/me', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username }) });
       setSavingName(false);
-      if (res.ok) { s.toastMsg('Profile updated', 'check', 'var(--green)'); setEditing(false); s.refreshUser(); }
-      else { const j = await res.json().catch(() => ({})); s.toastMsg(j?.error?.code === 'USERNAME_TAKEN' ? 'That name is taken' : 'Could not update profile', 'alert', 'var(--danger)'); }
-    } catch { setSavingName(false); s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+      if (res.ok) { s.toastMsg(t('profile.updated'), 'check', 'var(--green)'); setEditing(false); s.refreshUser(); }
+      else { const j = await res.json().catch(() => ({})); s.toastMsg(j?.error?.code === 'USERNAME_TAKEN' ? t('profile.nameTaken') : t('profile.updateFailed'), 'alert', 'var(--danger)'); }
+    } catch { setSavingName(false); s.toastMsg(t('profile.network'), 'alert', 'var(--danger)'); }
   };
 
   useEffect(() => {
@@ -663,13 +671,13 @@ export function Profile({ s }: ScreenProps) {
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok) {
-        s.toastMsg(`Bought ${type.replace(/_/g, ' ')}!`, 'star', 'var(--gold)');
+        s.toastMsg(t('profile.puBought', { name: type.replace(/_/g, ' ') }), 'star', 'var(--gold)');
         void s.refreshUser(); // sync balance
         fetchPowerUps();
       } else {
-        s.toastMsg(j?.error?.code === 'INSUFFICIENT_BALANCE' ? 'Not enough points' : 'Purchase failed', 'alert', 'var(--danger)');
+        s.toastMsg(j?.error?.code === 'INSUFFICIENT_BALANCE' ? t('shop.notEnough') : t('shop.purchaseFailed'), 'alert', 'var(--danger)');
       }
-    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    } catch { s.toastMsg(t('profile.network'), 'alert', 'var(--danger)'); }
     finally { setBuyingPowerUp(null); }
   }
 
@@ -685,7 +693,7 @@ export function Profile({ s }: ScreenProps) {
       fetchDuels();
     } else {
       const j = await res.json().catch(() => ({}));
-      s.toastMsg(j?.error?.code === 'SELF_DUEL' ? 'Cannot duel yourself' : 'Challenge failed', 'alert', 'var(--danger)');
+      s.toastMsg(j?.error?.code === 'SELF_DUEL' ? t('profile.selfDuel') : t('profile.challengeFailed'), 'alert', 'var(--danger)');
     }
   }
 
@@ -703,9 +711,9 @@ export function Profile({ s }: ScreenProps) {
     if (res.ok) {
       const j = await res.json().catch(() => ({}));
       const d = j?.data;
-      if (d) s.toastMsg(`ROI race: ${sgnPct(d.challengerRoi ?? 0)} vs ${sgnPct(d.opponentRoi ?? 0)}`, 'trophy', 'var(--gold)');
+      if (d) s.toastMsg(t('profile.roiRace', { a: sgnPct(d.challengerRoi ?? 0), b: sgnPct(d.opponentRoi ?? 0) }), 'trophy', 'var(--gold)');
       fetchDuels();
-    } else s.toastMsg('Could not resolve duel', 'alert', 'var(--danger)');
+    } else s.toastMsg(t('profile.resolveFailed'), 'alert', 'var(--danger)');
   }
 
   async function handleChangePassword() {
@@ -719,16 +727,16 @@ export function Profile({ s }: ScreenProps) {
       const json = await res.json();
       if (!res.ok) {
         const code = json?.error?.code;
-        if (code === 'INVALID_CREDENTIALS') s.toastMsg('Current password is incorrect', 'alert', 'var(--danger)');
-        else if (code === 'WEAK_PASSWORD') s.toastMsg('New password must be at least 8 characters', 'alert', 'var(--danger)');
-        else s.toastMsg('Failed to change password', 'alert', 'var(--danger)');
+        if (code === 'INVALID_CREDENTIALS') s.toastMsg(t('profile.pwWrong'), 'alert', 'var(--danger)');
+        else if (code === 'WEAK_PASSWORD') s.toastMsg(t('profile.pwWeak'), 'alert', 'var(--danger)');
+        else s.toastMsg(t('profile.pwFailed'), 'alert', 'var(--danger)');
       } else {
-        s.toastMsg('Password changed successfully', 'check', 'var(--green)');
+        s.toastMsg(t('profile.pwChanged'), 'check', 'var(--green)');
         setCurrentPw('');
         setNewPw('');
       }
     } catch {
-      s.toastMsg('Network error', 'alert', 'var(--danger)');
+      s.toastMsg(t('profile.network'), 'alert', 'var(--danger)');
     } finally {
       setPwLoading(false);
     }
@@ -755,17 +763,17 @@ export function Profile({ s }: ScreenProps) {
           <div className="row gap-16">
             <Avatar initials={me.avatar} size={64} color="var(--gold)" ring="var(--gold)" />
             <div>
-              <div className="row gap-8"><span className="h3">{me.name}</span><TierPill tier={s.tier} />{tierNext && tierToNext > 0 && <span className="tiny muted">{tierToNext.toLocaleString()} to {tierNext}</span>}</div>
-              <div className="tiny muted">{me.handle} · joined {me.joined}</div>
+              <div className="row gap-8"><span className="h3">{me.name}</span><TierPill tier={s.tier} />{tierNext && tierToNext > 0 && <span className="tiny muted">{t('profile.toNextTier', { n: tierToNext.toLocaleString(), tier: tierNext })}</span>}</div>
+              <div className="tiny muted">{me.handle} · {t('profile.joinedPrefix')} {me.joined}</div>
               <div className="row gap-8 mt-8">
-                <span className="badge badge-gold"><Icon name="fire" size={12} fill="var(--gold)" />{s.streak}-day streak</span>
+                <span className="badge badge-gold"><Icon name="fire" size={12} fill="var(--gold)" />{t('profile.dayStreak', { n: s.streak })}</span>
                 {s.winStreak > 0 && (
-                  <span className="badge badge-green">🔥 {s.winStreak} win streak</span>
+                  <span className="badge badge-green">{t('profile.winStreak', { n: s.winStreak })}</span>
                 )}
               </div>
             </div>
           </div>
-          <Btn variant="ghost" size="sm" icon="edit" onClick={() => { setEditName(me.name); setEditing(true); }}>Edit</Btn>
+          <Btn variant="ghost" size="sm" icon="edit" onClick={() => { setEditName(me.name); setEditing(true); }}>{t('profile.edit')}</Btn>
         </div>
       </div>
 
@@ -773,9 +781,9 @@ export function Profile({ s }: ScreenProps) {
         <Portal><div className="overlay" onClick={() => setEditing(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="card-pad-lg">
-              <div className="row between"><span className="eyebrow">Edit profile</span><button className="btn-icon" onClick={() => setEditing(false)}><Icon name="x" size={18} /></button></div>
-              <div className="field mt-16"><label className="label">Display name</label><input className="input" value={editName} maxLength={30} onChange={(e) => setEditName(e.target.value)} /></div>
-              <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={!editName.trim() || savingName} onClick={saveName}>{savingName ? 'Saving…' : 'Save'}</Btn>
+              <div className="row between"><span className="eyebrow">{t('profile.editProfile')}</span><button className="btn-icon" onClick={() => setEditing(false)}><Icon name="x" size={18} /></button></div>
+              <div className="field mt-16"><label className="label">{t('profile.displayName')}</label><input className="input" value={editName} maxLength={30} onChange={(e) => setEditName(e.target.value)} /></div>
+              <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={!editName.trim() || savingName} onClick={saveName}>{savingName ? t('profile.saving') : t('profile.save')}</Btn>
             </div>
           </div>
         </div></Portal>
@@ -783,7 +791,7 @@ export function Profile({ s }: ScreenProps) {
 
       {/* stats */}
       <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))' }}>
-        {([['Balance', s.points.toLocaleString(), 'var(--gold)'], ['ROI', sgnPct(me.roi), sgnCol(me.roi)], ['Rank', '#' + (me.rank ?? '—'), 'var(--sky)'], ['Settled', String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
+        {([[t('profile.statBalance'), s.points.toLocaleString(), 'var(--gold)'], [t('profile.statRoi'), sgnPct(me.roi), sgnCol(me.roi)], [t('profile.statRank'), '#' + (me.rank ?? '—'), 'var(--sky)'], [t('profile.statSettled'), String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
           <div key={l} className="card card-pad stat"><span className="s-val tnum" style={{ color: c, fontSize: 22 }}>{v}</span><span className="s-lbl">{l}</span></div>
         ))}
       </div>
@@ -793,23 +801,23 @@ export function Profile({ s }: ScreenProps) {
         <div className="card card-pad mt-16">
           <div className="row gap-8" style={{ marginBottom: 12 }}>
             <Icon name="sparkles" size={18} style={{ color: 'var(--gold)' }} />
-            <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Power-ups</span>
+            <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.powerups')}</span>
           </div>
           <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
             {([
-              { type: 'DOUBLE_DOWN', label: 'Double Down', desc: 'Won bet pays 2×', price: 300 },
-              { type: 'INSURANCE', label: 'Insurance', desc: 'Refund stake on a loss', price: 200 },
-              { type: 'STREAK_SHIELD', label: 'Streak Shield', desc: 'One loss won\'t break your win streak', price: 400 },
+              { type: 'DOUBLE_DOWN', label: t('profile.puDoubleDown'), desc: t('profile.puDoubleDownDesc'), price: 300 },
+              { type: 'INSURANCE', label: t('profile.puInsurance'), desc: t('profile.puInsuranceDesc'), price: 200 },
+              { type: 'STREAK_SHIELD', label: t('profile.puStreakShield'), desc: t('profile.puStreakShieldDesc'), price: 400 },
             ] as { type: string; label: string; desc: string; price: number }[]).map(({ type, label, desc, price }) => (
               <div key={type} className="card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
                 <div className="row between">
                   <span className="small" style={{ fontWeight: 700 }}>{label}</span>
-                  <span className="badge badge-gold">{powerUpInventory[type] ?? 0} owned</span>
+                  <span className="badge badge-gold">{t('profile.puOwned', { n: powerUpInventory[type] ?? 0 })}</span>
                 </div>
                 <div className="tiny muted mt-4">{desc}</div>
                 <Btn variant="ghost" size="sm" className="mt-8" disabled={buyingPowerUp === type}
                   onClick={() => handleBuyPowerUp(type)}>
-                  Buy · {price} pts
+                  {t('profile.puBuy', { price })}
                 </Btn>
               </div>
             ))}
@@ -820,21 +828,21 @@ export function Profile({ s }: ScreenProps) {
       {/* referral / share */}
       <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
         <div className="card card-pad">
-          <div className="row gap-8"><Icon name="users" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Refer &amp; earn</span></div>
-          <p className="tiny t2 mt-8">Invite a friend — you both get +300 points. {referral ? `${referral.count} friend${referral.count !== 1 ? 's' : ''} referred so far.` : 'You both get +300 points when they place their first bet.'}</p>
+          <div className="row gap-8"><Icon name="users" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.referTitle')}</span></div>
+          <p className="tiny t2 mt-8">{t('profile.referIntro')} {referral ? t('profile.referCount', { n: referral.count }) : t('profile.referNudge')}</p>
           <div className="row gap-8 mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
-            <span className="tnum small grow ellip">{referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : 'Generating your invite link…'}</span>
+            <span className="tnum small grow ellip">{referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : t('profile.genInvite')}</span>
             <Btn variant="primary" size="sm" disabled={!referral} onClick={() => {
               const url = referral && typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referral.code}` : '';
               if (url && typeof navigator !== 'undefined' && navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => s.toastMsg('Invite link copied!', 'check', 'var(--green)')).catch(() => s.toastMsg('Copy failed', 'alert', 'var(--danger)'));
-              } else s.toastMsg('No invite link yet', 'alert', 'var(--gold)');
-            }}>Copy</Btn>
+                navigator.clipboard.writeText(url).then(() => s.toastMsg(t('profile.inviteCopied'), 'check', 'var(--green)')).catch(() => s.toastMsg(t('profile.copyFail'), 'alert', 'var(--danger)'));
+              } else s.toastMsg(t('profile.noLink'), 'alert', 'var(--gold)');
+            }}>{t('profile.copy')}</Btn>
           </div>
         </div>
         <div className="card card-pad" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
-          <div className="row gap-8"><Icon name="share" size={18} style={{ color: 'var(--green)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Share your form</span></div>
-          <p className="tiny t2 mt-8">&quot;I&apos;m {sgnPct(me.roi)} ROI and {me.won} bets up at the World Cup.&quot; Make a share card.</p>
+          <div className="row gap-8"><Icon name="share" size={18} style={{ color: 'var(--green)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.shareTitle')}</span></div>
+          <p className="tiny t2 mt-8">{t('profile.shareDesc', { roi: sgnPct(me.roi), won: me.won })}</p>
           <div className="row gap-8 mt-12">
             <Btn variant="ghost" size="sm" icon="share" onClick={() => {
               const params = new URLSearchParams({
@@ -850,11 +858,11 @@ export function Profile({ s }: ScreenProps) {
                 ? `${window.location.origin}/api/og/share?${params}`
                 : `/api/og/share?${params}`;
               if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => s.toastMsg('Share link copied!', 'check', 'var(--green)')).catch(() => s.toastMsg('Copy failed', 'alert', 'var(--danger)'));
+                navigator.clipboard.writeText(url).then(() => s.toastMsg(t('profile.shareCopied'), 'check', 'var(--green)')).catch(() => s.toastMsg(t('profile.copyFail'), 'alert', 'var(--danger)'));
               } else {
-                s.toastMsg('Share link copied!', 'check', 'var(--green)');
+                s.toastMsg(t('profile.shareCopied'), 'check', 'var(--green)');
               }
-            }}>Copy link</Btn>
+            }}>{t('profile.copyLink')}</Btn>
             <Btn variant="primary" size="sm" onClick={() => {
               const params = new URLSearchParams({
                 name: me.name,
@@ -868,14 +876,14 @@ export function Profile({ s }: ScreenProps) {
               if (typeof window !== 'undefined') {
                 window.open(`/api/og/share?${params}`, '_blank');
               }
-            }}>Preview</Btn>
+            }}>{t('profile.preview')}</Btn>
           </div>
         </div>
       </div>
 
       {/* achievements */}
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Achievements</div>
-      {achievements.length === 0 && <div className="card card-pad" style={{ textAlign: 'center' }}><p className="muted">No achievements unlocked yet.</p></div>}
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('profile.achievements')}</div>
+      {achievements.length === 0 && <div className="card card-pad" style={{ textAlign: 'center' }}><p className="muted">{t('profile.achEmpty')}</p></div>}
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
         {achievements.map((a) => (
           <div key={a.name} className="card card-pad" style={{ opacity: a.unlocked ? 1 : .55, borderColor: a.unlocked ? 'rgba(255,200,61,.25)' : 'var(--line)' }}>
@@ -890,22 +898,22 @@ export function Profile({ s }: ScreenProps) {
       </div>
 
       {/* duels */}
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Duels</div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('profile.duels')}</div>
       {s.authed && (
         <div className="stack gap-10">
           {/* challenge form */}
           <div className="card card-pad">
-            <div className="row gap-8" style={{ marginBottom: 8 }}><Icon name="target" size={18} style={{ color: 'var(--magenta)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Challenge someone</span></div>
-            <p className="tiny muted" style={{ marginBottom: 12 }}>Head-to-head <b>ROI race</b>: whoever earns the higher ROI on bets settled <i>from when the challenge is issued</i> until it's resolved wins. Opponent must accept, then either player can resolve any time — bragging rights only, no points at stake.</p>
+            <div className="row gap-8" style={{ marginBottom: 8 }}><Icon name="target" size={18} style={{ color: 'var(--magenta)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.challengeSomeone')}</span></div>
+            <p className="tiny muted" style={{ marginBottom: 12 }}>{t('profile.duelExplain')}</p>
             <div className="stack gap-8">
-              <div className="field"><label className="label">Opponent user ID</label><input className="input" value={duelOpponentId} onChange={(e) => setDuelOpponentId(e.target.value)} placeholder="e.g. 42" /></div>
-              <div className="field"><label className="label">Label <span className="muted tiny">(optional)</span></label><input className="input" value={duelScope} onChange={(e) => setDuelScope(e.target.value)} placeholder="e.g. Group stage showdown" /></div>
-              <Btn variant="primary" size="sm" disabled={!duelOpponentId} onClick={handleChallenge}>Send challenge</Btn>
+              <div className="field"><label className="label">{t('profile.opponentId')}</label><input className="input" value={duelOpponentId} onChange={(e) => setDuelOpponentId(e.target.value)} placeholder={t('profile.opponentIdPh')} /></div>
+              <div className="field"><label className="label">{t('profile.labelField')} <span className="muted tiny">{t('profile.optional')}</span></label><input className="input" value={duelScope} onChange={(e) => setDuelScope(e.target.value)} placeholder={t('profile.labelPh')} /></div>
+              <Btn variant="primary" size="sm" disabled={!duelOpponentId} onClick={handleChallenge}>{t('profile.sendChallenge')}</Btn>
             </div>
           </div>
 
           {/* duel list */}
-          {duels.length === 0 && <div className="card card-pad"><span className="tiny muted">No duels yet.</span></div>}
+          {duels.length === 0 && <div className="card card-pad"><span className="tiny muted">{t('profile.noDuels')}</span></div>}
           {duels.map((d) => {
             const statusColor = d.status === 'ACTIVE' ? 'var(--green)' : d.status === 'DONE' ? 'var(--muted)' : 'var(--gold)';
             const isIncoming = d.status === 'PENDING' && meId && d.opponentId === meId;
@@ -914,22 +922,22 @@ export function Profile({ s }: ScreenProps) {
               <div key={d.id} className="card card-pad">
                 <div className="row between wrap gap-8">
                   <div>
-                    <div className="small" style={{ fontWeight: 700 }}>{d.challengerName} <span className="muted">vs</span> {d.opponentName}</div>
+                    <div className="small" style={{ fontWeight: 700 }}>{d.challengerName} <span className="muted">{t('profile.vs')}</span> {d.opponentName}</div>
                     {d.scope && d.scope !== 'GLOBAL' && <div className="tiny muted">{d.scope}</div>}
-                    <div className="tiny muted">Higher ROI since the challenge wins</div>
-                    {d.status === 'DONE' && d.winnerId && <div className="tiny" style={{ color: 'var(--green)' }}>Winner: {d.winnerId === d.challengerId ? d.challengerName : d.opponentName}</div>}
-                    {d.status === 'DONE' && !d.winnerId && <div className="tiny muted">Result: tie</div>}
+                    <div className="tiny muted">{t('profile.higherRoi')}</div>
+                    {d.status === 'DONE' && d.winnerId && <div className="tiny" style={{ color: 'var(--green)' }}>{t('profile.winner', { name: d.winnerId === d.challengerId ? d.challengerName : d.opponentName })}</div>}
+                    {d.status === 'DONE' && !d.winnerId && <div className="tiny muted">{t('profile.tie')}</div>}
                   </div>
                   <div className="row gap-8">
                     <span className="badge" style={{ background: 'var(--surface-2)', color: statusColor }}>{d.status}</span>
                     {isIncoming && (
                       <>
-                        <Btn variant="primary" size="sm" onClick={() => handleRespond(d.id, true)}>Accept</Btn>
-                        <Btn variant="ghost" size="sm" onClick={() => handleRespond(d.id, false)}>Decline</Btn>
+                        <Btn variant="primary" size="sm" onClick={() => handleRespond(d.id, true)}>{t('profile.accept')}</Btn>
+                        <Btn variant="ghost" size="sm" onClick={() => handleRespond(d.id, false)}>{t('profile.decline')}</Btn>
                       </>
                     )}
                     {d.status === 'ACTIVE' && isParticipant && (
-                      <Btn variant="gold" size="sm" onClick={() => handleResolve(d.id)}>Resolve</Btn>
+                      <Btn variant="gold" size="sm" onClick={() => handleResolve(d.id)}>{t('profile.resolve')}</Btn>
                     )}
                   </div>
                 </div>
@@ -940,32 +948,32 @@ export function Profile({ s }: ScreenProps) {
       )}
 
       {/* notifications */}
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Notifications</div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('profile.notifications')}</div>
       <div className="card" style={{ overflow: 'hidden' }}>
-        {NOTIF_ROWS.map(([label, key], i) => (
+        {NOTIF_ROWS.map(([labelKey, key], i) => (
           <div key={key} className="row between" style={{ padding: '14px 18px', borderBottom: i < NOTIF_ROWS.length - 1 ? '1px solid var(--line)' : 0 }}>
-            <span className="small">{label}</span>
+            <span className="small">{t(labelKey)}</span>
             <Toggle on={notifPrefs[key] ?? false} onChange={(v) => handleNotifToggle(key, v)} />
           </div>
         ))}
       </div>
 
       {/* change password */}
-      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>Security</div>
+      <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('profile.security')}</div>
       <div className="card card-pad">
-        <div className="row gap-8" style={{ marginBottom: 16 }}><Icon name="shield" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>Change password</span></div>
+        <div className="row gap-8" style={{ marginBottom: 16 }}><Icon name="shield" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.changePw')}</span></div>
         <div className="stack gap-12">
-          <div className="field"><label className="label">Current password</label><input className="input" type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="Enter current password" /></div>
-          <div className="field"><label className="label">New password</label><input className="input" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" /></div>
-          <Btn variant="primary" size="sm" disabled={pwLoading || !currentPw || !newPw} onClick={handleChangePassword}>{pwLoading ? 'Saving…' : 'Update password'}</Btn>
+          <div className="field"><label className="label">{t('profile.currentPw')}</label><input className="input" type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder={t('profile.currentPwPh')} /></div>
+          <div className="field"><label className="label">{t('profile.newPw')}</label><input className="input" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t('profile.newPwPh')} /></div>
+          <Btn variant="primary" size="sm" disabled={pwLoading || !currentPw || !newPw} onClick={handleChangePassword}>{pwLoading ? t('profile.saving') : t('profile.updatePw')}</Btn>
         </div>
       </div>
 
       {/* cosmetic shop */}
       <CosmeticShop s={s} />
 
-      <Btn variant="ghost" className="btn-block mt-24" icon="logout" onClick={() => s.logout()}>Log out</Btn>
-      <Btn variant="outline" className="btn-block mt-12" icon="shield" onClick={() => s.go('admin')}>Open admin console</Btn>
+      <Btn variant="ghost" className="btn-block mt-24" icon="logout" onClick={() => s.logout()}>{t('profile.logout')}</Btn>
+      <Btn variant="outline" className="btn-block mt-12" icon="shield" onClick={() => s.go('admin')}>{t('profile.openAdmin')}</Btn>
     </div>
   );
 }

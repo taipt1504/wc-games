@@ -1,10 +1,12 @@
 'use client';
-/* GOLAZO — Schedule · Match Detail · Bet Slip (ported from docs/design/predict-wc-2026/project/screens-match.jsx) */
-import React, { useState, useEffect, useCallback } from 'react';
+/* World Cup Games — Schedule · Match Detail · Bet Slip (ported from docs/design/predict-wc-2026/project/screens-match.jsx) */
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WC, type Pick1X2 } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, Portal, SecHead } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
+import { useRealtime } from '@/lib/realtime';
+import { useT } from '@/lib/i18n/hooks';
 
 /* ---- Real match shape (GET /api/v1/matches[/:id]) ---- */
 interface RealTeam { id: number; name: string; code: string | null; flagUrl: string | null }
@@ -16,15 +18,20 @@ export interface RealMatch {
   venue?: { name: string; city?: string | null; country?: string | null } | null;
 }
 
-/* Friendly messages for the predictions API error codes. */
+/* Maps a predictions API error code → an i18n key (resolved with t() at the call site). */
 const BET_ERR: Record<string, string> = {
-  BET_LOCKED: 'Betting is closed for this match',
-  INSUFFICIENT_BALANCE: 'Not enough balance',
-  ALREADY_BET_OUTCOME: 'You already bet that outcome',
-  ODDS_UNAVAILABLE: 'Odds unavailable',
-  INVALID_STAKE: 'Enter a valid stake',
-  MATCH_NOT_FOUND: 'Match not found',
+  BET_LOCKED: 'betslip.errLocked',
+  INSUFFICIENT_BALANCE: 'betslip.errBalance',
+  ALREADY_BET_OUTCOME: 'betslip.errAlready',
+  ODDS_UNAVAILABLE: 'betslip.errOdds',
+  INVALID_STAKE: 'betslip.errStake',
+  MATCH_NOT_FOUND: 'betslip.errNotFound',
 };
+
+/* GROUP → "Group A"; knockout → raw round code (matches the original card/detail display). */
+function roundShort(round: string, group: string | null, groupPrefix: string): string {
+  return round === 'GROUP' ? `${groupPrefix} ${group ?? ''}` : round;
+}
 
 /* Place a global bet; refresh store (balance + bets) on success. Returns an error code or null. */
 async function placeGlobalBet(s: ScreenProps['s'], matchId: number, outcome: Pick1X2, stake: number, exact?: { home: number; away: number }): Promise<string | null> {
@@ -41,31 +48,32 @@ async function placeGlobalBet(s: ScreenProps['s'], matchId: number, outcome: Pic
 
 /* Global bet slip (real match, multi-outcome) — Portal-rendered so the fade-up page can't trap it. */
 function MatchBetSlip({ match, pick, oddsVal, balance, busy, onClose, onConfirm }: { match: RealMatch; pick: Pick1X2; oddsVal: number; balance: number; busy?: boolean; onClose: () => void; onConfirm: (stake: number, exact?: { home: number; away: number }) => void }) {
+  const { t } = useT();
   const [stake, setStake] = useState(100);
   const [exH, setExH] = useState(0);
   const [exA, setExA] = useState(0);
   const knockout = match.round !== 'GROUP';
-  const label = pick === '1' ? (match.home?.name ?? 'Home') : pick === '2' ? (match.away?.name ?? 'Away') : 'Draw';
-  const payout = Math.round(stake * (1 + oddsVal));
+  const label = pick === '1' ? (match.home?.name ?? t('betslip.home')) : pick === '2' ? (match.away?.name ?? t('betslip.away')) : t('betslip.draw');
+  const payout = Math.round(stake * oddsVal); // decimal odds: total return = stake × odds
   const over = stake > balance;
   const quick = [50, 100, 250, 500];
   return (
     <Portal><div className="overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
         <div className="card-pad-lg">
-          <div className="row between"><span className="eyebrow">Bet slip</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
+          <div className="row between"><span className="eyebrow">{t('betslip.title')}</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
           <div className="row between mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
             <span className="small ellip">{match.home?.code ?? '?'} v {match.away?.code ?? '?'}</span>
             <span className="badge badge-sky">{pick} · {label}</span>
           </div>
           <div className="field mt-16">
-            <div className="row between"><label className="label">Stake</label><span className="tiny muted">Balance <span className="tnum text-gold">{balance.toLocaleString()}</span></span></div>
+            <div className="row between"><label className="label">{t('betslip.stake')}</label><span className="tiny muted">{t('betslip.balance')} <span className="tnum text-gold">{balance.toLocaleString()}</span></span></div>
             <input className="input input-mono" type="number" min={1} value={stake} onChange={e => setStake(Math.max(1, +e.target.value || 1))} />
-            <div className="row gap-8 mt-4">{quick.map(q => <button key={q} className="chip chip-sm" onClick={() => setStake(q)}>{q}</button>)}<button className="chip chip-sm" onClick={() => setStake(Math.max(1, balance))}>Max</button></div>
+            <div className="row gap-8 mt-4">{quick.map(q => <button key={q} className="chip chip-sm" onClick={() => setStake(q)}>{q}</button>)}<button className="chip chip-sm" onClick={() => setStake(Math.max(1, balance))}>{t('betslip.max')}</button></div>
           </div>
           {knockout && (
             <div className="field mt-12">
-              <div className="row between"><label className="label">Exact score</label><span className="tiny muted">optional · knockout bonus</span></div>
+              <div className="row between"><label className="label">{t('betslip.exactScore')}</label><span className="tiny muted">{t('betslip.exactHint')}</span></div>
               <div className="row gap-8" style={{ alignItems: 'center', justifyContent: 'center' }}>
                 <span className="tiny t2">{match.home?.code}</span>
                 <input className="input input-mono" type="number" min={0} value={exH} onChange={e => setExH(Math.max(0, +e.target.value || 0))} style={{ width: 64, textAlign: 'center' }} />
@@ -76,11 +84,11 @@ function MatchBetSlip({ match, pick, oddsVal, balance, busy, onClose, onConfirm 
             </div>
           )}
           <div className="card-2 card-pad mt-12" style={{ borderRadius: 'var(--r-sm)' }}>
-            <div className="row between small"><span className="t2">Odds</span><span className="tnum">×{(1 + oddsVal).toFixed(2)}</span></div>
-            <div className="row between mt-8"><span className="t2">Potential payout</span><span className="tnum text-green" style={{ fontWeight: 700 }}>{payout.toLocaleString()}</span></div>
+            <div className="row between small"><span className="t2">{t('betslip.odds')}</span><span className="tnum">×{oddsVal.toFixed(2)}</span></div>
+            <div className="row between mt-8"><span className="t2">{t('betslip.potentialPayout')}</span><span className="tnum text-green" style={{ fontWeight: 700 }}>{payout.toLocaleString()}</span></div>
           </div>
-          {over && <p className="tiny text-danger mt-8" style={{ textAlign: 'center' }}>Stake exceeds your balance.</p>}
-          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={stake <= 0 || over || busy} onClick={() => onConfirm(stake, knockout ? { home: exH, away: exA } : undefined)}>{busy ? 'Placing…' : `Confirm bet · ${stake} pts`}</Btn>
+          {over && <p className="tiny text-danger mt-8" style={{ textAlign: 'center' }}>{t('betslip.overBalance')}</p>}
+          <Btn variant="primary" size="lg" className="btn-block mt-16" disabled={stake <= 0 || over || busy} onClick={() => onConfirm(stake, knockout ? { home: exH, away: exA } : undefined)}>{busy ? t('betslip.placing') : t('betslip.confirm', { stake })}</Btn>
         </div>
       </div>
     </div></Portal>
@@ -89,13 +97,14 @@ function MatchBetSlip({ match, pick, oddsVal, balance, busy, onClose, onConfirm 
 
 /* Real match card with 1·X·2 betting — self-contained (owns its slip). Used by Schedule + Home/Landing. */
 export function MatchBetCard({ m, s }: { m: RealMatch; s: ScreenProps['s'] }) {
+  const { t, fmt } = useT();
   const [slip, setSlip] = useState<{ pick: Pick1X2; oddsVal: number } | null>(null);
   const [sending, setSending] = useState(false);
   const open = m.status === 'SCHEDULED' && !m.bettingLocked;
   const myBets = s.bets.filter(b => b.mid === m.id);
   const betFor = (k: Pick1X2) => myBets.find(b => b.pick === k);
   const cells: [Pick1X2, string, number][] = m.odds
-    ? [['1', m.home?.code ?? 'H', m.odds.mHome], ['X', 'Draw', m.odds.mDraw], ['2', m.away?.code ?? 'A', m.odds.mAway]]
+    ? [['1', m.home?.code ?? 'H', m.odds.mHome], ['X', t('betslip.draw'), m.odds.mDraw], ['2', m.away?.code ?? 'A', m.odds.mAway]]
     : [];
   const onBet = (k: Pick1X2, v: number) => { if (!s.authed) { s.go('auth', { mode: 'signup' }); return; } setSlip({ pick: k, oddsVal: v }); };
   const confirm = async (stake: number, exact?: { home: number; away: number }) => {
@@ -103,25 +112,25 @@ export function MatchBetCard({ m, s }: { m: RealMatch; s: ScreenProps['s'] }) {
     setSending(true);
     const err = await placeGlobalBet(s, m.id, slip.pick, stake, exact);
     setSending(false);
-    if (err) { s.toastMsg(BET_ERR[err] ?? 'Could not place bet', 'alert', 'danger'); return; }
-    s.toastMsg('Bet placed!', 'check', 'green');
+    if (err) { s.toastMsg(t(BET_ERR[err] ?? 'betslip.errGeneric'), 'alert', 'danger'); return; }
+    s.toastMsg(t('betslip.betPlaced'), 'check', 'green');
     setSlip(null);
   };
   return (
     <div className="card card-pad">
       <div className="row between" style={{ marginBottom: 10 }}>
-        <span className="badge badge-muted">{m.round === 'GROUP' ? `Group ${m.group ?? ''}` : m.round}</span>
-        {m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
-          : m.status === 'FINISHED' ? <span className="badge badge-muted">FT {m.scoreHome}-{m.scoreAway}</span>
-            : m.bettingLocked ? <span className="badge badge-danger"><Icon name="lock" size={11} /> Betting closed</span>
-              : <span className="tiny muted">{new Date(m.kickoffAt).toLocaleDateString()}</span>}
+        <span className="badge badge-muted">{roundShort(m.round, m.group, t('round.groupPrefix'))}</span>
+        {m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
+          : m.status === 'FINISHED' ? <span className="badge badge-muted">{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
+            : m.bettingLocked ? <span className="badge badge-danger"><Icon name="lock" size={11} /> {t('match.bettingClosedBadge')}</span>
+              : <span className="tiny muted">{fmt.date(m.kickoffAt)}</span>}
       </div>
       <div className="row between gap-12" style={{ marginBottom: 10 }} onClick={() => s.go('match', { id: m.id })}>
-        {[m.home, m.away].map((t, i) => (
+        {[m.home, m.away].map((tm, i) => (
           <div key={i} className="row gap-8 pointer" style={{ flex: 1, minWidth: 0, justifyContent: i ? 'flex-end' : 'flex-start' }}>
-            {i === 0 && t && <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={26} />}
-            <span className="ellip small" style={{ fontWeight: 600 }}>{t?.name ?? 'TBD'}</span>
-            {i === 1 && t && <Flag flagUrl={t.flagUrl ?? undefined} name={t.name} code={t.code ?? undefined} size={26} />}
+            {i === 0 && tm && <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={26} />}
+            <span className="ellip small" style={{ fontWeight: 600 }}>{tm?.name ?? t('match.tbd')}</span>
+            {i === 1 && tm && <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={26} />}
           </div>
         ))}
       </div>
@@ -172,23 +181,31 @@ function useLiveScores() {
 
 /* ===================== SCHEDULE ===================== */
 export function Schedule({ s }: ScreenProps) {
+  const { t } = useT();
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
   const [matches, setMatches] = useState<RealMatch[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const load = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     fetch('/api/v1/matches').then(r => (r.ok ? r.json() : null))
       .then(j => setMatches((j?.data ?? []) as RealMatch[]))
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: any match update silently re-fetches the list (debounced to coalesce bursts).
+  const debRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useRealtime('match.update', () => {
+    clearTimeout(debRef.current);
+    debRef.current = setTimeout(() => load(true), 500);
+  });
+
   const filters = [
-    { k: 'all', label: 'All' }, { k: 'live', label: 'Live' }, { k: 'today', label: 'Today' },
-    { k: 'open', label: 'Open' }, { k: 'finished', label: 'Finished' },
+    { k: 'all', label: t('schedule.filterAll') }, { k: 'live', label: t('schedule.filterLive') }, { k: 'today', label: t('schedule.filterToday') },
+    { k: 'open', label: t('schedule.filterOpen') }, { k: 'finished', label: t('schedule.filterFinished') },
   ];
   const today = new Date().toDateString();
   let list = matches.slice();
@@ -199,8 +216,7 @@ export function Schedule({ s }: ScreenProps) {
   if (q) list = list.filter(m => `${m.home?.name ?? ''} ${m.away?.name ?? ''}`.toLowerCase().includes(q.toLowerCase()));
 
   // group fixtures by Group / knockout round so the section a match belongs to is obvious
-  const ROUND_LABEL: Record<string, string> = { R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarter-finals', SF: 'Semi-finals', THIRD: 'Third place', FINAL: 'Final' };
-  const sectionOf = (m: RealMatch) => m.round === 'GROUP' ? `Group ${m.group ?? '?'}` : (ROUND_LABEL[m.round] ?? m.round);
+  const sectionOf = (m: RealMatch) => m.round === 'GROUP' ? `${t('round.groupPrefix')} ${m.group ?? '?'}` : t(`round.${m.round}`);
   const sections: [string, RealMatch[]][] = [];
   const secIdx = new Map<string, number>();
   for (const m of list) {
@@ -212,26 +228,26 @@ export function Schedule({ s }: ScreenProps) {
 
   return (
     <div className="page fade-up">
-      <SecHead title="Match schedule" sub="48 teams · 12 groups · 104 matches across USA, Canada & Mexico" />
+      <SecHead title={t('schedule.title')} sub={t('schedule.sub')} />
       <div className="row between wrap gap-12" style={{ marginBottom: 18 }}>
         <div className="row gap-8 wrap-w">
           {filters.map(f => <button key={f.k} className={`chip ${filter === f.k ? 'active' : ''}`} onClick={() => setFilter(f.k)}>{f.label}</button>)}
         </div>
         <div className="row gap-8 card" style={{ padding: '6px 12px', borderRadius: 'var(--r-pill)' }}>
           <Icon name="search" size={16} className="muted" />
-          <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0', width: 160 }} placeholder="Search teams" value={q} onChange={e => setQ(e.target.value)} />
+          <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0', width: 160 }} placeholder={t('schedule.searchPh')} value={q} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
 
       {loading
-        ? <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">Loading fixtures…</p></div>
+        ? <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('schedule.loading')}</p></div>
         : list.length === 0
-          ? <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">No matches match that filter.</p></div>
+          ? <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('schedule.empty')}</p></div>
           : sections.map(([label, ms]) => (
             <div key={label} style={{ marginBottom: 22 }}>
               <div className="row between" style={{ marginBottom: 10 }}>
                 <span className="eyebrow">{label}</span>
-                <span className="tiny muted">{ms.length} {ms.length === 1 ? 'match' : 'matches'}</span>
+                <span className="tiny muted">{ms.length} {ms.length === 1 ? t('schedule.matchOne') : t('schedule.matchMany')}</span>
               </div>
               <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
                 {ms.map(m => <MatchBetCard key={m.id} m={m} s={s} />)}
@@ -244,13 +260,14 @@ export function Schedule({ s }: ScreenProps) {
 
 /* ===================== MATCH DETAIL ===================== */
 
-const NEXT_GOAL_PICKS: { pick: string; label: string; odds: number }[] = [
-  { pick: 'HOME', label: 'Home', odds: 1.8 },
-  { pick: 'AWAY', label: 'Away', odds: 2.2 },
-  { pick: 'NONE', label: 'None', odds: 3.0 },
+const NEXT_GOAL_PICKS: { pick: string; labelKey: string; odds: number }[] = [
+  { pick: 'HOME', labelKey: 'match.nextGoalHome', odds: 1.8 },
+  { pick: 'AWAY', labelKey: 'match.nextGoalAway', odds: 2.2 },
+  { pick: 'NONE', labelKey: 'match.nextGoalNone', odds: 3.0 },
 ];
 
 function MicroBetWidget({ matchId }: { matchId: number }) {
+  const { t } = useT();
   const [selected, setSelected] = useState<string | null>(null);
   const [stake, setStake] = useState(50);
   const [sending, setSending] = useState(false);
@@ -267,10 +284,10 @@ function MicroBetWidget({ matchId }: { matchId: number }) {
       })
         .then(r => r.json())
         .then((j: { data?: { id: string }; error?: { code: string } }) => {
-          if (j?.data?.id) setDone('Bet placed!');
-          else setDone(j?.error?.code ?? 'Error');
+          if (j?.data?.id) setDone(t('betslip.betPlaced'));
+          else setDone(t('match.error'));
         })
-        .catch(() => setDone('Error'))
+        .catch(() => setDone(t('match.error')))
         .finally(() => setSending(false));
     } catch {
       setSending(false);
@@ -288,28 +305,29 @@ function MicroBetWidget({ matchId }: { matchId: number }) {
   return (
     <div className="card card-pad mt-16" style={{ borderColor: 'rgba(255,180,0,.3)' }}>
       <div className="row between" style={{ marginBottom: 10 }}>
-        <span className="eyebrow">In-play · Next Goal</span>
-        <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
+        <span className="eyebrow">{t('match.inplayNextGoal')}</span>
+        <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
       </div>
       <div className="row gap-8 mt-4">
-        {NEXT_GOAL_PICKS.map(({ pick, label, odds }) => (
+        {NEXT_GOAL_PICKS.map(({ pick, labelKey, odds }) => (
           <button key={pick} className={`odds ${selected === pick ? 'sel' : ''}`} style={{ flex: 1 }} onClick={() => setSelected(pick)}>
-            <span className="o-label">{label}</span><span className="o-val">×{(1 + odds).toFixed(1)}</span>
+            <span className="o-label">{t(labelKey)}</span><span className="o-val">×{(1 + odds).toFixed(1)}</span>
           </button>
         ))}
       </div>
       <div className="field mt-10">
-        <div className="row between"><label className="label">Stake</label></div>
+        <div className="row between"><label className="label">{t('betslip.stake')}</label></div>
         <input className="input input-mono" type="number" value={stake} min={1} onChange={e => setStake(Math.max(1, +e.target.value || 1))} />
       </div>
       <Btn variant="primary" className="btn-block mt-10" disabled={!selected || sending} onClick={handleConfirm}>
-        {sending ? 'Placing…' : 'Place in-play bet'}
+        {sending ? t('betslip.placing') : t('match.placeInplay')}
       </Btn>
     </div>
   );
 }
 
 export function MatchDetail({ s }: ScreenProps) {
+  const { t, fmt } = useT();
   const id = Number(s.param.id);
   const [m, setM] = useState<RealMatch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -318,15 +336,18 @@ export function MatchDetail({ s }: ScreenProps) {
   const [sending, setSending] = useState(false);
   const liveScores = useLiveScores();
 
-  const load = useCallback(() => {
+  const load = useCallback((silent = false) => {
     if (!id) { setLoading(false); return; }
-    setLoading(true);
+    if (!silent) setLoading(true);
     fetch(`/api/v1/matches/${id}`).then(r => (r.ok ? r.json() : null))
       .then(j => setM((j?.data ?? null) as RealMatch | null))
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: re-fetch this match silently when it changes (lineup/odds/score/lock/settle).
+  useRealtime('match.update', (ev) => { if (Number(ev.matchId) === id) load(true); });
 
   const homeId = m?.home?.id, awayId = m?.away?.id;
   useEffect(() => {
@@ -340,11 +361,11 @@ export function MatchDetail({ s }: ScreenProps) {
     return () => { cancelled = true; };
   }, [homeId, awayId]);
 
-  if (loading) return <div className="page fade-up"><div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">Loading match…</p></div></div>;
+  if (loading) return <div className="page fade-up"><div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('match.loading')}</p></div></div>;
   if (!m) return (
     <div className="page fade-up">
-      <button className="chip mt-4" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back</button>
-      <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">Match not found.</p></div>
+      <button className="chip mt-4" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> {t('common.back')}</button>
+      <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('match.notFound')}</p></div>
     </div>
   );
 
@@ -355,7 +376,7 @@ export function MatchDetail({ s }: ScreenProps) {
   const myBets = s.bets.filter(b => b.mid === m.id);
   const betFor = (k: Pick1X2) => myBets.find(b => b.pick === k);
   const cells: [Pick1X2, string, number][] = m.odds
-    ? [['1', m.home?.code ?? 'H', m.odds.mHome], ['X', 'Draw', m.odds.mDraw], ['2', m.away?.code ?? 'A', m.odds.mAway]]
+    ? [['1', m.home?.code ?? 'H', m.odds.mHome], ['X', t('betslip.draw'), m.odds.mDraw], ['2', m.away?.code ?? 'A', m.odds.mAway]]
     : [];
 
   const onBet = (pick: Pick1X2, oddsVal: number) => {
@@ -367,8 +388,8 @@ export function MatchDetail({ s }: ScreenProps) {
     setSending(true);
     const err = await placeGlobalBet(s, m.id, slip.pick, stake, exact);
     setSending(false);
-    if (err) { s.toastMsg(BET_ERR[err] ?? 'Could not place bet', 'alert', 'danger'); return; }
-    s.toastMsg('Bet placed!', 'check', 'green');
+    if (err) { s.toastMsg(t(BET_ERR[err] ?? 'betslip.errGeneric'), 'alert', 'danger'); return; }
+    s.toastMsg(t('betslip.betPlaced'), 'check', 'green');
     setSlip(null);
   };
 
@@ -380,23 +401,23 @@ export function MatchDetail({ s }: ScreenProps) {
     <div className="page fade-up">
       {/* reading content constrained for legibility; lineups grid below goes full width */}
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
-      <button className="chip mt-4" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back</button>
+      <button className="chip mt-4" onClick={() => s.back()} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> {t('common.back')}</button>
 
       {/* hero */}
       <div className="panel card-pad-lg" style={{ background: 'linear-gradient(160deg, var(--surface-2), var(--bg-2))' }}>
         <div className="row between">
-          <span className="badge badge-muted">{m.round === 'GROUP' ? `Group ${m.group ?? ''}` : m.round}</span>
-          {live ? <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
-            : fin ? <span className="badge badge-muted">Full time</span>
-              : <span className="badge badge-sky">{new Date(m.kickoffAt).toLocaleString()}</span>}
+          <span className="badge badge-muted">{roundShort(m.round, m.group, t('round.groupPrefix'))}</span>
+          {live ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
+            : fin ? <span className="badge badge-muted">{t('match.fullTime')}</span>
+              : <span className="badge badge-sky">{fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>}
         </div>
         <div className="row between" style={{ marginTop: 20, alignItems: 'flex-start' }}>
           <TeamHero t={m.home} rank={teams.home?.fifaRank} />
           <div style={{ textAlign: 'center', paddingTop: 10 }}>
             {(live || fin) && hs != null
               ? <div className="display tnum" style={{ fontSize: 48 }}>{hs}<span className="muted" style={{ fontSize: 28, padding: '0 8px' }}>:</span>{as}</div>
-              : <div className="display muted" style={{ fontSize: 32 }}>VS</div>}
-            {fin && m.result && <div className="tiny mt-4 text-gold">Result: {m.result === '1' ? m.home?.code : m.result === '2' ? m.away?.code : 'Draw'}</div>}
+              : <div className="display muted" style={{ fontSize: 32 }}>{t('match.vs')}</div>}
+            {fin && m.result && <div className="tiny mt-4 text-gold">{t('match.resultPrefix')} {m.result === '1' ? m.home?.code : m.result === '2' ? m.away?.code : t('betslip.draw')}</div>}
           </div>
           <TeamHero t={m.away} rank={teams.away?.fifaRank} />
         </div>
@@ -405,10 +426,10 @@ export function MatchDetail({ s }: ScreenProps) {
       {/* info strip (real) */}
       <div className="card card-pad mt-16">
         <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
-          <InfoCell label="Kickoff" value={new Date(m.kickoffAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} />
-          <InfoCell label="Round" value={m.round === 'GROUP' ? `Group ${m.group ?? ''}` : m.round} />
-          <InfoCell label="Venue" value={m.venue?.name ? `${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ''}${m.venue.country ? `, ${m.venue.country}` : ''}` : '—'} />
-          <InfoCell label="Status" value={m.status} />
+          <InfoCell label={t('match.kickoff')} value={fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })} />
+          <InfoCell label={t('match.roundLabel')} value={roundShort(m.round, m.group, t('round.groupPrefix'))} />
+          <InfoCell label={t('match.venue')} value={m.venue?.name ? `${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ''}${m.venue.country ? `, ${m.venue.country}` : ''}` : '—'} />
+          <InfoCell label={t('match.status')} value={m.status} />
         </div>
       </div>
 
@@ -416,8 +437,8 @@ export function MatchDetail({ s }: ScreenProps) {
       {cells.length > 0 && (
         <div className="card card-pad mt-16">
           <div className="row between" style={{ marginBottom: 12 }}>
-            <span className="eyebrow">Match odds</span>
-            {open ? <span className="tiny muted">Locks at kickoff</span> : <span className="tiny text-danger row gap-4"><Icon name="lock" size={12} /> Betting closed</span>}
+            <span className="eyebrow">{t('match.matchOdds')}</span>
+            {open ? <span className="tiny muted">{t('match.locksAtKickoff')}</span> : <span className="tiny text-danger row gap-4"><Icon name="lock" size={12} /> {t('match.bettingClosed')}</span>}
           </div>
           <div className="row gap-8 full">
             {cells.map(([k, lbl, v]) => {
@@ -434,7 +455,7 @@ export function MatchDetail({ s }: ScreenProps) {
             <div className="stack gap-8 mt-16">
               {myBets.map((b, i) => (
                 <div key={i} className="row between card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
-                  <div className="small">Your bet: <b>{b.pick}</b> · <span className="tnum">{b.stake}</span> pts @ <span className="tnum">{b.odds.toFixed(2)}</span></div>
+                  <div className="small">{t('match.yourBet')} <b>{b.pick}</b> · <span className="tnum">{b.stake}</span> pts @ <span className="tnum">{b.odds.toFixed(2)}</span></div>
                   <span className={`badge badge-${b.status === 'WON' ? 'green' : b.status === 'LOST' ? 'danger' : 'sky'}`}>{b.status}</span>
                 </div>
               ))}
@@ -447,17 +468,17 @@ export function MatchDetail({ s }: ScreenProps) {
       {live && s.authed && <MicroBetWidget matchId={m.id} />}
       {live && !s.authed && (
         <div className="card card-pad mt-16" style={{ textAlign: 'center' }}>
-          <p className="small muted">Sign in to place in-play bets on this match.</p>
+          <p className="small muted">{t('match.signInInplay')}</p>
         </div>
       )}
 
       {/* recent form (real — last finished results) */}
       {(homeForm.length > 0 || awayForm.length > 0) && (
         <div className="card card-pad mt-16">
-          <span className="eyebrow">Recent form</span>
+          <span className="eyebrow">{t('match.recentForm')}</span>
           <div className="stack gap-10 mt-12">
-            <FormRow name={m.home?.name ?? 'Home'} form={homeForm} />
-            <FormRow name={m.away?.name ?? 'Away'} form={awayForm} />
+            <FormRow name={m.home?.name ?? t('betslip.home')} form={homeForm} />
+            <FormRow name={m.away?.name ?? t('betslip.away')} form={awayForm} />
           </div>
         </div>
       )}
@@ -468,22 +489,22 @@ export function MatchDetail({ s }: ScreenProps) {
 
       {/* Lineups — both teams side-by-side (same as admin), full page width */}
       <div className="mt-16">
-        <div className="eyebrow" style={{ marginBottom: 12 }}>Lineups</div>
+        <div className="eyebrow" style={{ marginBottom: 12 }}>{t('match.lineups')}</div>
         {lineupTeams.length > 0
           ? (
             <>
-              <p className="tiny muted" style={{ marginBottom: 12 }}>AI-predicted lineups · updated ~15 min before kickoff.</p>
+              <p className="tiny muted" style={{ marginBottom: 12 }}>{t('match.lineupsHint')}</p>
               <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
-                {lineupTeams.map((t, i) => (
+                {lineupTeams.map((tm, i) => (
                   <div key={i}>
-                    <div className="small" style={{ fontWeight: 700, marginBottom: 8 }}>{t.name}</div>
-                    <FormationPitch players={t.players} formation={t.formation} manager={t.manager} />
+                    <div className="small" style={{ fontWeight: 700, marginBottom: 8 }}>{tm.name}</div>
+                    <FormationPitch players={tm.players} formation={tm.formation} manager={tm.manager} />
                   </div>
                 ))}
               </div>
             </>
           )
-          : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">Lineups not available yet.</p></div>}
+          : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('match.lineupsEmpty')}</p></div>}
       </div>
 
       {slip && <MatchBetSlip match={m} pick={slip.pick} oddsVal={slip.oddsVal} balance={s.points} busy={sending} onClose={() => setSlip(null)} onConfirm={confirm} />}
@@ -492,12 +513,13 @@ export function MatchDetail({ s }: ScreenProps) {
 }
 
 function TeamHero({ t, rank }: { t: RealTeam | null; rank?: number | null }) {
+  const { t: tr } = useT();
   return (
     <div className="stack center gap-8" style={{ width: 120 }}>
       <Flag flagUrl={t?.flagUrl ?? undefined} name={t?.name} code={t?.code ?? undefined} size={56} />
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>{t?.name ?? 'TBD'}</div>
-        {rank != null ? <div className="tiny muted">FIFA #{rank}</div> : t?.code ? <div className="tiny muted">{t.code}</div> : null}
+        <div style={{ fontWeight: 700, fontSize: 15 }}>{t?.name ?? tr('match.tbd')}</div>
+        {rank != null ? <div className="tiny muted">{tr('match.fifaRank', { rank })}</div> : t?.code ? <div className="tiny muted">{t.code}</div> : null}
       </div>
     </div>
   );
@@ -536,6 +558,7 @@ function InfoCell({ label, value }: { label: string; value: string }) {
 }
 
 function FormRow({ name, form }: { name: string; form: ('W' | 'D' | 'L')[] }) {
+  const { t } = useT();
   const color = (r: string) => r === 'W' ? 'var(--green)' : r === 'L' ? 'var(--danger)' : 'var(--text-2)';
   const bg = (r: string) => r === 'W' ? 'var(--green-soft)' : r === 'L' ? 'var(--danger-soft)' : 'var(--surface-3)';
   return (
@@ -543,13 +566,14 @@ function FormRow({ name, form }: { name: string; form: ('W' | 'D' | 'L')[] }) {
       <span className="small ellip" style={{ fontWeight: 600 }}>{name}</span>
       {form.length > 0
         ? <div className="row gap-6">{form.map((r, i) => <span key={i} className="badge" style={{ width: 24, justifyContent: 'center', background: bg(r), color: color(r) }}>{r}</span>)}</div>
-        : <span className="tiny muted">no results yet</span>}
+        : <span className="tiny muted">{t('match.noResults')}</span>}
     </div>
   );
 }
 
 /* ---- AI Pundit panel ---- */
 function PunditPanel({ m }: { m: RealMatch }) {
+  const { t } = useT();
   const [content, setContent] = useState<string | null>(null);
   const [disclaimer, setDisclaimer] = useState<string | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
@@ -578,8 +602,8 @@ function PunditPanel({ m }: { m: RealMatch }) {
         <Pundit size={56} mood="think" glow />
         <div className="grow">
           <div className="row between">
-            <span className="badge badge-sky">Ora · Match preview</span>
-            {provider && <span className="tiny muted">AI-assisted · {provider}</span>}
+            <span className="badge badge-sky">{t('match.oraPreview')}</span>
+            {provider && <span className="tiny muted">{t('match.aiAssisted', { provider })}</span>}
           </div>
           {content
             ? (
@@ -593,8 +617,8 @@ function PunditPanel({ m }: { m: RealMatch }) {
                 )}
               </>
             )
-            : err ? <p className="t2 small mt-8 muted">Preview unavailable right now.</p>
-              : <p className="t2 small mt-8 muted">Generating preview…</p>}
+            : err ? <p className="t2 small mt-8 muted">{t('match.previewUnavailable')}</p>
+              : <p className="t2 small mt-8 muted">{t('match.generatingPreview')}</p>}
         </div>
       </div>
     </div>

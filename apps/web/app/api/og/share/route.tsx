@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
               letterSpacing: '0.08em',
             }}
           >
-            GOLAZO
+            World Cup Games
           </div>
           <div style={{ display: 'flex', fontSize: 18, color: '#7B8DAE', letterSpacing: '0.04em' }}>
             World Cup Predictions

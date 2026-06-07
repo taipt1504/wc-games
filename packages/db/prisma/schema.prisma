@@ -414,7 +414,9 @@ model LobbyMatchOdds {
 model NewsArticle {
   id          BigInt     @id @default(autoincrement())
   title       String
+  titleVi     String? // AI Vietnamese translation; null → API falls back to EN title
   body        String?
+  bodyVi      String? // AI Vietnamese translation; null → API falls back to EN body
   tags        String[]
   sourceUrl   String?
   aiJobId     BigInt?

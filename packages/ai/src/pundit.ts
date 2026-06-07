@@ -67,6 +67,8 @@ export async function generateMatchPreview(
 export interface NewsDraft {
   title: string;
   body: string;
+  titleVi?: string; // Vietnamese translation; absent → consumers fall back to EN
+  bodyVi?: string;
   status: 'PENDING';
   sourceUrl?: string;
   aiAssisted: true;
@@ -86,7 +88,7 @@ export async function generateNewsDraft(
       role: 'system' as const,
       content:
         'You are a senior football journalist writing a full, original World Cup 2026 news article for a major sports outlet. ' +
-        'From the source headline, write a COMPLETELY ORIGINAL article — never copy or closely paraphrase the source wording (copyright). ' +
+        'From the source headline, write a COMPLETELY ORIGINAL article — do NOT copy text verbatim; never copy or closely paraphrase the source wording (copyright). ' +
         'Write it like a real published piece, 5–7 paragraphs (roughly 350–550 words): ' +
         '(1) a punchy lead paragraph that captures the news; ' +
         '(2) the key context / what happened; ' +
@@ -96,7 +98,8 @@ export async function generateNewsDraft(
         'Confident, authoritative, neutral newsroom tone with varied sentence length. ' +
         'Do NOT invent direct quotes, exact scores, dates or statistics — reason only from what the headline reasonably implies; speak in general analytical terms where specifics are unknown. ' +
         'Separate every paragraph with a blank line. ' +
-        'Output ONLY JSON: {"title":"<original, specific headline, max 90 chars>","body":"<the full ~350–550 word article, paragraphs separated by \\n\\n>"}.',
+        'Then provide a faithful, natural Vietnamese translation of BOTH the title and the full body (preserve the paragraph breaks). ' +
+        'Output ONLY JSON: {"title":"<original EN headline, max 90 chars>","body":"<the full ~350–550 word EN article, paragraphs separated by \\n\\n>","titleVi":"<Vietnamese title>","bodyVi":"<Vietnamese body, same paragraphs>"}.',
     },
     {
       role: 'user' as const,
@@ -105,21 +108,26 @@ export async function generateNewsDraft(
   ];
   const raw = await gateway.complete({ messages, model: input.model });
 
-  // Parse the rewritten {title, body}; on any failure derive both from the raw text so the
-  // stored title is never the verbatim source headline.
+  // Parse the rewritten {title, body, titleVi, bodyVi}; on any failure derive EN from the raw
+  // text so the stored title is never the verbatim source headline. VI is optional — when the
+  // model omits or truncates it, consumers fall back to EN.
   let title = '';
   let body = '';
+  let titleVi: string | undefined;
+  let bodyVi: string | undefined;
   try {
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');
     if (start >= 0 && end > start) {
-      const parsed = JSON.parse(raw.slice(start, end + 1)) as { title?: unknown; body?: unknown };
+      const parsed = JSON.parse(raw.slice(start, end + 1)) as { title?: unknown; body?: unknown; titleVi?: unknown; bodyVi?: unknown };
       if (typeof parsed.title === 'string') title = parsed.title.trim();
       if (typeof parsed.body === 'string') body = parsed.body.trim();
+      if (typeof parsed.titleVi === 'string' && parsed.titleVi.trim()) titleVi = parsed.titleVi.trim();
+      if (typeof parsed.bodyVi === 'string' && parsed.bodyVi.trim()) bodyVi = parsed.bodyVi.trim();
     }
   } catch { /* fall through to text fallback */ }
   if (!body) body = raw.trim();
   if (!title) title = body.split(/[.\n]/)[0].slice(0, 80).trim() || 'World Cup news update';
 
-  return { title, body, status: 'PENDING', sourceUrl: input.sourceUrl, aiAssisted: true };
+  return { title, body, titleVi, bodyVi, status: 'PENDING', sourceUrl: input.sourceUrl, aiAssisted: true };
 }

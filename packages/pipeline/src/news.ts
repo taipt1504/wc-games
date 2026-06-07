@@ -114,7 +114,9 @@ export async function generateAndStoreNews(
     await prisma.newsArticle.create({
       data: {
         title: draft.title,
+        titleVi: draft.titleVi,
         body: draft.body,
+        bodyVi: draft.bodyVi,
         tags: inferTags(draft.title),
         sourceUrl: draft.sourceUrl,
         aiJobId: job.id,

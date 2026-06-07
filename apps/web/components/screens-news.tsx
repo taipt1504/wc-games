@@ -1,9 +1,10 @@
 'use client';
-/* GOLAZO — News list · Article (ported from design screens-news.jsx) */
+/* World Cup Games — News list · Article (ported from design screens-news.jsx) */
 import React, { useState, useEffect } from 'react';
 import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, SecHead } from '@/components/ui';
+import { useT } from '@/lib/i18n/hooks';
 
 type NewsItem = {
   id: number;
@@ -17,31 +18,39 @@ type NewsItem = {
   match?: number;
 };
 
+// Tag values stay English — they are the canonical filter keys matched against the feed's `tag`
+// field. Only the on-screen label is translated via TAG_KEYS below.
 const TAGS = ['All', 'Match Preview', 'Squad News', 'Analysis', 'Transfer Buzz', 'Result', 'Off-pitch'];
+const TAG_KEYS: Record<string, string> = {
+  'All': 'news.tagAll', 'Match Preview': 'news.tagPreview', 'Squad News': 'news.tagSquad',
+  'Analysis': 'news.tagAnalysis', 'Transfer Buzz': 'news.tagTransfer', 'Result': 'news.tagResult', 'Off-pitch': 'news.tagOff',
+};
 
 /* ===================== NEWS ===================== */
 export function News({ s }: ScreenProps) {
+  const { t, locale } = useT();
+  const tagLabel = (tag: string) => (TAG_KEYS[tag] ? t(TAG_KEYS[tag]) : tag);
   const [tag, setTag] = useState('All');
   const [items, setItems] = useState<NewsItem[]>(WC.news as NewsItem[]);
   useEffect(() => {
-    fetch('/api/v1/news')
+    fetch(`/api/v1/news?locale=${locale}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (j?.data) setItems(j.data as NewsItem[]); })
       .catch(() => {});
-  }, []);
+  }, [locale]);
   const list = items.filter(n => tag === 'All' || n.tag === tag);
   const lead = list[0] ?? null;
   return (
     <div className="page fade-up">
-      <SecHead title="World Cup wire" sub="AI-assisted coverage, reviewed by editors before publishing" />
+      <SecHead title={t('news.wireTitle')} sub={t('news.wireSub')} />
       <div className="row gap-8 wrap-w" style={{ marginBottom: 18 }}>
-        {TAGS.map(t => (
-          <button key={t} className={`chip ${tag === t ? 'active' : ''}`} onClick={() => setTag(t)}>{t}</button>
+        {TAGS.map(tg => (
+          <button key={tg} className={`chip ${tag === tg ? 'active' : ''}`} onClick={() => setTag(tg)}>{tagLabel(tg)}</button>
         ))}
       </div>
 
       {list.length === 0 && (
-        <p className="muted" style={{ margin: '32px 0' }}>No news yet — check back soon.</p>
+        <p className="muted" style={{ margin: '32px 0' }}>{t('news.empty')}</p>
       )}
 
       {lead && (
@@ -51,14 +60,14 @@ export function News({ s }: ScreenProps) {
           onClick={() => s.go('article', { id: lead.id })}
         >
           <div className="row between">
-            <span className="badge badge-sky">{lead.tag}</span>
-            {lead.hot && <span className="badge badge-magenta">Trending</span>}
+            <span className="badge badge-sky">{tagLabel(lead.tag)}</span>
+            {lead.hot && <span className="badge badge-magenta">{t('news.trending')}</span>}
           </div>
           <h2 className="h2 mt-12" style={{ maxWidth: 640 }}>{lead.title}</h2>
           <p className="t2 mt-8" style={{ maxWidth: 620 }}>{lead.excerpt}</p>
           <div className="row gap-12 mt-16 tiny muted">
-            <span>Source · {lead.src}</span><span>·</span><span>{lead.time}</span>
-            <span className="badge badge-muted">✨ AI-assisted</span>
+            <span>{t('news.source')} · {lead.src}</span><span>·</span><span>{lead.time}</span>
+            <span className="badge badge-muted">{t('news.aiAssisted')}</span>
           </div>
         </div>
       )}
@@ -69,7 +78,7 @@ export function News({ s }: ScreenProps) {
             <div style={{ height: 110, borderRadius: 'var(--r-sm)', background: 'linear-gradient(135deg, var(--surface-2), var(--surface-3))', display: 'grid', placeItems: 'center', marginBottom: 14 }}>
               <Icon name="news" size={30} className="muted" />
             </div>
-            <span className="badge badge-muted">{n.tag}</span>
+            <span className="badge badge-muted">{tagLabel(n.tag)}</span>
             <div className="h3 mt-8" style={{ fontSize: 16 }}>{n.title}</div>
             <div className="row gap-8 mt-8 tiny muted"><span>{n.src}</span><span>·</span><span>{n.time}</span></div>
           </div>
@@ -81,13 +90,15 @@ export function News({ s }: ScreenProps) {
 
 /* ===================== ARTICLE ===================== */
 export function Article({ s }: ScreenProps) {
+  const { t, locale } = useT();
+  const tagLabel = (tag: string) => (TAG_KEYS[tag] ? t(TAG_KEYS[tag]) : tag);
   const [live, setLive] = useState<NewsItem[]>([]);
   useEffect(() => {
-    fetch('/api/v1/news')
+    fetch(`/api/v1/news?locale=${locale}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (j?.data) setLive(j.data as NewsItem[]); })
       .catch(() => {});
-  }, []);
+  }, [locale]);
   const id = s.param.id as number;
   const n = live.find(x => x.id === id) ?? (WC.news as NewsItem[]).find(x => x.id === id) ?? null;
 
@@ -95,9 +106,9 @@ export function Article({ s }: ScreenProps) {
     return (
       <div className="page page-narrow fade-up">
         <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}>
-          <Icon name="chevL" size={14} /> Back to wire
+          <Icon name="chevL" size={14} /> {t('news.backToWire')}
         </button>
-        <p className="muted">Article not found.</p>
+        <p className="muted">{t('news.notFound')}</p>
       </div>
     );
   }
@@ -105,13 +116,13 @@ export function Article({ s }: ScreenProps) {
   return (
     <div className="page page-narrow fade-up">
       <button className="chip" onClick={() => s.back()} style={{ marginBottom: 16 }}>
-        <Icon name="chevL" size={14} /> Back to wire
+        <Icon name="chevL" size={14} /> {t('news.backToWire')}
       </button>
-      <span className="badge badge-sky">{n.tag}</span>
+      <span className="badge badge-sky">{tagLabel(n.tag)}</span>
       <h1 className="h1 mt-12">{n.title}</h1>
       <div className="row gap-12 mt-12 tiny muted">
-        <span>Source · {n.src}</span><span>·</span><span>{n.time}</span>
-        <span className="badge badge-muted">✨ AI-assisted</span>
+        <span>{t('news.source')} · {n.src}</span><span>·</span><span>{n.time}</span>
+        <span className="badge badge-muted">{t('news.aiAssisted')}</span>
       </div>
 
       <div style={{ height: 200, borderRadius: 'var(--r-lg)', background: 'linear-gradient(135deg, var(--surface-2), var(--surface-3))', display: 'grid', placeItems: 'center', margin: '20px 0' }}>
@@ -126,14 +137,14 @@ export function Article({ s }: ScreenProps) {
         <div className="card card-pad mt-24 row between wrap gap-12" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
           <div className="row gap-12">
             <Icon name="ball" size={20} style={{ color: 'var(--green)' }} />
-            <span style={{ fontWeight: 600 }}>This story is about an upcoming match.</span>
+            <span style={{ fontWeight: 600 }}>{t('news.aboutMatch')}</span>
           </div>
-          <Btn variant="primary" size="sm" onClick={() => s.go('match', { id: n.match })}>Bet this match →</Btn>
+          <Btn variant="primary" size="sm" onClick={() => s.go('match', { id: n.match })}>{t('news.betMatch')}</Btn>
         </div>
       )}
 
       <div className="card-2 card-pad mt-16 tiny muted" style={{ borderRadius: 'var(--r-sm)' }}>
-        This article was summarized and rewritten by AI from the cited source, then reviewed by an editor before publishing. We link sources and never copy text verbatim.
+        {t('news.disclaimer')}
       </div>
     </div>
   );

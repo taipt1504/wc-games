@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WC, type Bet } from '@/lib/wc';
 import { apiFetch } from '@/lib/api';
+import { openRealtime, closeRealtime, onRealtime } from '@/lib/realtime';
 import type { Store, LedgerEntry, MeProfile } from '@/lib/store';
 import { Btn, Icon, Avatar, Pundit, Toast, type ToastData } from '@/components/ui';
 import { Landing, Auth, Home } from '@/components/screens-core';
@@ -14,6 +15,10 @@ import { Teams, TeamDetail, Groups, Bracket } from '@/components/screens-tournam
 import { Lobbies, LobbyCreate, LobbyView, BorrowModal } from '@/components/screens-lobby';
 import { News, Article } from '@/components/screens-news';
 import { Admin } from '@/components/screens-admin';
+import { NotificationBell } from '@/components/notification-bell';
+import { LangSwitch } from '@/components/lang-switch';
+import { BRAND } from '@/lib/i18n/locales';
+import { useT } from '@/lib/i18n/hooks';
 
 const ROUTES: Record<string, React.ComponentType<{ s: Store }>> = {
   landing: Landing, auth: Auth, home: Home, schedule: Schedule, match: MatchDetail,
@@ -24,13 +29,15 @@ const ROUTES: Record<string, React.ComponentType<{ s: Store }>> = {
 };
 const FULLBLEED = ['auth', 'admin'];
 const GATED = ['home', 'mybets', 'wallet', 'profile', 'lobbies', 'lobby', 'lobby-create', 'admin'];
-const PUB_NAV: [string, string][] = [['schedule', 'Matches'], ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['groups', 'Groups'], ['bracket', 'Bracket'], ['news', 'News']];
+// nav arrays store i18n KEYS for labels (resolved via t() at render).
+const PUB_NAV: [string, string][] = [['schedule', 'nav.matches'], ['leaderboard', 'nav.leaderboard'], ['teams', 'nav.teams'], ['groups', 'nav.groups'], ['bracket', 'nav.bracket'], ['news', 'nav.news']];
 const RAIL: { sec: string | null; items: [string, string, string][] }[] = [
-  { sec: null, items: [['home', 'Home', 'home'], ['schedule', 'Matches', 'calendar'], ['leaderboard', 'Leaderboard', 'trophy'], ['lobbies', 'Lobbies', 'users']] },
-  { sec: 'Tournament', items: [['teams', 'Teams', 'flag'], ['groups', 'Groups', 'grid'], ['bracket', 'Bracket', 'bracket'], ['news', 'News', 'news']] },
-  { sec: 'Account', items: [['mybets', 'My bets', 'target'], ['wallet', 'Wallet', 'wallet'], ['profile', 'Profile', 'user']] },
+  { sec: null, items: [['home', 'nav.home', 'home'], ['schedule', 'nav.matches', 'calendar'], ['leaderboard', 'nav.leaderboard', 'trophy'], ['lobbies', 'nav.lobbies', 'users']] },
+  { sec: 'nav.secTournament', items: [['teams', 'nav.teams', 'flag'], ['groups', 'nav.groups', 'grid'], ['bracket', 'nav.bracket', 'bracket'], ['news', 'nav.news', 'news']] },
+  { sec: 'nav.secAccount', items: [['mybets', 'nav.mybets', 'target'], ['wallet', 'nav.wallet', 'wallet'], ['profile', 'nav.profile', 'user']] },
 ];
-const TABS: [string, string, string][] = [['home', 'Home', 'home'], ['schedule', 'Matches', 'calendar'], ['leaderboard', 'Board', 'trophy'], ['lobbies', 'Lobbies', 'users'], ['profile', 'You', 'user']];
+const TABS: [string, string, string][] = [['home', 'nav.home', 'home'], ['schedule', 'nav.matches', 'calendar'], ['leaderboard', 'nav.tabBoard', 'trophy'], ['lobbies', 'nav.lobbies', 'users'], ['profile', 'nav.tabYou', 'user']];
+const TITLE_KEYS: Record<string, string> = { home: 'nav.home', schedule: 'nav.matches', match: 'nav.match', leaderboard: 'nav.leaderboard', mybets: 'nav.mybets', wallet: 'nav.wallet', profile: 'nav.profile', teams: 'nav.teams', team: 'nav.team', groups: 'nav.groups', bracket: 'nav.bracket', lobbies: 'nav.lobbies', lobby: 'nav.lobby', 'lobby-create': 'nav.lobbyCreate', news: 'nav.news', article: 'nav.article' };
 
 function navKey(r: string): string {
   if (['schedule', 'match'].includes(r)) return 'schedule';
@@ -62,6 +69,7 @@ function urlToRoute(): { route: string; param: Record<string, unknown> } | null 
 }
 
 export default function AppShell() {
+  const { t } = useT();
   const [route, setRoute] = useState('landing');
   const skipPush = useRef(false);
   const [param, setParam] = useState<Record<string, unknown>>({});
@@ -136,6 +144,13 @@ export default function AppShell() {
     } catch { /* keep current state on network error */ }
   }, []);
 
+  // Realtime → keep wallet/bets fresh on settlement (notifications/chat/match handled by screens).
+  useEffect(() => {
+    const offRefresh = onRealtime('refresh', () => { void refreshUser(); });
+    const offSettled = onRealtime('match.settled', () => { void refreshUser(); });
+    return () => { offRefresh(); offSettled(); };
+  }, [refreshUser]);
+
   // Rehydrate the session on load: the access JWT cookie persists (apiFetch silently rotates
   // the refresh token when it has expired), so a valid /me means the user is still logged in
   // after a refresh (F5 must not log them out). Also surfaces any OAuth redirect error.
@@ -147,9 +162,9 @@ export default function AppShell() {
       const joinCode = params.get('join'); // invite link → auto-join after auth
       const fromUrl = urlToRoute(); // deep link to a screen (captured before we clean the URL)
       if (authError) {
-        const msg = authError === 'google_not_configured' ? 'Google login isn’t configured yet'
-          : authError === 'banned' ? 'This account is banned'
-            : 'Google sign-in failed';
+        const msg = authError === 'google_not_configured' ? t('toast.googleNotConfigured')
+          : authError === 'banned' ? t('toast.accountBanned')
+            : t('toast.googleFailed');
         toastMsg(msg, 'alert', 'var(--danger)');
       }
       const setTarget = (r: string, p: Record<string, unknown>) => {
@@ -161,6 +176,7 @@ export default function AppShell() {
         if (!cancelled && res.ok) {
           authedRef.current = true;
           setAuthed(true);
+          openRealtime();
           if (joinCode) setTarget('lobbies', { join: joinCode });
           else setTarget(fromUrl?.route ?? 'home', fromUrl?.param ?? {});
           void refreshUser();
@@ -168,7 +184,7 @@ export default function AppShell() {
           // guest: restore a public deep link; gated screens fall back to the landing page
           if (fromUrl && !GATED.includes(fromUrl.route)) setTarget(fromUrl.route, fromUrl.param);
           else setTarget('landing', {});
-          if (joinCode) toastMsg('Sign in to join the lobby from your invite link', 'lock', 'var(--gold)');
+          if (joinCode) toastMsg(t('toast.signInToJoin'), 'lock', 'var(--gold)');
         }
       } catch { /* stay logged out on network error */ }
       finally { if (!cancelled) setBooting(false); }
@@ -190,21 +206,22 @@ export default function AppShell() {
           const j = await res.json().catch(() => ({}));
           const code = j?.error?.code;
           toastMsg(
-            code === 'EMAIL_TAKEN' ? 'Email already registered — log in instead'
-              : code === 'INVALID_CREDENTIALS' ? 'Wrong email or password'
-                : 'Authentication failed',
+            code === 'EMAIL_TAKEN' ? t('toast.emailTaken')
+              : code === 'INVALID_CREDENTIALS' ? t('toast.invalidCreds')
+                : t('toast.authFailed'),
             'alert', 'var(--danger)',
           );
           return;
         }
-        authedRef.current = true; setAuthed(true); setRoute('home'); setParam({}); void refreshUser();
-        toastMsg(endpoint === 'register' ? 'Welcome! +1,000 points added 🎉' : 'Welcome back!', 'star', 'var(--gold)');
+        authedRef.current = true; setAuthed(true); openRealtime(); setRoute('home'); setParam({}); void refreshUser();
+        toastMsg(endpoint === 'register' ? t('toast.welcomeNew') : t('toast.welcomeBack'), 'star', 'var(--gold)');
       } catch {
-        toastMsg('Network error — try again', 'alert', 'var(--danger)');
+        toastMsg(t('toast.networkRetry'), 'alert', 'var(--danger)');
       }
     },
     logout: () => {
       void fetch('/api/v1/auth/logout', { method: 'POST' });
+      closeRealtime();
       authedRef.current = false; setAuthed(false);
       setRole('USER'); setMe(ME_DEFAULT); setPoints(0); setBets([]); setLedger([]); setStreak(0); setWinStreak(0); setTier(WC.me.tier); setCheckedIn(false);
       setRoute('landing'); setParam({});
@@ -214,9 +231,9 @@ export default function AppShell() {
       try {
         const res = await fetch('/api/v1/checkin', { method: 'POST' });
         const j = await res.json().catch(() => ({}));
-        if (res.ok) { setPoints(Number(j.data.balance)); setStreak((s) => s + 1); setCheckedIn(true); toastMsg(`Checked in! +${j.data.reward} points`, 'fire', 'var(--gold)'); }
-        else { setCheckedIn(true); toastMsg(j?.error?.code === 'ALREADY_CHECKED_IN' ? 'Already checked in today' : 'Check-in failed', 'alert', 'var(--gold)'); }
-      } catch { toastMsg('Network error', 'alert', 'var(--danger)'); }
+        if (res.ok) { setPoints(Number(j.data.balance)); setStreak((s) => s + 1); setCheckedIn(true); toastMsg(t('toast.checkedIn', { reward: j.data.reward }), 'fire', 'var(--gold)'); }
+        else { setCheckedIn(true); toastMsg(j?.error?.code === 'ALREADY_CHECKED_IN' ? t('toast.alreadyCheckedIn') : t('toast.checkinFailed'), 'alert', 'var(--gold)'); }
+      } catch { toastMsg(t('toast.network'), 'alert', 'var(--danger)'); }
     },
     claimMission: async (code: string) => {
       try {
@@ -225,20 +242,20 @@ export default function AppShell() {
         if (res.ok) {
           const { reward, balance } = j.data as { reward: number; balance: number };
           setPoints(balance);
-          toastMsg(`Mission complete! +${reward} pts`, 'target', 'var(--purple)');
+          toastMsg(t('toast.missionComplete', { reward }), 'target', 'var(--purple)');
           void refreshUser();
         } else {
           const code_ = j?.error?.code;
-          toastMsg(code_ === 'ALREADY_CLAIMED' ? 'Already claimed today' : code_ === 'NOT_COMPLETE' ? 'Mission not complete yet' : 'Claim failed', 'alert', 'var(--danger)');
+          toastMsg(code_ === 'ALREADY_CLAIMED' ? t('toast.alreadyClaimed') : code_ === 'NOT_COMPLETE' ? t('toast.missionNotComplete') : t('toast.claimFailed'), 'alert', 'var(--danger)');
         }
-      } catch { toastMsg('Network error', 'alert', 'var(--danger)'); }
+      } catch { toastMsg(t('toast.network'), 'alert', 'var(--danger)'); }
     },
     openBorrow: () => setBorrowOpen(true),
     closeBorrow: () => setBorrowOpen(false),
   };
 
   if (booting) {
-    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><span className="rail-logo" style={{ padding: 0, fontSize: 28 }}>GOLAZO</span></div>;
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><span className="rail-logo" style={{ padding: 0, fontSize: 28 }}>{BRAND}</span></div>;
   }
 
   const Screen = ROUTES[route] || Home;
@@ -254,17 +271,18 @@ export default function AppShell() {
       <div>
         <header className="pubbar">
           <div className="pubbar-inner">
-            <span className="rail-logo pointer" style={{ padding: 0, fontSize: 24 }} onClick={() => { setRoute('landing'); setParam({}); }}>GOLAZO</span>
+            <span className="rail-logo pointer" style={{ padding: 0, fontSize: 24 }} onClick={() => { setRoute('landing'); setParam({}); }}>{BRAND}</span>
             <nav className="pub-nav">
-              {PUB_NAV.map(([k, l]) => <span key={k} className={`pub-link ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{l}</span>)}
+              {PUB_NAV.map(([k, l]) => <span key={k} className={`pub-link ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{t(l)}</span>)}
             </nav>
             <div className="row gap-10">
-              <Btn variant="ghost" size="sm" onClick={() => go('auth', { mode: 'login' })}>Log in</Btn>
-              <Btn variant="primary" size="sm" onClick={() => go('auth', { mode: 'signup' })}>Sign up free</Btn>
+              <LangSwitch />
+              <Btn variant="ghost" size="sm" onClick={() => go('auth', { mode: 'login' })}>{t('shell.login')}</Btn>
+              <Btn variant="primary" size="sm" onClick={() => go('auth', { mode: 'signup' })}>{t('shell.signupFree')}</Btn>
             </div>
           </div>
           <div className="pub-substrip">
-            {PUB_NAV.map(([k, l]) => <button key={k} className={`chip ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{l}</button>)}
+            {PUB_NAV.map(([k, l]) => <button key={k} className={`chip ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{t(l)}</button>)}
           </div>
         </header>
         {route !== 'landing' && <div style={{ height: 8 }} />}
@@ -275,11 +293,11 @@ export default function AppShell() {
               <div className="row gap-16">
                 <Pundit size={64} mood="happy" glow />
                 <div>
-                  <div className="h3">Like what you see?</div>
-                  <p className="t2 small mt-4">Create a free account to claim 1,000 points, place bets and climb the leaderboard.</p>
+                  <div className="h3">{t('shell.promoTitle')}</div>
+                  <p className="t2 small mt-4">{t('shell.promoDesc')}</p>
                 </div>
               </div>
-              <Btn variant="primary" size="lg" onClick={() => go('auth', { mode: 'signup' })}>Claim 1,000 points →</Btn>
+              <Btn variant="primary" size="lg" onClick={() => go('auth', { mode: 'signup' })}>{t('shell.promoCta')}</Btn>
             </div>
           </div>
         )}
@@ -288,24 +306,24 @@ export default function AppShell() {
     );
   }
 
-  const title = ({ home: 'Home', schedule: 'Matches', match: 'Match', leaderboard: 'Leaderboard', mybets: 'My bets', wallet: 'Wallet', profile: 'Profile', teams: 'Teams', team: 'Team', groups: 'Groups', bracket: 'Bracket', lobbies: 'Lobbies', lobby: 'Lobby', 'lobby-create': 'New lobby', news: 'News', article: 'Article' } as Record<string, string>)[route] || '';
+  const title = TITLE_KEYS[route] ? t(TITLE_KEYS[route]) : '';
 
   return (
     <div className="with-rail">
       <aside className="rail">
-        <div className="rail-logo pointer" onClick={() => go('home')}>GOLAZO</div>
+        <div className="rail-logo pointer" onClick={() => go('home')}>{BRAND}</div>
         <div className="stack gap-2" style={{ overflowY: 'auto', flex: 1 }}>
           {RAIL.map((grp, gi) => (
             <div key={gi} style={{ marginTop: grp.sec ? 14 : 0 }}>
-              {grp.sec && <div className="eyebrow" style={{ padding: '0 12px 6px' }}>{grp.sec}</div>}
+              {grp.sec && <div className="eyebrow" style={{ padding: '0 12px 6px' }}>{t(grp.sec)}</div>}
               {grp.items.map(([k, l, ic]) => (
-                <button key={k} className={`nav-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={19} />{l}</button>
+                <button key={k} className={`nav-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={19} />{t(l)}</button>
               ))}
             </div>
           ))}
         </div>
         {['ADMIN', 'SUPER', 'MOD'].includes(role) && (
-          <button className="nav-i" onClick={() => go('admin')} style={{ marginTop: 8 }}><Icon name="shield" size={19} />Admin</button>
+          <button className="nav-i" onClick={() => go('admin')} style={{ marginTop: 8 }}><Icon name="shield" size={19} />{t('nav.admin')}</button>
         )}
         <div className="card card-pad row gap-10" style={{ marginTop: 8 }}>
           <Avatar initials={me.avatar} size={34} color="var(--gold)" />
@@ -315,18 +333,16 @@ export default function AppShell() {
 
       <div className="topbar">
         <div className="row gap-12">
-          <span className="only-mobile rail-logo" style={{ padding: 0, fontSize: 22 }} onClick={() => go('home')}>GOLAZO</span>
+          <span className="only-mobile rail-logo" style={{ padding: 0, fontSize: 22 }} onClick={() => go('home')}>{BRAND}</span>
           <span className="h3 hide-mobile">{title}</span>
         </div>
         <div className="row gap-10">
+          <LangSwitch />
           <button className="points-pill" onClick={() => go('wallet')}>
             <Icon name="wallet" size={16} style={{ color: 'var(--gold)' }} />
             <span className="tnum" style={{ fontWeight: 700, color: 'var(--gold)' }}>{points.toLocaleString()}</span>
           </button>
-          <button className="btn-icon btn-ghost rel" onClick={() => toastMsg('No new notifications', 'bell')}>
-            <Icon name="bell" size={18} />
-            <span className="abs" style={{ top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: 'var(--magenta)' }} />
-          </button>
+          <NotificationBell />
         </div>
       </div>
 
@@ -334,7 +350,7 @@ export default function AppShell() {
 
       <nav className="tabs">
         {TABS.map(([k, l, ic]) => (
-          <button key={k} className={`tab-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={21} />{l}</button>
+          <button key={k} className={`tab-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={21} />{t(l)}</button>
         ))}
       </nav>
 
