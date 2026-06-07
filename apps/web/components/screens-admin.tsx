@@ -66,6 +66,7 @@ export function Admin({ s }: ScreenProps) {
     ['risk', 'Lobby risk', 'shield'],
     ['review', 'News', 'news'],
     ['pipeline', 'AI pipeline', 'database'],
+    ['jobs', 'Schedule jobs', 'clock'],
     ['audit', 'Audit log', 'lock'],
   ];
   const goTab = (k: string) => { setTab(k); setDetail(null); };
@@ -118,6 +119,7 @@ export function Admin({ s }: ScreenProps) {
           {!detail && tab === 'risk' && <AdmRisk open={open} />}
           {!detail && tab === 'review' && <AdmReview open={open} />}
           {!detail && tab === 'pipeline' && <AdmPipeline />}
+          {!detail && tab === 'jobs' && <AdmJobs s={s} />}
           {!detail && tab === 'audit' && <AdmAudit />}
         </div>
       </div>
@@ -205,6 +207,21 @@ function AdmTourney({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind,
   const [resetOpen, setResetOpen] = useState(false);
   const [resetText, setResetText] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [view, setView] = useState<'groups' | 'knockouts'>('groups');
+  const [q, setQ] = useState('');
+
+  const doSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/v1/admin/matches/sync', { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      setSyncing(false);
+      if (res.ok) { s.toastMsg(`Matches synced · ${j.data?.created ?? 0} new, ${j.data?.updated ?? 0} updated, ${j.data?.skipped ?? 0} skipped`, 'refresh', 'var(--green)'); load(); }
+      else s.toastMsg('Match sync failed', 'alert', 'var(--danger)');
+    } catch { setSyncing(false); s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
 
   const doReset = async () => {
     if (resetText !== 'RESET' || resetting) return;
@@ -230,9 +247,18 @@ function AdmTourney({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind,
     SCHEDULED: matches.filter(m => m.status === 'SCHEDULED').length,
     FINISHED: matches.filter(m => m.status === 'FINISHED').length,
   };
-  let list = matches.slice();
-  if (filter !== 'all') list = list.filter(m => m.status === filter);
-  list = list.slice(0, 60);
+  const ql = q.trim().toLowerCase();
+  const matchText = (m: AdmMatch) => `${m.home?.code ?? ''} ${m.home?.name ?? ''} ${m.away?.code ?? ''} ${m.away?.name ?? ''}`.toLowerCase();
+  const filtered = matches.filter(m => (filter === 'all' || m.status === filter) && (!ql || matchText(m).includes(ql)));
+  const byKickoff = (a: AdmMatch, b: AdmMatch) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime();
+
+  // Group view: GROUP-stage matches bucketed by group letter (A–L).
+  const groupLetters = [...new Set(filtered.filter(m => m.round === 'GROUP' && m.group).map(m => m.group as string))].sort();
+  const groupBuckets = groupLetters.map(g => ({ key: g, label: `Group ${g}`, items: filtered.filter(m => m.round === 'GROUP' && m.group === g).sort(byKickoff) }));
+  // Knockout view: non-GROUP matches bucketed by round, in bracket order.
+  const KO_ROUNDS: [string, string][] = [['R32', 'Round of 32'], ['R16', 'Round of 16'], ['QF', 'Quarter-finals'], ['SF', 'Semi-finals'], ['THIRD', 'Third place'], ['FINAL', 'Final']];
+  const koBuckets = KO_ROUNDS.map(([k, label]) => ({ key: k, label, items: filtered.filter(m => m.round === k).sort(byKickoff) })).filter(b => b.items.length);
+  const buckets = view === 'groups' ? groupBuckets : koBuckets;
 
   const toggleLock = async (m: AdmMatch) => {
     try {
@@ -252,9 +278,39 @@ function AdmTourney({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind,
 
   const filterTabs: [string, string][] = [['all', 'All'], ['LIVE', 'Live'], ['SCHEDULED', 'Scheduled'], ['FINISHED', 'Settled']];
 
+  const statusBadge = (m: AdmMatch) =>
+    m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot" />LIVE</span>
+      : m.status === 'FINISHED' ? <span className="badge badge-green">FT</span>
+        : <span className="badge badge-muted">Scheduled</span>;
+
+  const renderCard = (m: AdmMatch) => (
+    <div key={m.id} className="card card-pad pointer" onClick={() => open('match', m.id)} title="Open match detail">
+      <div className="row between gap-8">
+        <div className="row gap-6" style={{ minWidth: 0 }}>
+          {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={18} />}
+          <span className="small nowrap" style={{ fontWeight: 600 }}>{m.home?.code ?? 'TBD'} v {m.away?.code ?? 'TBD'}</span>
+          {m.away && <Flag flagUrl={m.away.flagUrl ?? undefined} name={m.away.name} code={m.away.code ?? undefined} size={18} />}
+        </div>
+        {statusBadge(m)}
+      </div>
+      <div className="row center mt-8"><span className="tnum h3">{m.scoreHome ?? '–'} : {m.scoreAway ?? '–'}</span></div>
+      <div className="row center tiny t2 tnum mt-4">{m.odds ? `${m.odds.mHome.toFixed(2)} · ${m.odds.mDraw.toFixed(2)} · ${m.odds.mAway.toFixed(2)}` : '—'}</div>
+      <div className="row between mt-12" onClick={e => e.stopPropagation()}>
+        <button className="chip chip-sm" onClick={() => toggleLock(m)} style={{ gap: 5 }}>
+          <Icon name={m.bettingLocked ? 'lock' : 'check'} size={12} style={{ color: m.bettingLocked ? 'var(--danger)' : 'var(--green)' }} />
+          {m.bettingLocked ? 'Blocked' : 'Open'}
+        </button>
+        <Btn variant="primary" size="sm" icon="check" onClick={() => setEdit(m)}>{m.status === 'FINISHED' ? 'Re-settle' : 'Confirm'}</Btn>
+      </div>
+    </div>
+  );
+
   return (
     <div>
-      <SecHead title="Tournament management" sub="Fixtures, scores, settlement & betting controls" action={<Btn variant="danger" size="sm" icon="refresh" onClick={() => { setResetText(''); setResetOpen(true); }}>Reset data</Btn>} />
+      <SecHead title="Tournament management" sub="Fixtures, scores, settlement & betting controls" action={<div className="row gap-8">
+        <Btn variant="primary" size="sm" icon="refresh" onClick={doSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync matches'}</Btn>
+        <Btn variant="danger" size="sm" icon="refresh" onClick={() => { setResetText(''); setResetOpen(true); }}>Reset data</Btn>
+      </div>} />
 
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', marginBottom: 18 }}>
           <KPI v={counts.all} l="Total fixtures" c="var(--text)" />
@@ -263,63 +319,33 @@ function AdmTourney({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind,
           <KPI v={counts.FINISHED} l="Settled" c="var(--green)" />
         </div>
 
-        <div className="row gap-8 wrap-w" style={{ marginBottom: 14 }}>
-          {filterTabs.map(([k, l]) => (
-            <button key={k} className={`chip ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>{l} · {counts[k]}</button>
-          ))}
+        <div className="row between wrap-w gap-12" style={{ marginBottom: 16 }}>
+          <div className="row gap-8 wrap-w">
+            <button className={`chip ${view === 'groups' ? 'active' : ''}`} onClick={() => setView('groups')}>Groups</button>
+            <button className={`chip ${view === 'knockouts' ? 'active' : ''}`} onClick={() => setView('knockouts')}>Knockouts</button>
+            <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)', margin: '0 4px' }} />
+            {filterTabs.map(([k, l]) => (
+              <button key={k} className={`chip ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>{l} · {counts[k]}</button>
+            ))}
+          </div>
+          <input className="input" style={{ maxWidth: 220 }} placeholder="Search team…" value={q} onChange={e => setQ(e.target.value)} />
         </div>
 
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Match</th>
-                  <th className="hide-mobile">Kickoff</th>
-                  <th style={{ textAlign: 'center' }}>Status</th>
-                  <th style={{ textAlign: 'center' }}>Score</th>
-                  <th style={{ textAlign: 'center' }} className="hide-mobile">Odds 1·X·2</th>
-                  <th style={{ textAlign: 'center' }}>Betting</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? <tr><td colSpan={7} className="small muted" style={{ padding: 16 }}>Loading fixtures…</td></tr>
-                  : list.map(m => (
-                    <tr key={m.id}>
-                      <td>
-                        <div className="row gap-8 pointer" style={{ minWidth: 0 }} onClick={() => open('match', m.id)} title="Open match detail">
-                          {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={20} />}
-                          <span className="small nowrap" style={{ fontWeight: 600 }}>{m.home?.code ?? 'TBD'} v {m.away?.code ?? 'TBD'}</span>
-                          <span className="tiny muted hide-mobile">{m.round}</span>
-                          <Icon name="chevR" size={13} className="muted" />
-                        </div>
-                      </td>
-                      <td className="tiny t2 hide-mobile nowrap">{new Date(m.kickoffAt).toLocaleDateString()}</td>
-                      <td style={{ textAlign: 'center' }}>
-                        {m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
-                          : m.status === 'FINISHED' ? <span className="badge badge-green">FT</span>
-                            : <span className="badge badge-muted">Scheduled</span>}
-                      </td>
-                      <td style={{ textAlign: 'center' }} className="tnum">{m.scoreHome ?? '–'} : {m.scoreAway ?? '–'}</td>
-                      <td style={{ textAlign: 'center' }} className="hide-mobile">
-                        <span className="tnum tiny t2 nowrap">{m.odds ? `${m.odds.mHome.toFixed(2)} · ${m.odds.mDraw.toFixed(2)} · ${m.odds.mAway.toFixed(2)}` : '—'}</span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button className="chip chip-sm" onClick={() => toggleLock(m)} style={{ gap: 5 }}>
-                          <Icon name={m.bettingLocked ? 'lock' : 'check'} size={12} style={{ color: m.bettingLocked ? 'var(--danger)' : 'var(--green)' }} />
-                          {m.bettingLocked ? 'Blocked' : 'Open'}
-                        </button>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <Btn variant="primary" size="sm" icon="check" onClick={() => setEdit(m)}>{m.status === 'FINISHED' ? 'Re-settle' : 'Confirm result'}</Btn>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {loading ? <p className="small muted" style={{ padding: 16 }}>Loading fixtures…</p>
+          : buckets.length === 0 ? <p className="tiny muted" style={{ padding: 16 }}>No matches{ql ? ' match your search' : ' in this view'}.</p>
+            : <div className="stack gap-20">
+                {buckets.map(b => (
+                  <div key={b.key}>
+                    <div className="row gap-8" style={{ marginBottom: 10 }}>
+                      <span className="eyebrow">{b.label}</span>
+                      <span className="tiny muted">{b.items.length} {b.items.length === 1 ? 'match' : 'matches'}</span>
+                    </div>
+                    <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))' }}>
+                      {b.items.map(m => renderCard(m))}
+                    </div>
+                  </div>
+                ))}
+              </div>}
         <div className="card-2 card-pad mt-12 small t2 row gap-8" style={{ borderRadius: 'var(--r-sm)' }}>
           <Icon name="alert" size={15} style={{ color: 'var(--gold)', flex: 'none' }} />
           <span>Confirming a result settles all bets (global + lobby) and is idempotent — re-confirming never double-pays. Blocking betting takes effect server-side immediately.</span>
@@ -1019,6 +1045,77 @@ function AdmPipeline() {
           <span>{jobs.filter((j) => j.status === 'error').length} job(s) failed in the last batch — check the rows flagged above.</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ===================== SCHEDULE JOBS ===================== */
+interface SchedJob { key: string; label: string; enabled: boolean; config: Record<string, number>; lastRunAt: string | null; lastRunStatus: string | null; lastRunNote: string | null }
+
+function AdmJobs({ s }: { s: ScreenProps['s'] }) {
+  const [jobs, setJobs] = useState<SchedJob[]>([]);
+  const [draft, setDraft] = useState<Record<string, Record<string, number>>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch('/api/v1/admin/schedule-jobs').then(r => (r.ok ? r.json() : null))
+      .then(j => { if (j?.data) { setJobs(j.data); setDraft(Object.fromEntries(j.data.map((x: SchedJob) => [x.key, { ...x.config }]))); } })
+      .catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (key: string, body: object) => {
+    setBusy(key);
+    try {
+      const res = await fetch(`/api/v1/admin/schedule-jobs/${key}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      setBusy(null);
+      if (res.ok) { s.toastMsg('Job updated', 'check', 'var(--green)'); load(); }
+      else { const j = await res.json().catch(() => ({})); s.toastMsg(j?.error?.message || 'Update failed', 'alert', 'var(--danger)'); }
+    } catch { setBusy(null); s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+  const trigger = async (key: string) => {
+    setBusy(key);
+    try {
+      const res = await fetch(`/api/v1/admin/schedule-jobs/${key}/trigger`, { method: 'POST' });
+      setBusy(null);
+      s.toastMsg(res.ok ? 'Triggered' : 'Trigger failed', res.ok ? 'refresh' : 'alert', res.ok ? 'var(--green)' : 'var(--danger)');
+    } catch { setBusy(null); s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  return (
+    <div>
+      <SecHead title="Schedule jobs" sub="Worker job thresholds, enable/disable, last run & manual trigger" />
+      <div className="stack gap-12">
+        {jobs.map(j => {
+          const d = draft[j.key] ?? j.config;
+          return (
+            <div key={j.key} className="card card-pad">
+              <div className="row between">
+                <div className="row gap-8"><span className="h4">{j.label}</span><span className="tiny muted">{j.key}</span></div>
+                <label className="row gap-6 tiny"><input type="checkbox" checked={j.enabled} onChange={e => save(j.key, { enabled: e.target.checked })} /> Enabled</label>
+              </div>
+              <div className="row gap-12 wrap-w mt-12">
+                {Object.keys(j.config).map(f => (
+                  <div key={f} className="field" style={{ minWidth: 150 }}>
+                    <label className="label tiny">{f}</label>
+                    <input className="input input-mono" type="number" value={d[f]}
+                      onChange={e => setDraft(p => ({ ...p, [j.key]: { ...d, [f]: +e.target.value } }))} />
+                  </div>
+                ))}
+              </div>
+              <div className="row between mt-12">
+                <span className="tiny muted">{j.lastRunAt
+                  ? <><JobDot st={j.lastRunStatus === 'OK' ? 'ok' : j.lastRunStatus === 'ERROR' ? 'err' : 'fallback'} /> {new Date(j.lastRunAt).toLocaleString()} · {j.lastRunNote ?? ''}</>
+                  : 'never run'}</span>
+                <div className="row gap-8">
+                  <Btn variant="ghost" size="sm" icon="refresh" disabled={busy === j.key} onClick={() => trigger(j.key)}>Run now</Btn>
+                  <Btn variant="primary" size="sm" disabled={busy === j.key} onClick={() => save(j.key, { config: d })}>Save</Btn>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

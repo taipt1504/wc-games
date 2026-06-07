@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { publishEvent, channels } from '@wc/realtime';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/session';
 
@@ -17,5 +18,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await prisma.auditLog.create({
     data: { actorType: 'ADMIN', actorId: admin.id, action: 'LOCK_BETTING', target: `match:${id}`, metadata: { locked: parsed.data.locked } },
   });
+  await publishEvent(channels.matches, { type: 'match.update', matchId: Number(id) });
   return NextResponse.json({ data: { id: Number(id), bettingLocked: parsed.data.locked } });
 }
