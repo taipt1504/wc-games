@@ -21,21 +21,21 @@ describe('result1x2', () => {
   });
 });
 
-describe('payout1x2 — PRD France–Japan example (m_home=0.8, m_away=1.5)', () => {
-  it('France win, stake 100 → 180', () => {
-    expect(payout1x2(100, 0.8, '1', '1')).toBe(180);
+describe('payout1x2 — decimal odds (total return = stake*odds)', () => {
+  it('home win, odds 1.8, stake 100 → 180', () => {
+    expect(payout1x2(100, 1.8, '1', '1')).toBe(180);
   });
-  it('Japan win, stake 100 → 250', () => {
-    expect(payout1x2(100, 1.5, '2', '2')).toBe(250);
+  it('away win, odds 2.5, stake 100 → 250', () => {
+    expect(payout1x2(100, 2.5, '2', '2')).toBe(250);
   });
   it('wrong pick → 0', () => {
-    expect(payout1x2(100, 0.8, '1', '2')).toBe(0);
+    expect(payout1x2(100, 1.8, '1', '2')).toBe(0);
   });
-  it('correct draw, m=1.1 → 210', () => {
-    expect(payout1x2(100, 1.1, 'X', 'X')).toBe(210);
+  it('correct draw, odds 2.1 → 210', () => {
+    expect(payout1x2(100, 2.1, 'X', 'X')).toBe(210);
   });
   it('rounds to nearest integer', () => {
-    expect(payout1x2(100, 0.855, '1', '1')).toBe(186); // 185.5 → 186
+    expect(payout1x2(100, 1.855, '1', '1')).toBe(186); // 185.5 → 186
   });
 });
 
@@ -53,17 +53,17 @@ describe('knockoutExactBonus', () => {
 
 describe('settleBet', () => {
   it('group win', () => {
-    expect(settleBet({ stake: 100, odds: 0.8, pick: '1', homeGoals: 2, awayGoals: 1 })).toMatchObject({
+    expect(settleBet({ stake: 100, odds: 1.8, pick: '1', homeGoals: 2, awayGoals: 1 })).toMatchObject({
       result: '1',
       won: true,
       payout: 180,
       netProfit: 80,
     });
   });
-  it('knockout win + exact bonus (QF 2-1, m=0.9, bonus 1.0) → 290', () => {
+  it('knockout win + exact bonus (QF 2-1, odds 1.9, bonus 1.0) → 290', () => {
     const r = settleBet({
       stake: 100,
-      odds: 0.9,
+      odds: 1.9,
       pick: '1',
       homeGoals: 2,
       awayGoals: 1,
@@ -76,7 +76,7 @@ describe('settleBet', () => {
   it('knockout win but wrong exact → no bonus (190)', () => {
     const r = settleBet({
       stake: 100,
-      odds: 0.9,
+      odds: 1.9,
       pick: '1',
       homeGoals: 3,
       awayGoals: 1,
@@ -86,7 +86,7 @@ describe('settleBet', () => {
     expect(r.payout).toBe(190);
   });
   it('lost → payout 0, netProfit -stake', () => {
-    expect(settleBet({ stake: 100, odds: 0.8, pick: '1', homeGoals: 0, awayGoals: 2 })).toMatchObject({
+    expect(settleBet({ stake: 100, odds: 1.8, pick: '1', homeGoals: 0, awayGoals: 2 })).toMatchObject({
       won: false,
       payout: 0,
       netProfit: -100,
@@ -136,30 +136,30 @@ describe('isUnderdog', () => {
 });
 
 describe('settleBet — underdog bonus (DEPTH-03)', () => {
-  it('(a) underdog win odds=2.5 stake=100 → base 350, +15% = +53 → total 403', () => {
-    const r = settleBet({ stake: 100, odds: 2.5, pick: '1', homeGoals: 2, awayGoals: 1 });
+  it('(a) underdog win odds=3.5 stake=100 → base 350, +15% = +53 → total 403', () => {
+    const r = settleBet({ stake: 100, odds: 3.5, pick: '1', homeGoals: 2, awayGoals: 1 });
     expect(r.won).toBe(true);
     expect(r.payout).toBe(403);
   });
 
-  it('(b) favourite win odds=1.5 → no underdog bonus (payout 250)', () => {
+  it('(b) favourite win odds=1.5 → no underdog bonus (payout 150)', () => {
     const r = settleBet({ stake: 100, odds: 1.5, pick: '2', homeGoals: 0, awayGoals: 1 });
     expect(r.won).toBe(true);
-    expect(r.payout).toBe(250); // round(100*(1+1.5)) = 250, no underdog bonus
+    expect(r.payout).toBe(150); // round(100*1.5) = 150, odds < 2.0 → no underdog bonus
   });
 
-  it('(c) underdog LOSS odds=2.5 → payout 0', () => {
-    const r = settleBet({ stake: 100, odds: 2.5, pick: '1', homeGoals: 0, awayGoals: 2 });
+  it('(c) underdog LOSS odds=3.5 → payout 0', () => {
+    const r = settleBet({ stake: 100, odds: 3.5, pick: '1', homeGoals: 0, awayGoals: 2 });
     expect(r.won).toBe(false);
     expect(r.payout).toBe(0);
   });
 
   it('(d) underdog win + knockout exact hit → both bonuses; underdog = 15% of base 1X2 only, not including KO bonus', () => {
-    // base 1X2 = round(100*(1+2.5)) = 350; KO bonus = round(100*1.0) = 100; underdog = round(350*0.15) = 53
+    // base 1X2 = round(100*3.5) = 350; KO bonus = round(100*1.0) = 100; underdog = round(350*0.15) = 53
     // total = 350 + 100 + 53 = 503 (NOT 518, which would be 15% of 350+100)
     const r = settleBet({
       stake: 100,
-      odds: 2.5,
+      odds: 3.5,
       pick: '1',
       homeGoals: 2,
       awayGoals: 1,

@@ -96,7 +96,7 @@ export async function placeParlay(prisma: PrismaClient, input: PlaceParlayInput)
  * Settle all OPEN parlays that have a leg on matchId.
  * For each such parlay: resolve legs whose match is FINISHED, then:
  *   - ANY leg LOST → Parlay LOST (payout 0)
- *   - ALL legs resolved WON → Parlay WON, payout = round(stake × Π(1 + oddsSnapshot))
+ *   - ALL legs resolved WON → Parlay WON, payout = round(stake × Π(oddsSnapshot))  // decimal odds
  *   - Otherwise (some still PENDING) → leave OPEN
  * IDEMPOTENT: only acts on OPEN parlays; re-running is a no-op.
  * Returns count of parlays moved to terminal status (WON or LOST) this run.
@@ -147,8 +147,8 @@ export async function settleParlays(prisma: PrismaClient, matchId: bigint): Prom
         await tx.parlay.update({ where: { id: parlay.id }, data: { status: 'LOST', payout: 0n } });
         resolved++;
       } else if (allResolved) {
-        // All WON — compute product payout
-        const multiplier = updatedLegs.reduce((acc, l) => acc * (1 + l.oddsSnapshot), 1);
+        // All WON — combined decimal odds = product of leg odds; total return = stake × Π(odds).
+        const multiplier = updatedLegs.reduce((acc, l) => acc * l.oddsSnapshot, 1);
         const payout = BigInt(Math.round(Number(parlay.stake) * multiplier));
 
         // Credit GLOBAL wallet

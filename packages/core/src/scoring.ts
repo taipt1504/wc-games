@@ -12,9 +12,10 @@ export function result1x2(homeGoals: number, awayGoals: number): Pick1X2 {
   return 'X';
 }
 
-/** Payout kèo 1X2: đúng → round(stake*(1+odds)); sai → 0. PRD §04.3 */
+/** Payout kèo 1X2 — decimal/European odds (odds = tổng tiền-về trên 1 điểm cược): đúng → round(stake*odds); sai → 0.
+ *  Stake đã bị trừ (escrow) lúc đặt kèo, nên đây là tổng tiền hoàn về; lãi ròng = stake*(odds−1). PRD §04.3 */
 export function payout1x2(stake: number, odds: number, pick: Pick1X2, result: Pick1X2): number {
-  return pick === result ? Math.round(stake * (1 + odds)) : 0;
+  return pick === result ? Math.round(stake * odds) : 0;
 }
 
 /** Bonus tỉ số chính xác (CHỈ knockout): đúng 1X2 VÀ đúng tỉ số 90' → +round(stake*bonusRate). PRD §04.5 */
