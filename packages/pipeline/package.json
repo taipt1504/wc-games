@@ -20,7 +20,8 @@
   "dependencies": {
     "@wc/ai": "workspace:*",
     "@wc/db": "workspace:*",
-    "@wc/fixtures": "workspace:*"
+    "@wc/fixtures": "workspace:*",
+    "@wc/realtime": "workspace:*"
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.0",

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { decideBorrow, getLobbyStanding } from '@wc/lobby';
+import { notify } from '@wc/prediction';
 import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/session';
 
@@ -86,6 +87,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const result = await decideBorrow(prisma, BigInt(requestId), parsed.data.approve, user.id);
+    // Notify the borrower of the decision (best-effort).
+    const br = await prisma.borrowRequest.findUnique({ where: { id: BigInt(requestId) } });
+    if (br) {
+      const m = await prisma.lobbyMembership.findUnique({ where: { id: br.membershipId }, select: { userId: true } });
+      if (m) await notify(prisma, m.userId, 'borrow', { event: parsed.data.approve ? 'approved' : 'declined', lobbyId: Number(lobbyId), amount: Number(br.amount) });
+    }
     return NextResponse.json({ data: result });
   } catch (e) {
     const msg = (e as Error).message;

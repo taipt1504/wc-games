@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { publishEvent, channels } from '@wc/realtime';
 import { prisma } from '@/lib/db';
 import { getSessionUser } from '@/lib/session';
 
@@ -37,7 +38,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       ? 'sys'
       : (u?.username || u?.email.split('@')[0] || 'member');
     const t = m.createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    return { who, text: m.body, t };
+    return { id: Number(m.id), who, text: m.body, t };
   });
 
   return NextResponse.json({ data });
@@ -72,5 +73,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   const t = message.createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  return NextResponse.json({ data: { who, text: message.body, t } }, { status: 201 });
+  const payload = { id: Number(message.id), who, text: message.body, t };
+  // Realtime: broadcast to everyone in the lobby (best-effort).
+  await publishEvent(channels.lobby(id), { type: 'chat', lobbyId: Number(lobbyId), message: payload });
+  return NextResponse.json({ data: payload }, { status: 201 });
 }

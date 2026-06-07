@@ -549,10 +549,11 @@ model Notification {
   id        BigInt    @id @default(autoincrement())
   userId    BigInt
   type      String
-  channel   String // PUSH | EMAIL
+  channel   String // PUSH | EMAIL | IN_APP
   payload   Json
   status    String    @default("PENDING")
   sentAt    DateTime?
+  readAt    DateTime? // in-app feed: null = unread
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])

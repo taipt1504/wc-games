@@ -4,8 +4,10 @@
  */
 import type { PrismaClient, Prediction } from '@wc/db';
 import { settleBet, type Pick1X2 } from '@wc/core';
+import { publishEvent, channels } from '@wc/realtime';
 import { consumePowerUp } from './powerups';
 import { settleParlays } from './parlay';
+import { notify } from './notify';
 
 type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
@@ -150,6 +152,7 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
   const knockoutRounds = ['R32', 'R16', 'QF', 'SF', 'THIRD', 'FINAL'];
 
   let settledCount = 0;
+  const toNotify: { userId: bigint; won: boolean; payout: bigint }[] = [];
   await prisma.$transaction(async (tx) => {
     const match = await tx.match.findUniqueOrThrow({ where: { id: matchId } });
     await tx.match.update({
@@ -199,6 +202,7 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
         where: { id: p.id },
         data: { status: r.won ? 'WON' : 'LOST', payout, settledAt: new Date() },
       });
+      toNotify.push({ userId: p.userId, won: r.won, payout });
 
       // ROI leaderboard aggregate — GLOBAL context only (lobby uses score_lobby)
       if (p.contextType === 'GLOBAL') {
@@ -227,6 +231,17 @@ export async function settleMatch(prisma: PrismaClient, matchId: bigint, score: 
 
   // Settle parlays that have a leg on this match (outside core tx; no-op when none exist).
   await settleParlays(prisma, matchId);
+
+  // Realtime: notify each settled user of their result + payout (best-effort, post-commit).
+  for (const n of toNotify) {
+    await notify(prisma, n.userId, 'settle', { matchId: Number(matchId), result: n.won ? 'WON' : 'LOST', payout: Number(n.payout) });
+  }
+  // Realtime: refresh the match display + tell each settled user to re-fetch their balance/bets.
+  await publishEvent(channels.matches, { type: 'match.update', matchId: Number(matchId) });
+  await publishEvent(channels.matches, { type: 'match.settled', matchId: Number(matchId) });
+  for (const uid of new Set(toNotify.map((n) => n.userId))) {
+    await publishEvent(channels.user(String(uid)), { type: 'refresh', what: 'me' });
+  }
 
   return { alreadySettled: false, result, settledCount };
 }

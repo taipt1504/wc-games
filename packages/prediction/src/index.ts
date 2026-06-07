@@ -8,3 +8,4 @@ export * from './duel';
 export * from './feed';
 export * from './parlay';
 export * from './micro';
+export * from './notify';

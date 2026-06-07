@@ -18,7 +18,8 @@
     "ioredis": "^5.4.0",
     "openai": "^4.67.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "@wc/realtime": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

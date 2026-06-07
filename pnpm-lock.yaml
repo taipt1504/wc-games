@@ -38,6 +38,9 @@ importers:
       '@wc/prediction':
         specifier: workspace:*
         version: link:../../packages/prediction
+      '@wc/realtime':
+        specifier: workspace:*
+        version: link:../../packages/realtime
       '@wc/risk':
         specifier: workspace:*
         version: link:../../packages/risk
@@ -114,6 +117,9 @@ importers:
       '@wc/prediction':
         specifier: workspace:*
         version: link:../../packages/prediction
+      '@wc/realtime':
+        specifier: workspace:*
+        version: link:../../packages/realtime
       bullmq:
         specifier: ^5.21.0
         version: 5.77.6
@@ -241,6 +247,9 @@ importers:
       '@wc/fixtures':
         specifier: workspace:*
         version: link:../fixtures
+      '@wc/realtime':
+        specifier: workspace:*
+        version: link:../realtime
     devDependencies:
       dotenv-cli:
         specifier: ^7.4.0
@@ -263,6 +272,9 @@ importers:
       '@wc/db':
         specifier: workspace:*
         version: link:../db
+      '@wc/realtime':
+        specifier: workspace:*
+        version: link:../realtime
     devDependencies:
       '@wc/auth':
         specifier: workspace:*
@@ -270,6 +282,19 @@ importers:
       dotenv-cli:
         specifier: ^7.4.0
         version: 7.4.4
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.19)(jsdom@25.0.1)(terser@5.48.0)
+
+  packages/realtime:
+    dependencies:
+      ioredis:
+        specifier: ^5.10.0
+        version: 5.11.0
+    devDependencies:
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

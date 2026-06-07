@@ -6,6 +6,7 @@
  *   DONE     → opponent declined, or duel resolved (check winnerId)
  */
 import type { PrismaClient, Duel } from '@wc/db';
+import { notify } from './notify';
 
 type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
@@ -17,9 +18,11 @@ export async function createDuel(
   scope: string,
 ): Promise<Duel> {
   if (challengerId === opponentId) throw new Error('SELF_DUEL');
-  return prisma.duel.create({
+  const duel = await prisma.duel.create({
     data: { challengerId, opponentId, scope, status: 'PENDING' },
   });
+  await notify(prisma, opponentId, 'duel', { event: 'challenged', duelId: Number(duel.id), from: Number(challengerId) });
+  return duel;
 }
 
 /** Opponent accepts (→ ACTIVE) or declines (→ DONE, no winner). */
@@ -32,10 +35,12 @@ export async function respondDuel(
   const duel = await prisma.duel.findUniqueOrThrow({ where: { id: duelId } });
   if (duel.opponentId !== opponentId) throw new Error('NOT_OPPONENT');
   if (duel.status !== 'PENDING') throw new Error('ALREADY_DECIDED');
-  return prisma.duel.update({
+  const updated = await prisma.duel.update({
     where: { id: duelId },
     data: { status: accept ? 'ACTIVE' : 'DONE' },
   });
+  await notify(prisma, duel.challengerId, 'duel', { event: accept ? 'accepted' : 'declined', duelId: Number(duelId) });
+  return updated;
 }
 
 export interface ResolveResult {
@@ -72,6 +77,9 @@ export async function resolveDuel(
         : null;
 
   await prisma.duel.update({ where: { id: duelId }, data: { status: 'DONE', winnerId } });
+  const result = { event: 'resolved', duelId: Number(duelId), winnerId: winnerId == null ? null : Number(winnerId), challengerRoi, opponentRoi };
+  await notify(prisma, duel.challengerId, 'duel', result);
+  await notify(prisma, duel.opponentId, 'duel', result);
   return { winnerId, challengerRoi, opponentRoi };
 }
 

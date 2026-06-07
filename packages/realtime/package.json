@@ -1,5 +1,5 @@
 {
-  "name": "@wc/prediction",
+  "name": "@wc/realtime",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -12,16 +12,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "dotenv -e ../../.env -- vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@wc/core": "workspace:*",
-    "@wc/db": "workspace:*",
-    "@wc/realtime": "workspace:*"
+    "ioredis": "^5.10.0"
   },
   "devDependencies": {
-    "@wc/auth": "workspace:*",
-    "dotenv-cli": "^7.4.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
