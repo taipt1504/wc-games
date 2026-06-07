@@ -1,4 +1,5 @@
-/** Global ROI-based leaderboard (PRD §04.9 / OQ-04). Ranks GLOBAL-context predictors. */
+/** Global net-profit leaderboard (PRD §04.9 / OQ-04). Ranks GLOBAL-context predictors by
+ *  net points won (bankroll growth from the 1000-point signup grant); ROI% is a side stat. */
 import type { PrismaClient } from '@wc/db';
 import { roiPercent } from '@wc/core';
 
@@ -12,9 +13,9 @@ export interface LeaderboardEntry {
 }
 
 /**
- * ROI leaderboard from prediction_user_stats (GLOBAL only — daily check-in points
+ * Net-profit leaderboard from prediction_user_stats (GLOBAL only — daily check-in points
  * never enter these aggregates, so they don't inflate rank). Requires >= minSettled
- * settled bets to qualify (anti small-sample). Ties broken by absolute net profit.
+ * settled bets to qualify (anti small-sample). Ranked by net profit; ties broken by ROI%.
  */
 export async function getGlobalLeaderboard(
   prisma: PrismaClient,
@@ -39,7 +40,7 @@ export async function getGlobalLeaderboard(
         winCount: s.winCount,
       };
     })
-    .sort((a, b) => b.roi - a.roi || b.netProfit - a.netProfit)
+    .sort((a, b) => b.netProfit - a.netProfit || b.roi - a.roi)
     .slice(0, limit)
     .map((e, i) => ({ rank: i + 1, ...e }));
 }

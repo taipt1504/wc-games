@@ -13,7 +13,7 @@ function sha256(s: string): string {
   return createHash('sha256').update(s).digest('hex');
 }
 
-const SIGNUP_BONUS = 1000n;
+export const SIGNUP_BONUS = 1000n;
 const REFERRAL_BONUS = 300n;
 const TZ_OFFSET_MS = 7 * 3600 * 1000; // UTC+7 (PRD OQ-07)
 const BCRYPT_ROUNDS = 10;
@@ -77,6 +77,11 @@ function startOfDayUtc7(now: Date): Date {
 }
 
 const DAY_MS = 24 * 3600 * 1000;
+
+/** True if the user has already checked in for the current UTC+7 calendar day. */
+export function isCheckedInToday(lastCheckinDate: Date | null | undefined, now: Date = new Date()): boolean {
+  return !!lastCheckinDate && lastCheckinDate.getTime() === startOfDayUtc7(now).getTime();
+}
 
 /**
  * Daily check-in: +200–400 streak-tiered (ENG-01) once per UTC+7 calendar day. Throws ALREADY_CHECKED_IN.

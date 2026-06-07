@@ -133,6 +133,7 @@ export default function AppShell() {
       if (meR.ok) {
         const j = await meR.json(); const d = j.data;
         setPoints(Number(d.balance)); setRole(d.role ?? 'USER'); setWinStreak(d.winStreak ?? 0); setTier(d.tier ?? WC.me.tier);
+        setStreak(d.streak ?? 0); setCheckedIn(d.checkedIn ?? false);
         setMe({
           name: d.name ?? ME_DEFAULT.name, handle: d.handle ?? ME_DEFAULT.handle, avatar: d.avatar ?? ME_DEFAULT.avatar,
           country: d.country ?? ME_DEFAULT.country, rank: d.rank ?? null, roi: d.roi ?? 0,
@@ -231,7 +232,7 @@ export default function AppShell() {
       try {
         const res = await fetch('/api/v1/checkin', { method: 'POST' });
         const j = await res.json().catch(() => ({}));
-        if (res.ok) { setPoints(Number(j.data.balance)); setStreak((s) => s + 1); setCheckedIn(true); toastMsg(t('toast.checkedIn', { reward: j.data.reward }), 'fire', 'var(--gold)'); }
+        if (res.ok) { setPoints(Number(j.data.balance)); setStreak(Number(j.data.streak)); setCheckedIn(true); toastMsg(t('toast.checkedIn', { reward: j.data.reward }), 'fire', 'var(--gold)'); }
         else { setCheckedIn(true); toastMsg(j?.error?.code === 'ALREADY_CHECKED_IN' ? t('toast.alreadyCheckedIn') : t('toast.checkinFailed'), 'alert', 'var(--gold)'); }
       } catch { toastMsg(t('toast.network'), 'alert', 'var(--danger)'); }
     },
