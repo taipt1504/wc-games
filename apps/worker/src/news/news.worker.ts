@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Worker } from 'bullmq';
 import { prisma } from '@wc/db';
-import { generateAndStoreNews, publishDueNews, crawlNewsSources, SAMPLE_SOURCES, getJobConfig, isJobEnabled, recordJobRun } from '@wc/pipeline';
+import { generateAndStoreNews, publishDueNews, crawlNewsSources, SAMPLE_SOURCES, getJobConfig, isJobEnabled, recordJobRun, backfillNewsTranslations } from '@wc/pipeline';
 import { LlmGateway } from '../llm/llm-gateway';
 import { connection } from '../redis';
 
@@ -54,8 +54,11 @@ export class NewsWorker implements OnModuleInit, OnModuleDestroy {
       }
       const n = await publishDueNews(prisma);
       if (n > 0) this.log.log(`auto-published ${n} scheduled news article(s)`);
-      await recordJobRun(prisma, 'news', 'OK', `published ${n}`);
-      return `published ${n}`;
+      // Backfill VI translations for articles still missing them (self-healing, small batch/cycle).
+      const vi = await backfillNewsTranslations(prisma, this.llm, { limit: 5 }).catch(() => 0);
+      if (vi > 0) this.log.log(`backfilled ${vi} VI translation(s)`);
+      await recordJobRun(prisma, 'news', 'OK', `published ${n} · vi+${vi}`);
+      return `published ${n} · vi+${vi}`;
     } catch (err) {
       await recordJobRun(prisma, 'news', 'ERROR', (err as Error).message);
       this.log.error(`publishDueNews error: ${(err as Error).message}`);

@@ -131,3 +131,35 @@ export async function generateNewsDraft(
 
   return { title, body, titleVi, bodyVi, status: 'PENDING', sourceUrl: input.sourceUrl, aiAssisted: true };
 }
+
+/**
+ * Translate an existing EN news article (title + body) to Vietnamese. Backfills articles created
+ * before bilingual generation. Returns empty strings on parse failure so the caller keeps EN.
+ */
+export async function translateNewsToVi(
+  gateway: LlmGateway,
+  input: { title: string; body: string; model?: string },
+): Promise<{ titleVi: string; bodyVi: string }> {
+  const messages = [
+    {
+      role: 'system' as const,
+      content:
+        'You are a professional Vietnamese sports translator. Translate the given football news title and body into natural, fluent Vietnamese, preserving meaning, tone and the paragraph breaks (\\n\\n). Do not add or omit content. ' +
+        'Output ONLY JSON: {"titleVi":"<Vietnamese title>","bodyVi":"<Vietnamese body, same paragraphs>"}.',
+    },
+    { role: 'user' as const, content: `Title: ${input.title}\n\nBody:\n${input.body}` },
+  ];
+  const raw = await gateway.complete({ messages, model: input.model });
+  let titleVi = '';
+  let bodyVi = '';
+  try {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      const parsed = JSON.parse(raw.slice(start, end + 1)) as { titleVi?: unknown; bodyVi?: unknown };
+      if (typeof parsed.titleVi === 'string') titleVi = parsed.titleVi.trim();
+      if (typeof parsed.bodyVi === 'string') bodyVi = parsed.bodyVi.trim();
+    }
+  } catch { /* keep empty → caller skips this article */ }
+  return { titleVi, bodyVi };
+}

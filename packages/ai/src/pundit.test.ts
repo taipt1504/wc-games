@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { generateMatchPreview, generateNewsDraft, deterministicPreview, type PreviewRecord } from './pundit';
+import { generateMatchPreview, generateNewsDraft, translateNewsToVi, deterministicPreview, type PreviewRecord } from './pundit';
 import { AI_DISCLAIMER, type LlmGateway } from './llm';
 
 function fakeGateway(reply: string) {
@@ -101,5 +101,21 @@ describe('generateNewsDraft', () => {
     const d = await generateNewsDraft(gw, { sourceTitle: 'Brazil beat Nigeria' });
     expect(d.titleVi).toBeUndefined();
     expect(d.bodyVi).toBeUndefined();
+  });
+});
+
+describe('translateNewsToVi', () => {
+  it('parses titleVi/bodyVi from the gateway JSON', async () => {
+    const gw = fakeGateway('{"titleVi":"Tây Ban Nha hạ Đức","bodyVi":"Một trận cầu kinh điển."}');
+    const r = await translateNewsToVi(gw, { title: 'Spain beat Germany', body: 'A classic.' });
+    expect(r.titleVi).toBe('Tây Ban Nha hạ Đức');
+    expect(r.bodyVi).toBe('Một trận cầu kinh điển.');
+  });
+
+  it('returns empty strings on non-JSON output so the caller keeps EN', async () => {
+    const gw = fakeGateway('translation unavailable');
+    const r = await translateNewsToVi(gw, { title: 'X', body: 'Y' });
+    expect(r.titleVi).toBe('');
+    expect(r.bodyVi).toBe('');
   });
 });

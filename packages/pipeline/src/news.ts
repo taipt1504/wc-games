@@ -4,7 +4,7 @@
  * NEWS-04: publishDueNews (auto-publish scheduled articles)
  */
 import type { PrismaClient } from '@wc/db';
-import { generateNewsDraft } from '@wc/ai';
+import { generateNewsDraft, translateNewsToVi } from '@wc/ai';
 import type { LlmGateway } from '@wc/ai';
 
 export interface NewsSource {
@@ -103,6 +103,19 @@ export async function generateAndStoreNews(
       model: source.model,
     });
 
+    // Guarantee a VI translation. Use the draft's inline VI when the bilingual call returned it;
+    // otherwise run the dedicated translator — far more reliable than the long combined prompt,
+    // which often truncates and drops the trailing titleVi/bodyVi fields.
+    let titleVi = draft.titleVi;
+    let bodyVi = draft.bodyVi;
+    if (!titleVi || !bodyVi) {
+      // A VI failure must never drop the EN article — store EN now, the worker backfills VI later.
+      const vi = await translateNewsToVi(gateway, { title: draft.title, body: draft.body, model: source.model })
+        .catch(() => ({ titleVi: '', bodyVi: '' }));
+      titleVi = titleVi || vi.titleVi || undefined;
+      bodyVi = bodyVi || vi.bodyVi || undefined;
+    }
+
     const job = await prisma.aiJob.create({
       data: {
         type: 'news',
@@ -114,9 +127,9 @@ export async function generateAndStoreNews(
     await prisma.newsArticle.create({
       data: {
         title: draft.title,
-        titleVi: draft.titleVi,
+        titleVi,
         body: draft.body,
-        bodyVi: draft.bodyVi,
+        bodyVi,
         tags: inferTags(draft.title),
         sourceUrl: draft.sourceUrl,
         aiJobId: job.id,
@@ -127,6 +140,31 @@ export async function generateAndStoreNews(
     stored++;
   }
   return stored;
+}
+
+/**
+ * Backfill Vietnamese translations for articles missing them (created before bilingual generation,
+ * any status). Translates title+body via the gateway and stores titleVi/bodyVi; rows that fail to
+ * translate are left untouched so they retry on the next run. Returns the count updated.
+ */
+export async function backfillNewsTranslations(
+  prisma: PrismaClient,
+  gateway: LlmGateway,
+  opts: { limit?: number } = {},
+): Promise<number> {
+  const pending = await prisma.newsArticle.findMany({
+    where: { titleVi: null, body: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    take: opts.limit ?? 10,
+  });
+  let updated = 0;
+  for (const a of pending) {
+    const { titleVi, bodyVi } = await translateNewsToVi(gateway, { title: a.title, body: a.body ?? '' });
+    if (!titleVi || !bodyVi) continue; // skip partial/failed → retried next run
+    await prisma.newsArticle.update({ where: { id: a.id }, data: { titleVi, bodyVi } });
+    updated++;
+  }
+  return updated;
 }
 
 /**
