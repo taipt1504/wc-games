@@ -6,3 +6,4 @@ export * from './livescore';
 export * from './schedule';
 export * from './job-config';
 export * from './odds-ai';
+export * from './football-data';

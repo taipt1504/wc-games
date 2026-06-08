@@ -3,7 +3,8 @@
  * One rate-limited client for all FD traffic; pure mappers translate FD JSON onto our Prisma enums
  * and are unit-tested against captured fixtures (no network, no key in CI).
  */
-import type { MatchRound, MatchStatus, Outcome } from '@wc/db';
+import type { PrismaClient, MatchRound, MatchStatus, Outcome } from '@wc/db';
+import { publishEvent, channels } from '@wc/realtime';
 
 // ─────────────────────────── Raw API shapes (football-data.org v4) ───────────────────────────
 export interface FdRef { id: number | null; name?: string | null; tla?: string | null }
@@ -227,4 +228,164 @@ export function fdClientFromEnv(): FdClient {
     apiKey: process.env.SPORTS_API_KEY ?? '',
     baseUrl: process.env.SPORTS_API_BASE_URL ?? '',
   });
+}
+
+// ─────────────────────────── Sync (impure) ───────────────────────────
+
+/**
+ * Sync 48 teams + their real squads from FD into existing DB rows (1 API call).
+ * Match each FD team to a DB team by externalId, else by code (TLA). Set externalId + manager +
+ * flag, then REPLACE that team's squad with the real FD squad (delete + recreate). Safe: nothing
+ * references Player.id with live data (microPrediction:0; the lineup worker regenerates the XI).
+ */
+export async function syncTeamsAndSquads(
+  prisma: PrismaClient,
+  client: FdClientLike,
+): Promise<{ teams: number; players: number; unmatched: string[] }> {
+  const fdTeams = (await fetchFdTeams(client)).map(mapFdTeam);
+  let teamCount = 0, playerCount = 0;
+  const unmatched: string[] = [];
+
+  for (const t of fdTeams) {
+    const dbTeam =
+      (await prisma.team.findUnique({ where: { externalId: t.externalId }, select: { id: true } })) ??
+      (await prisma.team.findFirst({ where: { code: t.code }, select: { id: true } }));
+    if (!dbTeam) { unmatched.push(`${t.code} (${t.name})`); continue; }
+
+    await prisma.team.update({
+      where: { id: dbTeam.id },
+      data: { externalId: t.externalId, manager: t.manager ?? undefined, flagUrl: t.flagUrl ?? undefined, name: t.name },
+    });
+    teamCount++;
+
+    if (t.squad.length > 0) {
+      await prisma.$transaction([
+        prisma.player.deleteMany({ where: { teamId: dbTeam.id } }),
+        ...t.squad.map((p) =>
+          prisma.player.create({
+            data: { teamId: dbTeam.id, name: p.name, position: p.position, externalId: p.externalId, isStarter: false },
+          }),
+        ),
+      ]);
+      playerCount += t.squad.length;
+    }
+  }
+  return { teams: teamCount, players: playerCount, unmatched };
+}
+
+/**
+ * Sync all 104 matches from FD into existing DB rows (1 API call). Attaches Match.externalId by
+ * natural key on first run, then upserts by externalId thereafter:
+ *   - GROUP matches → match the DB row by (homeTeamId, awayTeamId, round=GROUP). Teams are known,
+ *     so this is unique and protects existing predictions on those rows.
+ *   - KNOCKOUT matches (teams null pre-draw) → match remaining DB rows of the same round by
+ *     chronological ordinal (both sides ordered by kickoff). One-time heuristic; once the bracket
+ *     is drawn, externalId already drives updates. No predictions exist on knockout rows.
+ * Never overwrites an ADMIN-sourced result. Never touches venueId or odds. Publishes match.update.
+ */
+export async function syncMatches(
+  prisma: PrismaClient,
+  client: FdClientLike,
+): Promise<{ matched: number; updated: number; skippedAdmin: number; unresolved: number }> {
+  const fdMatches = await fetchFdMatches(client);
+
+  // group name → id
+  const groups = await prisma.group.findMany({ select: { id: true, name: true } });
+  const groupId: Record<string, bigint> = {};
+  for (const g of groups) groupId[g.name] = g.id;
+
+  // FD team id → DB team id (via externalId set by syncTeamsAndSquads)
+  const teamRows = await prisma.team.findMany({ where: { externalId: { not: null } }, select: { id: true, externalId: true } });
+  const teamByExt = new Map<number, bigint>();
+  for (const t of teamRows) teamByExt.set(t.externalId as number, t.id);
+  const resolveTeamId: ResolveTeamId = (fdId) => (fdId == null ? null : teamByExt.get(fdId) ?? null);
+
+  const mapped = fdMatches.map((m) => ({ raw: m, m: mapFdMatch(m, resolveTeamId) }));
+
+  // First-run knockout reconciliation: pair unattached DB knockout rows to FD knockouts by ordinal.
+  const knockoutByRound = new Map<MatchRound, number[]>(); // round → FD externalIds (chronological)
+  for (const { m } of mapped.filter((x) => x.m.round !== 'GROUP').sort((a, b) => a.m.kickoffAt.getTime() - b.m.kickoffAt.getTime())) {
+    const arr = knockoutByRound.get(m.round) ?? [];
+    arr.push(m.externalId);
+    knockoutByRound.set(m.round, arr);
+  }
+  for (const [round, extIds] of knockoutByRound) {
+    const dbRows = await prisma.match.findMany({
+      where: { round, externalId: null }, orderBy: { kickoffAt: 'asc' }, select: { id: true },
+    });
+    for (let i = 0; i < dbRows.length && i < extIds.length; i++) {
+      await prisma.match.update({ where: { id: dbRows[i].id }, data: { externalId: extIds[i] } });
+    }
+  }
+
+  let matched = 0, updated = 0, skippedAdmin = 0, unresolved = 0;
+  for (const { m } of mapped) {
+    // locate target row: externalId first, else group-by-teams
+    let target = await prisma.match.findUnique({ where: { externalId: m.externalId }, select: { id: true, source: true } });
+    if (!target && m.round === 'GROUP' && m.homeTeamId !== 0n && m.awayTeamId !== 0n) {
+      target = await prisma.match.findFirst({
+        where: { round: 'GROUP', homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId },
+        select: { id: true, source: true },
+      });
+    }
+    if (!target) { unresolved++; continue; }
+    if (target.source === 'ADMIN') { skippedAdmin++; continue; }
+
+    // Typed literal (assignable to MatchUpdateInput). `undefined` fields are skipped by Prisma —
+    // so teams are only written when FD actually provides them (never clobber a known pair with 0n).
+    const data = {
+      externalId: m.externalId,
+      round: m.round,
+      groupId: m.groupLetter ? (groupId[m.groupLetter] ?? null) : null,
+      kickoffAt: m.kickoffAt,
+      status: m.status,
+      scoreHome90: m.scoreHome90,
+      scoreAway90: m.scoreAway90,
+      result90: m.result90,
+      source: 'API' as const,
+      homeTeamId: m.homeTeamId !== 0n ? m.homeTeamId : undefined,
+      awayTeamId: m.awayTeamId !== 0n ? m.awayTeamId : undefined,
+    };
+
+    await prisma.match.update({ where: { id: target.id }, data });
+    matched++; updated++;
+    await publishEvent(channels.matches, { type: 'match.update', matchId: Number(target.id) });
+  }
+  return { matched, updated, skippedAdmin, unresolved };
+}
+
+/**
+ * Live poll — ONE call returns all currently-live matches (FD `status=LIVE` = IN_PLAY+PAUSED).
+ * Updates score/status by externalId only; never touches ADMIN rows; publishes match.update.
+ * Replaces the worldcup26 /get/games poll. Returns the ids that newly transitioned to FINISHED.
+ */
+export async function syncLiveScores(
+  prisma: PrismaClient,
+  client: FdClientLike,
+): Promise<{ updated: number; newlyFinished: number[] }> {
+  const fdMatches = await fetchFdMatches(client, { status: 'LIVE' });
+  let updated = 0;
+  const newlyFinished: number[] = [];
+
+  for (const raw of fdMatches) {
+    const ext = raw.id;
+    const existing = await prisma.match.findUnique({
+      where: { externalId: ext },
+      select: { id: true, status: true, scoreHome90: true, scoreAway90: true, source: true },
+    });
+    if (!existing || existing.source === 'ADMIN') continue;
+
+    const status = mapFdStatus(raw.status);
+    const score = mapFdScore(raw.score);
+    if (existing.status === status && existing.scoreHome90 === score.scoreHome90 && existing.scoreAway90 === score.scoreAway90) continue;
+
+    await prisma.match.update({
+      where: { id: existing.id },
+      data: { status, scoreHome90: score.scoreHome90, scoreAway90: score.scoreAway90, result90: score.result90, source: 'API' },
+    });
+    updated++;
+    await publishEvent(channels.matches, { type: 'match.update', matchId: Number(existing.id) });
+    if (status === 'FINISHED' && existing.status !== 'FINISHED') newlyFinished.push(Number(existing.id));
+  }
+  return { updated, newlyFinished };
 }
