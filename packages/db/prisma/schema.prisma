@@ -338,6 +338,7 @@ model Team {
   groupId BigInt?
   formation String? // e.g. "4-2-3-1" (AI-crawled lineup)
   manager   String? // head coach (AI-crawled)
+  externalId Int? @unique // football-data.org team id (e.g. 769); null until first FD sync
 
   group   Group?   @relation(fields: [groupId], references: [id])
   players Player[]
@@ -357,6 +358,7 @@ model Player {
   position  String? // specific role: GK/RB/CB/LB/CDM/CM/CAM/RW/LW/ST/... (AI-crawled)
   number    Int?
   isStarter Boolean @default(false)
+  externalId Int? @unique // football-data.org player id (e.g. 3160)
 
   team Team @relation(fields: [teamId], references: [id])
 
@@ -377,6 +379,7 @@ model Match {
   result90    Outcome?
   source      OddsSource?
   bettingLocked Boolean   @default(false) // admin can block betting on this match (PRD §09)
+  externalId  Int?        @unique // football-data.org match id (e.g. 537327); null until first FD sync
   updatedAt   DateTime    @updatedAt
 
   odds        MatchOdds?
