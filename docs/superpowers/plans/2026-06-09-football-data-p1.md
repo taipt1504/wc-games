@@ -37,7 +37,7 @@ pnpm --filter @wc/db build && pnpm --filter @wc/pipeline build && pnpm --filter 
 | `packages/pipeline/src/job-config.ts` (modify) | Add `fd_sync` job key + config + bounds |
 | `packages/pipeline/package.json` (modify) | Add `ingest:fd` script |
 | `packages/db/prisma/schema.prisma` (modify) | Add `externalId` to `Team`/`Match`/`Player` |
-| `packages/db/prisma/migrations/<ts>_add_external_ids/migration.sql` (new, generated) | The migration |
+| `packages/db/prisma/migrations/20260609000000_add_external_ids/migration.sql` (new, hand-authored) | The migration (applied via `migrate deploy`, not `migrate dev`) |
 | `apps/worker/src/footballdata/fd-sync.worker.ts` (new) | Timer-poller reference-sync worker (teams+matches) |
 | `apps/worker/src/livescore/livescore.worker.ts` (modify) | Repoint live poll to FD `syncLiveScores` |
 | `apps/worker/src/app.module.ts` (modify) | Register `FdSyncWorker` |
@@ -686,9 +686,11 @@ git commit -m "feat(pipeline): football-data typed fetchers + env client factory
 
 **Files:**
 - Modify: `packages/db/prisma/schema.prisma:332-364` (Team, Player) and `:366-387` (Match)
-- Create (generated): `packages/db/prisma/migrations/<timestamp>_add_external_ids/migration.sql`
+- Create (hand-authored): `packages/db/prisma/migrations/20260609000000_add_external_ids/migration.sql`
 
-> **GATE:** This task changes the schema and creates a migration. Per the spec stop-conditions, **STOP and get explicit user approval before running the migration command** (Step 2). Confirm `DATABASE_URL` points at the dev database, not prod.
+> **GATE:** This task changes the schema and applies a migration. Per the spec stop-conditions, **STOP and get explicit user approval before applying the migration** (Step 3). Confirm `DATABASE_URL` points at the dev database, not prod.
+>
+> **Use `migrate deploy`, not `migrate dev`.** This DB holds real demo data (13 users, 6 predictions we are explicitly preserving). `migrate dev` runs drift detection and can **reset the database** on drift; `migrate deploy` only applies pending migration files and never resets. So we hand-author the SQL (we already know it exactly) and deploy it.
 
 - [ ] **Step 1: Edit `schema.prisma`** — add a nullable, unique `externalId` to three models.
 
@@ -707,14 +709,11 @@ In `model Match` (after `bettingLocked Boolean @default(false) ...`):
   externalId Int? @unique // football-data.org match id (e.g. 537327); null until first FD sync
 ```
 
-- [ ] **Step 2: Generate + apply the migration**  🚦 (run only after user approval)
+- [ ] **Step 2: Hand-author the migration SQL**
 
-Run:
-```bash
-pnpm --filter @wc/db exec prisma migrate dev --name add_external_ids
-```
-Expected: Prisma creates `migrations/<ts>_add_external_ids/migration.sql` containing roughly:
+Create `packages/db/prisma/migrations/20260609000000_add_external_ids/migration.sql`:
 ```sql
+-- Add football-data.org external id mapping columns (nullable, unique).
 ALTER TABLE "Team"   ADD COLUMN "externalId" INTEGER;
 ALTER TABLE "Player" ADD COLUMN "externalId" INTEGER;
 ALTER TABLE "Match"  ADD COLUMN "externalId" INTEGER;
@@ -722,17 +721,38 @@ CREATE UNIQUE INDEX "Team_externalId_key"   ON "Team"("externalId");
 CREATE UNIQUE INDEX "Player_externalId_key" ON "Player"("externalId");
 CREATE UNIQUE INDEX "Match_externalId_key"  ON "Match"("externalId");
 ```
-and applies it. Output ends with `Your database is now in sync with your schema.`
+(The folder timestamp `20260609000000` sorts after the latest existing migration `20260607130000_news_i18n`, so Prisma applies it last.)
 
-- [ ] **Step 3: Regenerate the client + rebuild db**
+- [ ] **Step 3: Apply the migration**  🚦 (run only after user approval, on the dev DB)
+
+Run:
+```bash
+pnpm --filter @wc/db prisma:deploy
+```
+Expected: `Applying migration 20260609000000_add_external_ids` … `All migrations have been successfully applied.` (`prisma:deploy` = `dotenv -e ../../.env -- prisma migrate deploy` — applies pending files only, no reset.)
+
+- [ ] **Step 4: Regenerate the client + rebuild db**
 
 Run:
 ```bash
 pnpm --filter @wc/db exec prisma generate && pnpm --filter @wc/db build
 ```
-Expected: client regenerated; `tsc` exits 0.
+Expected: client regenerated (now knows `externalId`); `tsc` exits 0.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Verify columns exist + demo data intact**
+
+Run:
+```bash
+cd packages/db && DATABASE_URL=$(grep -E "^DATABASE_URL=" ../../.env | cut -d= -f2- | tr -d '"') node --input-type=module -e "
+import { PrismaClient } from '@prisma/client';
+const p = new PrismaClient();
+console.log('match externalId column ok; predictions still:', await p.prediction.count());
+await p.\$disconnect();
+"; cd ../..
+```
+Expected: `predictions still: 6` (migration added columns without touching data).
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add packages/db/prisma/schema.prisma packages/db/prisma/migrations
@@ -934,10 +954,12 @@ Expected: `tsc` exits 0.
 
 > If `tsc` reports the `source: 'API'` literal isn't assignable, cast it `as const` (as `ingest.ts:193` does) — but the `Record<string, unknown> data` object above already accepts it.
 
-- [ ] **Step 6: Run the full pipeline test suite (no regressions)**
+- [ ] **Step 6: Run the unit-test suite (no regressions)**
 
-Run: `pnpm --filter @wc/pipeline test`
-Expected: existing `ingest`/`livescore`/etc. tests + the 15 new football-data tests all PASS.
+Run: `pnpm --filter @wc/pipeline test -- --exclude='**/*.int.test.ts'`
+Expected: **exit 0**, all unit tests pass (the pre-existing 47 + the 15 new football-data tests = 62).
+
+> **Known-red, do not "fix":** the bare `pnpm --filter @wc/pipeline test` exits 1 because `news.int.test.ts` + `seed.int.test.ts` refuse to construct `PrismaClient` against the dev DB (`Refusing to construct PrismaClient under a test runner against a non-test database`). That is environmental (they need `TEST_DATABASE_URL`), pre-existing, and unrelated to this work — hence the `--exclude` filter above.
 
 - [ ] **Step 7: Commit**
 
@@ -994,9 +1016,10 @@ Expected (approx):
 teams: { teams: 48, players: 1248, unmatched: [] }
 matches: { matched: 104, updated: 104, skippedAdmin: 0, unresolved: 0 }
 ```
-- `unmatched: []` ⇒ every FD team mapped to a DB team by TLA.
-- `unresolved: 0` ⇒ every FD match found a DB row.
-- If `unmatched` lists teams, their TLA differs between DB and FD — note them for a follow-up alias map (do not guess).
+**`unmatched` / `unresolved` are diagnostics, not a pass/fail gate.** Nonzero is *information*, not necessarily a bug:
+- `unmatched` lists FD teams whose `tla` has no DB team with that `code` — the DB and FD disagree on a 3-letter code. **List them, do not guess** an alias; decide with the user whether a small alias map is warranted.
+- `unresolved` counts FD matches that found no DB row. Group-match matching assumes FD and DB agree on the **home/away designation** and **group letter** for each fixture; a source can swap home/away or assign a group differently. If nonzero, print which fixtures (`stage`, teams) disagreed and decide whether a swap/alias fix is needed — **do not silently force a match.**
+- In the happy path (data already aligned, as verified 2026-06-09) both are expected to be 0/empty.
 
 - [ ] **Step 4: Spot-check the DB** — confirm externalIds landed and a known match updated.
 
@@ -1212,10 +1235,10 @@ pnpm --filter @wc/db build && pnpm --filter @wc/pipeline build && pnpm --filter 
 ```
 Expected: all exit 0.
 
-- [ ] **Step 2: Full pipeline test suite**
+- [ ] **Step 2: Unit-test suite**
 
-Run: `pnpm --filter @wc/pipeline test`
-Expected: all green (15 new + pre-existing).
+Run: `pnpm --filter @wc/pipeline test -- --exclude='**/*.int.test.ts'`
+Expected: exit 0, 62 unit tests pass. (The 2 DB-gated int files are excluded — see Task 7 Step 6.)
 
 - [ ] **Step 3: Confirm web still type-checks (no accidental coupling)**
 
@@ -1225,6 +1248,11 @@ Expected: exits 0 (P1 touched no web code; this guards against an accidental sha
 - [ ] **Step 4: Print the P1 summary and STOP for review.** Report: files changed, the `ingest:fd` output (teams/players/matches counts, `unmatched`/`unresolved`), proof the 6 demo predictions kept their `matchId`s, and the rate-limiter test evidence (spacing ≥7500ms). Do not start P2.
 
 ---
+
+## Follow-ups (tracked, out of P1 scope)
+
+- **Live path is unverifiable until matches actually go live.** Every WC match is `TIMED` until 2026-06-11, so `?status=LIVE` returns an empty set today. Task 8 success proves teams/matches sync, **not** the live transition. Re-verify `syncLiveScores` (IN_PLAY/PAUSED → LIVE → FINISHED) during the tournament — this is a P3 acceptance item.
+- **Mixed-source hazard on the admin "sync result" route.** That route still calls the worldcup26 `syncOneMatchResult` (`packages/pipeline/src/livescore.ts`). Once the scheduled live poll is FD-sourced (Task 9), a manual admin sync would overwrite FD scores with worldcup26 data on the same (preserved) match ids. Repoint that route to FD in **P3**; out of scope here. The old worldcup26 `ingest.ts`/`livescore.ts` functions remain (dead once fully cut over) — flagged, not deleted, per house rules.
 
 ## Self-Review
 
