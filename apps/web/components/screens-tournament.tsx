@@ -160,9 +160,10 @@ export function Groups({ s }: ScreenProps) {
                 <span className="h3">{t('tournament.group', { g: g.name })}</span>
                 <span className="tiny muted">{t('tournament.matchday')}</span>
               </div>
+              <div className="scroll-x">
               <table className="tbl">
                 <thead>
-                  <tr><th>{t('tournament.colRank')}</th><th>{t('tournament.colTeam')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colP')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colPts')}</th></tr>
+                  <tr><th>{t('tournament.colRank')}</th><th>{t('tournament.colTeam')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colP')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colW')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colL')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGF')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGA')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colPts')}</th></tr>
                 </thead>
                 <tbody>
                   {g.teams.map((tm, i) => (
@@ -170,12 +171,18 @@ export function Groups({ s }: ScreenProps) {
                       <td className="tnum" style={{ color: i < 2 ? 'var(--green)' : 'var(--muted)' }}>{i + 1}</td>
                       <td><div className="row gap-8"><Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={22} /><span className="small ellip" style={{ fontWeight: 600 }}>{tm.code ?? tm.name}</span></div></td>
                       <td className="tnum t2" style={{ textAlign: 'center' }}>{tm.played}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.won}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.drawn}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.lost}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.gf}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.ga}</td>
                       <td className="tnum t2" style={{ textAlign: 'center' }}>{tm.gd > 0 ? '+' : ''}{tm.gd}</td>
                       <td className="tnum" style={{ textAlign: 'center', fontWeight: 700 }}>{tm.pts}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           ))}
         </div>
