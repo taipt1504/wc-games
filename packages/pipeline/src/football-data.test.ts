@@ -67,3 +67,40 @@ describe('football-data scalar mappers', () => {
       .toEqual({ scoreHome90: 1, scoreAway90: 1, result90: 'AWAY' });
   });
 });
+
+import { mapFdTeam, mapFdMatch, type MappedFdMatch } from './football-data';
+
+describe('football-data entity mappers', () => {
+  it('mapFdTeam extracts identity + coach + mapped squad', () => {
+    const t = mapFdTeam(teams[0]); // Uruguay
+    expect(t.externalId).toBe(758);
+    expect(t.code).toBe('URY');
+    expect(t.name).toBe('Uruguay');
+    expect(t.flagUrl).toBe('https://crests.football-data.org/758.svg');
+    expect(t.manager).toBe('Marcelo Bielsa');
+    expect(t.squad).toHaveLength(2);
+    expect(t.squad[0]).toEqual({ externalId: 3160, name: 'Fernando Muslera', position: 'GK' });
+  });
+
+  it('mapFdMatch maps a group match with both teams resolvable', () => {
+    const resolveTeam = (fdId: number | null) => (fdId === 769 ? 1n : fdId === 774 ? 2n : null);
+    const m = mapFdMatch(matches[0], resolveTeam); // 537327 MEX v RSA
+    expect(m.externalId).toBe(537327);
+    expect(m.round).toBe('GROUP');
+    expect(m.groupLetter).toBe('A');
+    expect(m.homeTeamId).toBe(1n);
+    expect(m.awayTeamId).toBe(2n);
+    expect(m.kickoffAt.toISOString()).toBe('2026-06-11T19:00:00.000Z');
+    expect(m.status).toBe('SCHEDULED'); // TIMED
+    expect(m.scoreHome90).toBeNull();
+  });
+
+  it('mapFdMatch maps a knockout match with null teams to placeholder 0n', () => {
+    const resolveTeam = () => null;
+    const m = mapFdMatch(matches[1], resolveTeam); // 537390 FINAL, teams null
+    expect(m.round).toBe('FINAL');
+    expect(m.groupLetter).toBeNull();
+    expect(m.homeTeamId).toBe(0n);
+    expect(m.awayTeamId).toBe(0n);
+  });
+});

@@ -80,3 +80,46 @@ export function mapFdScore(s: FdScore): MappedScore {
   const result90: Outcome = s.winner === 'HOME_TEAM' ? 'HOME' : s.winner === 'AWAY_TEAM' ? 'AWAY' : 'DRAW';
   return { scoreHome90: h, scoreAway90: a, result90 };
 }
+
+// ─────────────────────────── Pure entity mappers ───────────────────────────
+
+export interface MappedSquadPlayer { externalId: number; name: string; position: string | null }
+export interface MappedFdTeam {
+  externalId: number; name: string; code: string; flagUrl: string | null;
+  manager: string | null; squad: MappedSquadPlayer[];
+}
+export function mapFdTeam(t: FdTeam): MappedFdTeam {
+  return {
+    externalId: t.id,
+    name: t.name,
+    code: t.tla,
+    flagUrl: t.crest ?? null,
+    manager: t.coach?.name ?? null,
+    squad: (t.squad ?? []).map((p) => ({ externalId: p.id, name: p.name, position: mapFdPosition(p.position) })),
+  };
+}
+
+export interface MappedFdMatch {
+  externalId: number; round: MatchRound; groupLetter: string | null;
+  homeTeamId: bigint; awayTeamId: bigint; kickoffAt: Date; status: MatchStatus;
+  scoreHome90: number | null; scoreAway90: number | null; result90: Outcome | null;
+}
+/** Resolve FD team id → DB team id (via Team.externalId); null FD team (undrawn knockout) → 0n
+ *  placeholder, matching the existing worldcup26 "0" convention (homeTeamId has no FK). */
+export type ResolveTeamId = (fdTeamId: number | null) => bigint | null;
+export function mapFdMatch(m: FdMatch, resolveTeamId: ResolveTeamId): MappedFdMatch {
+  const round = mapFdStage(m.stage);
+  const score = mapFdScore(m.score);
+  return {
+    externalId: m.id,
+    round,
+    groupLetter: round === 'GROUP' ? mapFdGroup(m.group) : null,
+    homeTeamId: resolveTeamId(m.homeTeam.id) ?? 0n,
+    awayTeamId: resolveTeamId(m.awayTeam.id) ?? 0n,
+    kickoffAt: new Date(m.utcDate),
+    status: mapFdStatus(m.status),
+    scoreHome90: score.scoreHome90,
+    scoreAway90: score.scoreAway90,
+    result90: score.result90,
+  };
+}
