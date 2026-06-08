@@ -122,7 +122,7 @@ export function TeamDetail({ s }: ScreenProps) {
         {fixtures.length === 0 ? <p className="muted small">{t('tournament.noFixtures')}</p> : fixtures.map((m) => (
           <div key={m.id} className="card card-pad row between" style={{ padding: '10px 14px' }}>
             <div className="row gap-10" style={{ minWidth: 0 }}>
-              <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? t('round.groupPrefix') : m.round}</span>
+              <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? t('round.groupPrefix') : t(`round.${m.round}`)}</span>
               <span className="small ellip">{m.home?.code ?? m.home?.name ?? t('match.tbd')} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny muted">
