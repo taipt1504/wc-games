@@ -120,7 +120,7 @@ export function Lobbies({ s }: ScreenProps) {
         action={<Btn variant="primary" size="sm" icon="plus" onClick={() => s.go('lobby-create')}>{t('lobby.createLobby')}</Btn>} />
 
       {/* search + join */}
-      <div className="grid gap-12" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', marginBottom: 22 }}>
+      <div className="grid grid-stack-md gap-12" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', marginBottom: 22 }}>
         <div className="card card-pad row gap-10" style={{ borderRadius: 'var(--r-pill)' }}>
           <Icon name="search" size={18} className="muted" />
           <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0' }} placeholder={t('lobby.searchPh')} value={q} onChange={e => setQ(e.target.value)} />
@@ -138,7 +138,7 @@ export function Lobbies({ s }: ScreenProps) {
         <span className="eyebrow">{t('lobby.yourLobbies', { n: joined.length })}</span>
       </div>
       {joined.length
-        ? <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>{joined.map(l => <LobbyCard key={l.id} l={l} s={s} joined />)}</div>
+        ? <div className="grid-fill" style={{ '--col-min': '280px', '--gap': '14px' } as React.CSSProperties}>{joined.map(l => <LobbyCard key={l.id} l={l} s={s} joined />)}</div>
         : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('lobby.noJoined')}</p></div>}
 
       {/* discover */}
@@ -147,7 +147,7 @@ export function Lobbies({ s }: ScreenProps) {
         <span className="tiny muted">{t('lobby.discoverHint')}</span>
       </div>
       {discover.length
-        ? <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>{discover.map(l => <LobbyCard key={l.id} l={l} s={s} onJoin={(lb) => join({ id: lb.id, name: lb.name })} />)}</div>
+        ? <div className="grid-fill" style={{ '--col-min': '280px', '--gap': '14px' } as React.CSSProperties}>{discover.map(l => <LobbyCard key={l.id} l={l} s={s} onJoin={(lb) => join({ id: lb.id, name: lb.name })} />)}</div>
         : <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('lobby.noDiscover')}</p></div>}
 
       {/* password prompt (protected lobby / code) */}
@@ -409,7 +409,7 @@ function LobbyMatches({ ownerName, matches, isHost, odds, onEdit, onBet }: {
   const { t, fmt } = useT();
   return (
     <div>
-      <div className="card card-pad row between wrap gap-12" style={{ marginBottom: 14, background: isHost ? 'linear-gradient(120deg,var(--sky-soft),transparent)' : 'transparent' }}>
+      <div className="card card-pad row between wrap wrap-w gap-12" style={{ marginBottom: 14, background: isHost ? 'linear-gradient(120deg,var(--sky-soft),transparent)' : 'transparent' }}>
         <div className="row gap-10">
           <Icon name={isHost ? 'gauge' : 'calendar'} size={18} style={{ color: isHost ? 'var(--sky)' : 'var(--muted)' }} />
           <div>
@@ -475,7 +475,7 @@ function LobbyBoard({ board }: { board: BoardRow[] }) {
   const { t } = useT();
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="scroll-x">
         <table className="tbl">
           <thead><tr><th>#</th><th>{t('lobby.colMember')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colDefault')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colWinnings')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colBorrowed')}</th><th style={{ textAlign: 'right' }}>{t('lobby.colScore')}</th></tr></thead>
           <tbody>
@@ -686,7 +686,7 @@ function LobbyRequests({ s, l, isHost, reqs, onRefetch }: { s: ScreenProps['s'];
 
   return (
     <div className="stack gap-12">
-      <div className="card card-pad row between wrap gap-12" style={{ background: 'linear-gradient(120deg,var(--gold-soft),transparent)', borderColor: 'rgba(255,200,61,.25)' }}>
+      <div className="card card-pad row between wrap wrap-w gap-12" style={{ background: 'linear-gradient(120deg,var(--gold-soft),transparent)', borderColor: 'rgba(255,200,61,.25)' }}>
         <div className="row gap-10">
           <Icon name="wallet" size={18} style={{ color: 'var(--gold)' }} />
           <div>
@@ -702,7 +702,7 @@ function LobbyRequests({ s, l, isHost, reqs, onRefetch }: { s: ScreenProps['s'];
         const decided = r.state !== 'pending';
         return (
           <div key={r.id} className="card card-pad" style={{ opacity: decided ? 0.6 : 1, borderColor: r.repeat && !decided ? 'rgba(255,200,61,.3)' : 'var(--line)' }}>
-            <div className="row between wrap gap-12">
+            <div className="row between wrap wrap-w gap-12">
               <div className="row gap-12" style={{ minWidth: 0 }}>
                 <Avatar initials={r.who.slice(0, 2).toUpperCase()} size={40} color="var(--sky)" />
                 <div style={{ minWidth: 0 }}>
@@ -723,7 +723,7 @@ function LobbyRequests({ s, l, isHost, reqs, onRefetch }: { s: ScreenProps['s'];
 
             {r.msg && <div className="card-2 card-pad mt-12 small t2" style={{ borderRadius: 'var(--r-sm)', fontStyle: 'italic' }}>&quot;{r.msg}&quot;</div>}
 
-            <div className="row between mt-12 gap-8 wrap">
+            <div className="row between mt-12 gap-8 wrap wrap-w">
               <span className="tiny muted">{t('lobby.moveNote', { n: r.amount })}</span>
               {decided
                 ? <span className={`badge badge-${r.state === 'approved' ? 'green' : 'danger'}`}>{r.state === 'approved' ? t('lobby.approved') : t('lobby.declined')}</span>
@@ -864,7 +864,7 @@ export function LobbyView({ s }: ScreenProps) {
       <button className="chip" onClick={() => s.go('lobbies')} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> {t('lobby.allLobbies')}</button>
 
       <div className="panel card-pad-lg" style={{ background: 'linear-gradient(150deg, var(--surface-2), var(--bg-2))' }}>
-        <div className="row between wrap gap-12">
+        <div className="row between wrap wrap-w gap-12">
           <div>
             <div className="row gap-8 wrap-w"><span className="badge badge-sky">{l.scope}</span>{l.borrow && <span className="badge badge-gold">{t('lobby.borrowOn')}</span>}{isHost && <span className="badge badge-green">{t('lobby.youHost')}</span>}</div>
             <h1 className="h2 mt-8">{l.name}</h1>
@@ -887,7 +887,7 @@ export function LobbyView({ s }: ScreenProps) {
         </div>
       </div>
 
-      <div className="row gap-8 mt-16" style={{ overflowX: 'auto' }}>
+      <div className="row gap-8 mt-16 scroll-x">
         {tabs.map(([k, lbl]) =>
           <button key={k} className={`chip ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
             {lbl}

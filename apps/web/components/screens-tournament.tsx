@@ -57,7 +57,7 @@ export function Teams({ s }: ScreenProps) {
       {loading ? <p className="muted small">{t('tournament.loadingTeams')}</p>
         : list.length === 0 ? <p className="muted small">{t('tournament.noTeams')}</p>
           : (
-            <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(168px,1fr))' }}>
+            <div className="grid-fill" style={{ '--col-min': '168px', '--gap': '12px' } as React.CSSProperties}>
               {list.map((tm) => (
                 <div key={tm.id} className="card card-pad card-hover pointer" onClick={() => s.go('team', { id: tm.id })}>
                   <div className="row between"><Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={40} /><span className="badge badge-muted">{t('tournament.grp', { g: tm.group ?? '—' })}</span></div>
@@ -153,7 +153,7 @@ export function Groups({ s }: ScreenProps) {
     <div className="page fade-up">
       <SecHead title={t('tournament.groupsTitle')} sub={t('tournament.groupsSub')} />
       {loading ? <p className="muted small">{t('tournament.loadingStandings')}</p> : (
-        <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))' }}>
+        <div className="grid-fill" style={{ '--col-min': '320px', '--gap': '16px' } as React.CSSProperties}>
           {(groups ?? []).map((g) => (
             <div key={g.name} className="card" style={{ overflow: 'hidden' }}>
               <div className="row between card-pad" style={{ paddingBottom: 10 }}>
@@ -268,7 +268,7 @@ export function Bracket({ s }: ScreenProps) {
   return (
     <div className="page fade-up">
       <SecHead title={t('tournament.bracketTitle')} sub={t('tournament.bracketSub')} />
-      <div className="card card-pad" style={{ overflowX: 'auto' }}>
+      <div className="card card-pad scroll-x">
         <div className="row" style={{ gap: 28, alignItems: 'stretch', minWidth: 1100, padding: '8px 0' }}>
           <Col title={t('round.R32')} count={8} start={0} />
           <Col title={t('round.R16')} count={4} start={4} />
@@ -285,7 +285,7 @@ export function Bracket({ s }: ScreenProps) {
           </div>
         </div>
       </div>
-      <div className="card card-pad mt-16 row between wrap gap-12" style={{ background: 'linear-gradient(120deg,var(--sky-soft),transparent)' }}>
+      <div className="card card-pad mt-16 row between wrap wrap-w gap-12" style={{ background: 'linear-gradient(120deg,var(--sky-soft),transparent)' }}>
         <div className="row gap-12">
           <Pundit size={48} mood="idle" />
           <div>

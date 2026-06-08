@@ -51,7 +51,7 @@ export function Leaderboard({ s }: ScreenProps) {
 
       {guest ? (
         /* guest conversion card */
-        <div className="panel card-pad-lg row between wrap gap-16" style={{ background: 'linear-gradient(120deg, var(--gold-soft), transparent)', borderColor: 'rgba(255,200,61,.25)', marginBottom: 18 }}>
+        <div className="panel card-pad-lg row between wrap wrap-w gap-16" style={{ background: 'linear-gradient(120deg, var(--gold-soft), transparent)', borderColor: 'rgba(255,200,61,.25)', marginBottom: 18 }}>
           <div className="row gap-14">
             <Icon name="trophy" size={28} style={{ color: 'var(--gold)' }} />
             <div>
@@ -64,7 +64,7 @@ export function Leaderboard({ s }: ScreenProps) {
       ) : (
         /* your rank card */
         <div className="panel card-pad mt-4" style={{ background: 'linear-gradient(120deg, var(--gold-soft), transparent)', borderColor: 'rgba(255,200,61,.25)', marginBottom: 18 }}>
-          <div className="row between wrap gap-12">
+          <div className="row between wrap wrap-w gap-12">
             <div className="row gap-14">
               <div className="display" style={{ fontSize: 32, color: 'var(--gold)' }}>#{s.me.rank ?? '—'}</div>
               <div><div style={{ fontWeight: 700 }}>{t('leaderboard.yourRank')}</div><div className="tiny muted">{t('leaderboard.topPct', { n: s.me.settled })}</div></div>
@@ -99,7 +99,7 @@ export function Leaderboard({ s }: ScreenProps) {
 
           {/* table */}
           <div className="card" style={{ overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
+            <div className="scroll-x">
               <table className="tbl">
                 <thead>
                   <tr>
@@ -260,7 +260,7 @@ function ParlayBuilder({ s }: ScreenProps) {
             const profit = Number(p.payout) - Number(p.stake);
             return (
               <div key={p.id} className="card card-pad">
-                <div className="row between wrap gap-8">
+                <div className="row between wrap wrap-w gap-8">
                   <div>
                     <div className="small" style={{ fontWeight: 700 }}>{t('bets.parlayN', { id: p.id, n: p.legs.length })}</div>
                     <div className="tiny muted">{t('bets.stakeN', { stake: p.stake })}</div>
@@ -315,7 +315,7 @@ export function MyBets({ s }: ScreenProps) {
   return (
     <div className="page fade-up">
       <SecHead title={t('bets.title')} sub={t('bets.sub')} />
-      <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', marginBottom: 18 }}>
+      <div className="grid-auto" style={{ '--col-min': '140px', '--gap': '12px', marginBottom: 18 } as React.CSSProperties}>
         <div className="card card-pad stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">{t('bets.roi')}</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{Math.round(won / (settled.length || 1) * 100)}%</span><span className="s-lbl">{t('bets.winRate')}</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{settled.length}</span><span className="s-lbl">{t('bets.settled')}</span></div>
@@ -510,7 +510,7 @@ export function CosmeticShop({ s }: ScreenProps) {
         {sections.map(([label, list]) => (
           <div key={label}>
             <div className="tiny muted" style={{ fontWeight: 700, letterSpacing: '.06em', marginBottom: 8 }}>{label.toUpperCase()}</div>
-            <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
+            <div className="grid-fill" style={{ '--col-min': '150px', '--gap': '12px' } as React.CSSProperties}>
               {list.map((item) => {
                 const price = Number(item.price);
                 const afford = s.points >= price;
@@ -759,7 +759,7 @@ export function Profile({ s }: ScreenProps) {
     <div className="page page-narrow fade-up">
       {/* header */}
       <div className="panel card-pad-lg" style={{ background: 'linear-gradient(160deg, var(--surface-2), var(--bg-2))' }}>
-        <div className="row between wrap gap-16">
+        <div className="row between wrap wrap-w gap-16">
           <div className="row gap-16">
             <Avatar initials={me.avatar} size={64} color="var(--gold)" ring="var(--gold)" />
             <div>
@@ -790,7 +790,7 @@ export function Profile({ s }: ScreenProps) {
       )}
 
       {/* stats */}
-      <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))' }}>
+      <div className="grid-auto mt-16" style={{ '--col-min': '110px', '--gap': '12px' } as React.CSSProperties}>
         {([[t('profile.statBalance'), s.points.toLocaleString(), 'var(--gold)'], [t('profile.statRoi'), sgnPct(me.roi), sgnCol(me.roi)], [t('profile.statRank'), '#' + (me.rank ?? '—'), 'var(--sky)'], [t('profile.statSettled'), String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
           <div key={l} className="card card-pad stat"><span className="s-val tnum" style={{ color: c, fontSize: 22 }}>{v}</span><span className="s-lbl">{l}</span></div>
         ))}
@@ -803,7 +803,7 @@ export function Profile({ s }: ScreenProps) {
             <Icon name="sparkles" size={18} style={{ color: 'var(--gold)' }} />
             <span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.powerups')}</span>
           </div>
-          <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
+          <div className="grid-auto" style={{ '--col-min': '180px', '--gap': '10px' } as React.CSSProperties}>
             {([
               { type: 'DOUBLE_DOWN', label: t('profile.puDoubleDown'), desc: t('profile.puDoubleDownDesc'), price: 300 },
               { type: 'INSURANCE', label: t('profile.puInsurance'), desc: t('profile.puInsuranceDesc'), price: 200 },
@@ -826,7 +826,7 @@ export function Profile({ s }: ScreenProps) {
       )}
 
       {/* referral / share */}
-      <div className="grid gap-12 mt-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
+      <div className="grid-auto mt-16" style={{ '--col-min': '240px', '--gap': '12px' } as React.CSSProperties}>
         <div className="card card-pad">
           <div className="row gap-8"><Icon name="users" size={18} style={{ color: 'var(--sky)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.referTitle')}</span></div>
           <p className="tiny t2 mt-8">{t('profile.referIntro')} {referral ? t('profile.referCount', { n: referral.count }) : t('profile.referNudge')}</p>
@@ -884,7 +884,7 @@ export function Profile({ s }: ScreenProps) {
       {/* achievements */}
       <div className="eyebrow mt-24" style={{ marginBottom: 12, display: 'block' }}>{t('profile.achievements')}</div>
       {achievements.length === 0 && <div className="card card-pad" style={{ textAlign: 'center' }}><p className="muted">{t('profile.achEmpty')}</p></div>}
-      <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+      <div className="grid-auto" style={{ '--col-min': '150px', '--gap': '12px' } as React.CSSProperties}>
         {achievements.map((a) => (
           <div key={a.name} className="card card-pad" style={{ opacity: a.unlocked ? 1 : .55, borderColor: a.unlocked ? 'rgba(255,200,61,.25)' : 'var(--line)' }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: a.unlocked ? 'var(--gold-soft)' : 'var(--surface-2)', display: 'grid', placeItems: 'center' }}>
@@ -920,7 +920,7 @@ export function Profile({ s }: ScreenProps) {
             const isParticipant = meId && (d.challengerId === meId || d.opponentId === meId);
             return (
               <div key={d.id} className="card card-pad">
-                <div className="row between wrap gap-8">
+                <div className="row between wrap wrap-w gap-8">
                   <div>
                     <div className="small" style={{ fontWeight: 700 }}>{d.challengerName} <span className="muted">{t('profile.vs')}</span> {d.opponentName}</div>
                     {d.scope && d.scope !== 'GLOBAL' && <div className="tiny muted">{d.scope}</div>}

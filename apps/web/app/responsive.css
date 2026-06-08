@@ -1,0 +1,46 @@
+/* ============================================================
+   RESPONSIVE LAYER — single source of truth for breakpoints + fluid
+   tokens + reusable layout utilities. Imported once in layout.tsx after
+   globals.css. Layout/CSS only — no logic.
+
+   BREAKPOINTS — the ONLY widths any @media in this app may use:
+     mobile      : max-width 767px
+     tablet      : 768px – 1023px
+     desktop     : min-width 1024px
+     phone-sheet : max-width 640px   (modal → bottom sheet)
+   ============================================================ */
+
+/* ---- Fluid spacing tokens (smooth scale 360 → desktop).
+   Headings (.h1/.h2) are already clamp() in globals.css — left untouched. */
+:root{
+  --page-pad-x: clamp(12px, 3vw, 20px);
+  --page-pad-y: clamp(16px, 3vw, 24px);
+}
+
+/* ---- Layout utilities (replace breaking inline-px) ---- */
+
+/* Auto-reflow card grids. Set --col-min (+ optional --gap) per use.
+   .grid-auto = auto-fit  → few items STRETCH to fill the row (stat/feature grids).
+   .grid-fill = auto-fill → items stay at --col-min, no stretch (card lists).
+   min(100%, …) guarantees one column never overflows a 360px viewport. */
+.grid-auto, .grid-fill{ display:grid; gap:var(--gap, 12px); }
+.grid-auto{ grid-template-columns:repeat(auto-fit, minmax(min(100%, var(--col-min, 240px)), 1fr)); }
+.grid-fill{ grid-template-columns:repeat(auto-fill, minmax(min(100%, var(--col-min, 240px)), 1fr)); }
+
+/* Fixed-ratio multi-column grid that collapses to one column on mobile.
+   Keep the desktop grid-template-columns inline; this forces 1col < 768. */
+@media (max-width:767px){
+  .grid-stack-md{ grid-template-columns:1fr !important; }
+}
+
+/* Horizontal touch-scroll wrapper for wide content (data tables, bracket). */
+.scroll-x{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+/* Wide tables keep column widths and scroll instead of cramping on phones. */
+.scroll-x .tbl{ min-width:480px; }
+.scroll-x .tbl th, .scroll-x .tbl td{ white-space:nowrap; }
+
+/* ---- Visibility helpers (canonical breakpoints) ---- */
+@media (max-width:767px){ .hide-mobile{ display:none !important; } }
+@media (min-width:768px) and (max-width:1023px){ .hide-tablet{ display:none !important; } }
+@media (min-width:768px){ .only-mobile{ display:none !important; } }
+@media (max-width:1023px){ .only-desktop{ display:none !important; } }

@@ -27,11 +27,11 @@ export function Landing({ s }: ScreenProps) {
         <p className="lead fade-up" style={{ maxWidth: 560, margin: '20px auto 0', fontSize: 19 }}>
           {t('landing.lead')}
         </p>
-        <div className="row center gap-12 wrap fade-up" style={{ marginTop: 28 }}>
+        <div className="row center gap-12 wrap wrap-w fade-up" style={{ marginTop: 28 }}>
           <Btn variant="primary" size="lg" icon="ball" onClick={() => s.go('auth', { mode: 'signup' })}>{t('landing.ctaClaim')}</Btn>
           <Btn variant="outline" size="lg" onClick={() => s.go('auth', { mode: 'login' })}>{t('landing.ctaHaveAccount')}</Btn>
         </div>
-        <div className="row center gap-24 wrap" style={{ marginTop: 26, color: 'var(--muted)', fontSize: 13 }}>
+        <div className="row center gap-24 wrap wrap-w" style={{ marginTop: 26, color: 'var(--muted)', fontSize: 13 }}>
           <span>{t('landing.trust1')}</span><span>·</span><span>{t('landing.trust2')}</span><span>·</span><span>{t('landing.trust3')}</span>
         </div>
       </div>
@@ -41,14 +41,14 @@ export function Landing({ s }: ScreenProps) {
           <span className="eyebrow">{t('landing.upNext')}</span>
           <button className="chip" onClick={() => s.go('schedule')}>{t('landing.allMatches')}</button>
         </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+        <div className="grid-auto" style={{ '--col-min': '280px', '--gap': '16px' } as React.CSSProperties}>
           {feat.map((m) => <MatchBetCard key={m.id} m={m} s={s} />)}
         </div>
       </div>
 
       <div style={{ maxWidth: 1080, margin: '56px auto 0', padding: '0 24px' }}>
         <h2 className="h2" style={{ textAlign: 'center', marginBottom: 28 }}>{t('landing.stepsTitle')}</h2>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16 }}>
+        <div className="grid-auto" style={{ '--col-min': '240px', '--gap': '16px' } as React.CSSProperties}>
           {[
             { n: '01', t: t('landing.step1Title'), d: t('landing.step1Desc'), c: 'var(--gold)', i: 'wallet' },
             { n: '02', t: t('landing.step2Title'), d: t('landing.step2Desc'), c: 'var(--green)', i: 'target' },
@@ -64,7 +64,7 @@ export function Landing({ s }: ScreenProps) {
       </div>
 
       <div style={{ maxWidth: 1080, margin: '40px auto 0', padding: '0 24px' }}>
-        <div className="panel card-pad-lg row between gap-24 wrap" style={{ background: 'linear-gradient(120deg, var(--sky-soft), transparent)' }}>
+        <div className="panel card-pad-lg row between gap-24 wrap wrap-w" style={{ background: 'linear-gradient(120deg, var(--sky-soft), transparent)' }}>
           <div style={{ flex: 1, minWidth: 260 }}>
             <span className="badge badge-sky">{t('common.aiPundit')}</span>
             <h2 className="h2" style={{ marginTop: 12 }}>{t('landing.punditTitle')}</h2>
@@ -78,7 +78,7 @@ export function Landing({ s }: ScreenProps) {
         <div className="row between" style={{ marginBottom: 14 }}>
           <span className="eyebrow">{t('landing.exploreHead')}</span>
         </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
+        <div className="grid-auto" style={{ '--col-min': '220px', '--gap': '16px' } as React.CSSProperties}>
           {[
             { k: 'schedule', t: t('landing.exploreSchedule'), d: t('landing.exploreScheduleD'), i: 'calendar', c: 'var(--green)' },
             { k: 'leaderboard', t: t('landing.exploreLeaderboard'), d: t('landing.exploreLeaderboardD'), i: 'trophy', c: 'var(--gold)' },
@@ -279,7 +279,7 @@ export function Home({ s }: ScreenProps) {
   }, []);
   return (
     <div className="page fade-up">
-      <div className="row between wrap gap-16" style={{ marginBottom: 22 }}>
+      <div className="row between wrap wrap-w gap-16" style={{ marginBottom: 22 }}>
         <div>
           <div className="eyebrow">{t('home.matchday')}{today[0] ? ` · ${fmt.date(today[0].kickoffAt)}` : ''}</div>
           <h1 className="h1" style={{ marginTop: 6 }}>{t('home.greeting', { name: me.name.split(' ')[0] })}</h1>
@@ -287,7 +287,7 @@ export function Home({ s }: ScreenProps) {
         <CheckinCard s={s} />
       </div>
 
-      <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(136px,1fr))', marginBottom: 26 }}>
+      <div className="grid-auto" style={{ '--col-min': '136px', '--gap': '12px', marginBottom: 26 } as React.CSSProperties}>
         <Stat val={s.points.toLocaleString()} lbl={t('home.statBalance')} c="var(--gold)" i="wallet" onClick={() => s.go('wallet')} />
         <Stat val={`+${me.roi}%`} lbl={t('home.statRoi')} c="var(--green)" i="trending" onClick={() => s.go('mybets')} />
         <Stat val={me.rank == null ? '—' : `#${me.rank.toLocaleString()}`} lbl={t('home.statRank')} c="var(--sky)" i="trophy" onClick={() => s.go('leaderboard')} />

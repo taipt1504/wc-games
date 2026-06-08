@@ -128,7 +128,7 @@ export const vi: Dict = {
     mybets: 'Dự đoán của tôi', wallet: 'Ví', profile: 'Hồ sơ', admin: 'Quản trị',
     match: 'Trận đấu', team: 'Đội', lobby: 'Sảnh', lobbyCreate: 'Sảnh mới', article: 'Bài viết',
     secTournament: 'Giải đấu', secAccount: 'Tài khoản',
-    tabBoard: 'Bảng', tabYou: 'Bạn',
+    tabBoard: 'Bảng', tabYou: 'Bạn', more: 'Thêm',
   },
   shell: {
     login: 'Đăng nhập', signupFree: 'Đăng ký miễn phí',

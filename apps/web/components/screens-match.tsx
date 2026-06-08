@@ -229,13 +229,13 @@ export function Schedule({ s }: ScreenProps) {
   return (
     <div className="page fade-up">
       <SecHead title={t('schedule.title')} sub={t('schedule.sub')} />
-      <div className="row between wrap gap-12" style={{ marginBottom: 18 }}>
+      <div className="row between wrap wrap-w gap-12" style={{ marginBottom: 18 }}>
         <div className="row gap-8 wrap-w">
           {filters.map(f => <button key={f.k} className={`chip ${filter === f.k ? 'active' : ''}`} onClick={() => setFilter(f.k)}>{f.label}</button>)}
         </div>
         <div className="row gap-8 card" style={{ padding: '6px 12px', borderRadius: 'var(--r-pill)' }}>
           <Icon name="search" size={16} className="muted" />
-          <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0', width: 160 }} placeholder={t('schedule.searchPh')} value={q} onChange={e => setQ(e.target.value)} />
+          <input className="input" style={{ border: 0, background: 'transparent', padding: '4px 0', flex: 1, minWidth: 0 }} placeholder={t('schedule.searchPh')} value={q} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
 
@@ -249,7 +249,7 @@ export function Schedule({ s }: ScreenProps) {
                 <span className="eyebrow">{label}</span>
                 <span className="tiny muted">{ms.length} {ms.length === 1 ? t('schedule.matchOne') : t('schedule.matchMany')}</span>
               </div>
-              <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
+              <div className="grid-fill" style={{ '--col-min': '300px', '--gap': '14px' } as React.CSSProperties}>
                 {ms.map(m => <MatchBetCard key={m.id} m={m} s={s} />)}
               </div>
             </div>
@@ -425,7 +425,7 @@ export function MatchDetail({ s }: ScreenProps) {
 
       {/* info strip (real) */}
       <div className="card card-pad mt-16">
-        <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+        <div className="grid-auto" style={{ '--col-min': '150px', '--gap': '12px' } as React.CSSProperties}>
           <InfoCell label={t('match.kickoff')} value={fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })} />
           <InfoCell label={t('match.roundLabel')} value={roundShort(m.round, m.group, t('round.groupPrefix'))} />
           <InfoCell label={t('match.venue')} value={m.venue?.name ? `${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ''}${m.venue.country ? `, ${m.venue.country}` : ''}` : '—'} />
@@ -494,7 +494,7 @@ export function MatchDetail({ s }: ScreenProps) {
           ? (
             <>
               <p className="tiny muted" style={{ marginBottom: 12 }}>{t('match.lineupsHint')}</p>
-              <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
+              <div className="grid-auto" style={{ '--col-min': '300px', '--gap': '16px' } as React.CSSProperties}>
                 {lineupTeams.map((tm, i) => (
                   <div key={i}>
                     <div className="small" style={{ fontWeight: 700, marginBottom: 8 }}>{tm.name}</div>

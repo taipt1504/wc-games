@@ -36,7 +36,8 @@ const RAIL: { sec: string | null; items: [string, string, string][] }[] = [
   { sec: 'nav.secTournament', items: [['teams', 'nav.teams', 'flag'], ['groups', 'nav.groups', 'grid'], ['bracket', 'nav.bracket', 'bracket'], ['news', 'nav.news', 'news']] },
   { sec: 'nav.secAccount', items: [['mybets', 'nav.mybets', 'target'], ['wallet', 'nav.wallet', 'wallet'], ['profile', 'nav.profile', 'user']] },
 ];
-const TABS: [string, string, string][] = [['home', 'nav.home', 'home'], ['schedule', 'nav.matches', 'calendar'], ['leaderboard', 'nav.tabBoard', 'trophy'], ['lobbies', 'nav.lobbies', 'users'], ['profile', 'nav.tabYou', 'user']];
+const TABS: [string, string, string][] = [['home', 'nav.home', 'home'], ['schedule', 'nav.matches', 'calendar'], ['leaderboard', 'nav.leaderboard', 'trophy'], ['lobbies', 'nav.lobbies', 'users'], ['more', 'nav.more', 'grid']];
+const PRIMARY_TABS = new Set(['home', 'schedule', 'leaderboard', 'lobbies']);
 const TITLE_KEYS: Record<string, string> = { home: 'nav.home', schedule: 'nav.matches', match: 'nav.match', leaderboard: 'nav.leaderboard', mybets: 'nav.mybets', wallet: 'nav.wallet', profile: 'nav.profile', teams: 'nav.teams', team: 'nav.team', groups: 'nav.groups', bracket: 'nav.bracket', lobbies: 'nav.lobbies', lobby: 'nav.lobby', 'lobby-create': 'nav.lobbyCreate', news: 'nav.news', article: 'nav.article' };
 
 function navKey(r: string): string {
@@ -84,6 +85,7 @@ export default function AppShell() {
   const [streak, setStreak] = useState(WC.me.streak);
   const [winStreak, setWinStreak] = useState(WC.me.winStreak);
   const [checkedIn, setCheckedIn] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [borrowOpen, setBorrowOpen] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [booting, setBooting] = useState(true);
@@ -272,13 +274,13 @@ export default function AppShell() {
       <div>
         <header className="pubbar">
           <div className="pubbar-inner">
-            <span className="rail-logo pointer" style={{ padding: 0, fontSize: 24 }} onClick={() => { setRoute('landing'); setParam({}); }}>{BRAND}</span>
+            <span className="rail-logo pointer ellip" style={{ padding: 0, fontSize: 'clamp(14px, 4vw, 24px)', flex: 1, minWidth: 0 }} onClick={() => { setRoute('landing'); setParam({}); }}>{BRAND}</span>
             <nav className="pub-nav">
               {PUB_NAV.map(([k, l]) => <span key={k} className={`pub-link ${active === k ? 'active' : ''}`} onClick={() => go(k)}>{t(l)}</span>)}
             </nav>
-            <div className="row gap-10">
+            <div className="row gap-10" style={{ flexShrink: 0 }}>
               <LangSwitch />
-              <Btn variant="ghost" size="sm" onClick={() => go('auth', { mode: 'login' })}>{t('shell.login')}</Btn>
+              <Btn className="hide-mobile" variant="ghost" size="sm" onClick={() => go('auth', { mode: 'login' })}>{t('shell.login')}</Btn>
               <Btn variant="primary" size="sm" onClick={() => go('auth', { mode: 'signup' })}>{t('shell.signupFree')}</Btn>
             </div>
           </div>
@@ -290,7 +292,7 @@ export default function AppShell() {
         <main><div key={route + JSON.stringify(param)}><Screen s={store} /></div></main>
         {route !== 'landing' && (
           <div className="wrap" style={{ paddingBottom: 48 }}>
-            <div className="panel card-pad-lg row between wrap gap-16" style={{ background: 'linear-gradient(120deg, var(--green-soft), transparent)' }}>
+            <div className="panel card-pad-lg row between wrap wrap-w gap-16" style={{ background: 'linear-gradient(120deg, var(--green-soft), transparent)' }}>
               <div className="row gap-16">
                 <Pundit size={64} mood="happy" glow />
                 <div>
@@ -333,11 +335,11 @@ export default function AppShell() {
       </aside>
 
       <div className="topbar">
-        <div className="row gap-12">
-          <span className="only-mobile rail-logo" style={{ padding: 0, fontSize: 22 }} onClick={() => go('home')}>{BRAND}</span>
+        <div className="row gap-12" style={{ minWidth: 0, flex: 1 }}>
+          <span className="only-mobile rail-logo ellip" style={{ padding: 0, fontSize: 'clamp(15px, 4.5vw, 22px)' }} onClick={() => go('home')}>{BRAND}</span>
           <span className="h3 hide-mobile">{title}</span>
         </div>
-        <div className="row gap-10">
+        <div className="row gap-10" style={{ flexShrink: 0 }}>
           <LangSwitch />
           <button className="points-pill" onClick={() => go('wallet')}>
             <Icon name="wallet" size={16} style={{ color: 'var(--gold)' }} />
@@ -350,10 +352,28 @@ export default function AppShell() {
       <main className="main"><div key={route + JSON.stringify(param)}><Screen s={store} /></div></main>
 
       <nav className="tabs">
-        {TABS.map(([k, l, ic]) => (
-          <button key={k} className={`tab-i ${active === k ? 'active' : ''}`} onClick={() => go(k)}><Icon name={ic} size={21} />{t(l)}</button>
-        ))}
+        {TABS.map(([k, l, ic]) => {
+          const isMore = k === 'more';
+          const act = isMore ? !PRIMARY_TABS.has(active) : active === k;
+          return (
+            <button key={k} className={`tab-i ${act ? 'active' : ''}`} onClick={() => (isMore ? setMoreOpen(true) : go(k))}><Icon name={ic} size={21} />{t(l)}</button>
+          );
+        })}
       </nav>
+      {moreOpen && (
+        <div className="overlay" style={{ zIndex: 100 }} onClick={() => setMoreOpen(false)}>
+          <div className="modal scale-in" style={{ padding: 14 }} onClick={(e) => e.stopPropagation()}>
+            {RAIL.slice(1).map((grp) => (
+              <div key={grp.sec ?? ''} style={{ marginBottom: 8 }}>
+                {grp.sec && <div className="eyebrow" style={{ padding: '6px 8px' }}>{t(grp.sec)}</div>}
+                {grp.items.map(([rk, rl, ic]) => (
+                  <button key={rk} className={`nav-i ${active === rk ? 'active' : ''}`} style={{ width: '100%' }} onClick={() => { setMoreOpen(false); go(rk); }}><Icon name={ic} size={18} />{t(rl)}</button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <BorrowModal s={store} />
       <Toast toast={toast} />

@@ -29,7 +29,7 @@ function sideRank(pos: string | null): number {
 
 function Chip({ p }: { p: LineupPlayer }) {
   return (
-    <div style={{ textAlign: 'center', width: 84, minWidth: 0 }}>
+    <div style={{ textAlign: 'center', width: 'clamp(52px, 16vw, 84px)', minWidth: 0 }}>
       <div style={{ width: 32, height: 32, margin: '0 auto', borderRadius: '50%', background: 'linear-gradient(135deg, var(--green), var(--sky))', border: '2px solid rgba(255,255,255,.9)', display: 'grid', placeItems: 'center', fontFamily: 'var(--f-display)', fontWeight: 800, fontSize: 12, color: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,.55)' }}>{p.number ?? ''}</div>
       <div className="tiny" style={{ marginTop: 3, color: '#fff', fontWeight: 700, textShadow: '0 1px 3px rgba(0,0,0,.95)', fontSize: 10, lineHeight: 1.15, wordBreak: 'break-word' }} title={p.name}>{p.name}</div>
       {p.position && <div className="tiny" style={{ color: 'rgba(255,255,255,.65)', fontSize: 8.5, fontWeight: 600 }}>{p.position}</div>}
@@ -77,7 +77,7 @@ export function FormationPitch({ players, formation, manager }: { players: Lineu
       {bench.length > 0 && (
         <div>
           <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{t('tournament.bench')}</div>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 8 }}>
+          <div className="grid-fill" style={{ '--col-min': '170px', '--gap': '8px' } as React.CSSProperties}>
             {bench.map((p, i) => (
               <div key={i} className="card-2" style={{ borderRadius: 'var(--r-xs)', padding: '8px 12px', textAlign: 'center' }}>
                 <div className="row center gap-8 small" style={{ minWidth: 0 }}>

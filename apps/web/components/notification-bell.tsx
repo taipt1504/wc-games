@@ -53,7 +53,7 @@ export function NotificationBell() {
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-          <div className="card" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 300, maxHeight: 380, overflowY: 'auto', zIndex: 50, padding: 6 }}>
+          <div className="card" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 'min(300px, calc(100vw - 24px))', maxHeight: 380, overflowY: 'auto', zIndex: 50, padding: 6 }}>
             <div className="eyebrow" style={{ padding: '6px 8px' }}>{t('notif.title')}</div>
             {items.length === 0 && <p className="tiny muted" style={{ padding: 8 }}>{t('notif.empty')}</p>}
             {items.map((n) => (

@@ -126,7 +126,7 @@ export const en = {
     mybets: 'My bets', wallet: 'Wallet', profile: 'Profile', admin: 'Admin',
     match: 'Match', team: 'Team', lobby: 'Lobby', lobbyCreate: 'New lobby', article: 'Article',
     secTournament: 'Tournament', secAccount: 'Account',
-    tabBoard: 'Board', tabYou: 'You',
+    tabBoard: 'Board', tabYou: 'You', more: 'More',
   },
   shell: {
     login: 'Log in', signupFree: 'Sign up free',

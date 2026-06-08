@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
+import './responsive.css';
 import { I18nProvider } from '@/lib/i18n/provider';
 import { normalizeLocale, LOCALE_COOKIE } from '@/lib/i18n/locales';
 
@@ -12,6 +13,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#070B16',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

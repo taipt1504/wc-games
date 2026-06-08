@@ -72,7 +72,7 @@ export function News({ s }: ScreenProps) {
         </div>
       )}
 
-      <div className="grid gap-14" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>
+      <div className="grid-fill" style={{ '--col-min': '280px', '--gap': '14px' } as React.CSSProperties}>
         {list.slice(1).map(n => (
           <div key={n.id} className="card card-pad card-hover pointer" onClick={() => s.go('article', { id: n.id })}>
             <div style={{ height: 110, borderRadius: 'var(--r-sm)', background: 'linear-gradient(135deg, var(--surface-2), var(--surface-3))', display: 'grid', placeItems: 'center', marginBottom: 14 }}>
@@ -134,7 +134,7 @@ export function Article({ s }: ScreenProps) {
       </div>
 
       {n.match && (
-        <div className="card card-pad mt-24 row between wrap gap-12" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
+        <div className="card card-pad mt-24 row between wrap wrap-w gap-12" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
           <div className="row gap-12">
             <Icon name="ball" size={20} style={{ color: 'var(--green)' }} />
             <span style={{ fontWeight: 600 }}>{t('news.aboutMatch')}</span>

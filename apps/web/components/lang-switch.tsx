@@ -8,7 +8,7 @@ export function LangSwitch() {
     <div className="row gap-4" role="group" aria-label="Language">
       {LOCALES.map((l) => (
         <button key={l} className={`chip chip-sm ${locale === l ? 'active' : ''}`} onClick={() => setLocale(l)} aria-pressed={locale === l}>
-          <span aria-hidden style={{ marginRight: 4 }}>{LOCALE_FLAGS[l]}</span>{LOCALE_LABELS[l]}
+          <span aria-hidden>{LOCALE_FLAGS[l]}</span><span className="hide-mobile" style={{ marginLeft: 4 }}>{LOCALE_LABELS[l]}</span>
         </button>
       ))}
     </div>
