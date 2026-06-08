@@ -69,8 +69,8 @@ export const SAMPLE_SOURCES: NewsSource[] = [
     sourceUrl: 'https://goalwire.example/spain-germany',
   },
   {
-    sourceTitle: 'Brazil preview: Vinícius set to start against Nigeria',
-    sourceUrl: 'https://goalwire.example/brazil-nigeria',
+    sourceTitle: 'Brazil preview: Vinícius set to start against Morocco',
+    sourceUrl: 'https://goalwire.example/brazil-morocco',
   },
   {
     sourceTitle: 'Transfer buzz: midfielder eyeing a summer switch',

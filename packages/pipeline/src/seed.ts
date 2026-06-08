@@ -29,7 +29,7 @@ export async function seedTournament(prisma: PrismaClient): Promise<{ teams: num
 
   // 48 teams (explicit ids matching @wc/fixtures)
   for (const t of teams) {
-    const data = { name: t.name, code: t.code, fifaRank: t.rank, groupId: groupId[t.group] };
+    const data = { name: t.name, code: t.code, flagUrl: t.flagUrl, fifaRank: t.rank, groupId: groupId[t.group] };
     await prisma.team.upsert({ where: { id: BigInt(t.id) }, create: { id: BigInt(t.id), ...data }, update: data });
   }
 
@@ -68,10 +68,10 @@ const NEWS_DRAFTS = [
     sourceUrl: 'https://goalwire.example/spain-germany',
   },
   {
-    title: 'Brazil preview: Vinícius set to start against Nigeria',
+    title: 'Brazil preview: Vinícius set to start against Morocco',
     body: 'Brazil are expected to field Vinícius from the first whistle as they chase top spot in the group. For entertainment only — not betting advice.',
     tags: ['Match Preview'],
-    sourceUrl: 'https://goalwire.example/brazil-nigeria',
+    sourceUrl: 'https://goalwire.example/brazil-morocco',
   },
   {
     title: 'Transfer buzz: midfielder eyeing a summer switch',
