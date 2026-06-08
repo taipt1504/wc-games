@@ -161,3 +161,25 @@ describe('FdClient rate limiter', () => {
     expect(() => new FdClient({ apiKey: '', baseUrl: 'http://x/v4' })).toThrow(/SPORTS_API_KEY/);
   });
 });
+
+import { fetchFdTeams, fetchFdMatches, type FdClientLike } from './football-data';
+
+describe('football-data typed fetchers', () => {
+  function stubClient(map: Record<string, unknown>): FdClientLike {
+    return { get: async (path: string) => map[path] };
+  }
+
+  it('fetchFdTeams hits the teams endpoint and returns the array', async () => {
+    const c = stubClient({ '/competitions/WC/teams': { teams: teams } });
+    expect(await fetchFdTeams(c)).toHaveLength(2);
+  });
+
+  it('fetchFdMatches passes a status filter as a query param', async () => {
+    let seen = '';
+    const c: FdClientLike = { get: async (p: string) => { seen = p; return { matches }; } };
+    await fetchFdMatches(c, { status: 'LIVE' });
+    expect(seen).toBe('/competitions/WC/matches?status=LIVE');
+    await fetchFdMatches(c);
+    expect(seen).toBe('/competitions/WC/matches');
+  });
+});

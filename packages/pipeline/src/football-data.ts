@@ -193,3 +193,38 @@ export class FdClient {
     return h.get ? h.get(name) : null;
   }
 }
+
+// ─────────────────────────── Typed fetchers + env factory ───────────────────────────
+
+/** Minimal shape the sync functions need — lets tests stub the client without a real one. */
+export interface FdClientLike { get<T = unknown>(path: string): Promise<T> }
+
+const COMP = '/competitions/WC';
+
+export async function fetchFdTeams(client: FdClientLike): Promise<FdTeam[]> {
+  const r = await client.get<{ teams: FdTeam[] }>(`${COMP}/teams`);
+  return r.teams;
+}
+
+export async function fetchFdMatches(
+  client: FdClientLike,
+  filters: { status?: string; dateFrom?: string; dateTo?: string; stage?: string } = {},
+): Promise<FdMatch[]> {
+  const qs = new URLSearchParams(
+    Object.entries(filters).filter(([, v]) => v != null) as [string, string][],
+  ).toString();
+  const r = await client.get<{ matches: FdMatch[] }>(`${COMP}/matches${qs ? `?${qs}` : ''}`);
+  return r.matches;
+}
+
+export async function fetchFdMatch(client: FdClientLike, id: number): Promise<FdMatch> {
+  return client.get<FdMatch>(`/matches/${id}`);
+}
+
+/** Build a client from env (SPORTS_API_KEY + SPORTS_API_BASE_URL). Throws a clear error if unset. */
+export function fdClientFromEnv(): FdClient {
+  return new FdClient({
+    apiKey: process.env.SPORTS_API_KEY ?? '',
+    baseUrl: process.env.SPORTS_API_BASE_URL ?? '',
+  });
+}
