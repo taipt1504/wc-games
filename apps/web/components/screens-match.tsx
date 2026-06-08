@@ -1,7 +1,7 @@
 'use client';
 /* World Cup Games — Schedule · Match Detail · Bet Slip (ported from docs/design/predict-wc-2026/project/screens-match.jsx) */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { WC, type Pick1X2 } from '@/lib/wc';
+import { type Pick1X2 } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, Portal, SecHead } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
@@ -393,6 +393,13 @@ export function MatchDetail({ s }: ScreenProps) {
     setSlip(null);
   };
 
+  const statusLabel = (s: string) =>
+    s === 'LIVE' ? t('match.statusLive')
+    : s === 'FINISHED' ? t('match.statusFinished')
+    : s === 'POSTPONED' ? t('match.statusPostponed')
+    : s === 'CANCELLED' ? t('match.statusCancelled')
+    : t('match.statusScheduled');
+
   const lineupTeams = [teams.home, teams.away].filter((t): t is TeamDetail => !!t && Array.isArray(t.players) && t.players.length > 0);
   const homeForm = teams.home ? formFor(teams.home.id, teams.home.matches ?? []) : [];
   const awayForm = teams.away ? formFor(teams.away.id, teams.away.matches ?? []) : [];
@@ -429,7 +436,7 @@ export function MatchDetail({ s }: ScreenProps) {
           <InfoCell label={t('match.kickoff')} value={fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })} />
           <InfoCell label={t('match.roundLabel')} value={roundShort(m.round, m.group, t('round.groupPrefix'))} />
           <InfoCell label={t('match.venue')} value={m.venue?.name ? `${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ''}${m.venue.country ? `, ${m.venue.country}` : ''}` : '—'} />
-          <InfoCell label={t('match.status')} value={m.status} />
+          <InfoCell label={t('match.status')} value={statusLabel(m.status)} />
         </div>
       </div>
 
