@@ -249,7 +249,8 @@ export async function syncTeamsAndSquads(
   for (const t of fdTeams) {
     const dbTeam =
       (await prisma.team.findUnique({ where: { externalId: t.externalId }, select: { id: true } })) ??
-      (await prisma.team.findFirst({ where: { code: t.code }, select: { id: true } }));
+      (await prisma.team.findFirst({ where: { code: t.code }, select: { id: true } })) ??
+      (await prisma.team.findFirst({ where: { name: t.name }, select: { id: true } }));
     if (!dbTeam) { unmatched.push(`${t.code} (${t.name})`); continue; }
 
     await prisma.team.update({
