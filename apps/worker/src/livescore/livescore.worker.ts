@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { prisma } from '@wc/db';
-import { updateLiveScores, getJobConfig, isJobEnabled, recordJobRun } from '@wc/pipeline';
+import { syncLiveScores, fdClientFromEnv, getJobConfig, isJobEnabled, recordJobRun } from '@wc/pipeline';
 
 /**
- * LiveScoreWorker — polls worldcup26.ir on a config-driven cadence and writes current scores/status
+ * LiveScoreWorker — polls football-data.org on a config-driven cadence and writes current scores/status
  * onto Match (PRD §15 LIVE). Does NOT settle. Plain timer poller (no queue) — independent of Redis.
  * `runOnce()` is also the manual-trigger entry point (ControlWorker).
  */
@@ -16,7 +16,7 @@ export class LiveScoreWorker implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     void this.loop();
-    this.log.log('LiveScoreWorker polling worldcup26 (config-driven cadence).');
+    this.log.log('LiveScoreWorker polling football-data.org (config-driven cadence).');
   }
 
   /** One poll pass; also the manual-trigger entry point. Returns a short status note. */
@@ -28,7 +28,13 @@ export class LiveScoreWorker implements OnModuleInit, OnModuleDestroy {
         await recordJobRun(prisma, 'livescore', 'SKIPPED', 'disabled');
         return 'disabled';
       }
-      const { updated, newlyFinished } = await updateLiveScores(prisma);
+      let client;
+      try { client = fdClientFromEnv(); }
+      catch (e) {
+        await recordJobRun(prisma, 'livescore', 'SKIPPED', (e as Error).message);
+        return 'no-key';
+      }
+      const { updated, newlyFinished } = await syncLiveScores(prisma, client);
       const note = `updated ${updated}, finished [${newlyFinished.join(',')}]`;
       if (updated > 0) this.log.log(`live scores: ${note}`);
       await recordJobRun(prisma, 'livescore', 'OK', note);

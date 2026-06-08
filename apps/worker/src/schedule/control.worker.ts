@@ -4,6 +4,7 @@ import { createSubscriber, channels } from '@wc/realtime';
 import { MatchSchedulerService } from './match-scheduler.service';
 import { LiveScoreWorker } from '../livescore/livescore.worker';
 import { NewsWorker } from '../news/news.worker';
+import { FdSyncWorker } from '../footballdata/fd-sync.worker';
 
 /**
  * ControlWorker — subscribes to the Redis "job.control" channel (admin "Run now" publishes via
@@ -20,6 +21,7 @@ export class ControlWorker implements OnModuleInit, OnModuleDestroy {
     private readonly scheduler: MatchSchedulerService,
     private readonly liveScore: LiveScoreWorker,
     private readonly news: NewsWorker,
+    private readonly fdSync: FdSyncWorker,
   ) {}
 
   onModuleInit() {
@@ -36,6 +38,7 @@ export class ControlWorker implements OnModuleInit, OnModuleDestroy {
       switch (key) {
         case 'livescore': await this.liveScore.runOnce(); break;
         case 'news': await this.news.runOnce(); break;
+        case 'fd_sync': await this.fdSync.runOnce(); break;
         case 'scheduler_scan':
         case 'lineup':
         case 'result_check':

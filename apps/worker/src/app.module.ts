@@ -8,12 +8,13 @@ import { LineupWorker } from './schedule/lineup.worker';
 import { ResultCheckWorker } from './schedule/result-check.worker';
 import { LockBettingWorker } from './schedule/lock-betting.worker';
 import { ControlWorker } from './schedule/control.worker';
+import { FdSyncWorker } from './footballdata/fd-sync.worker';
 
 @Module({
   providers: [
     LlmGateway, SettlementWorker, NewsWorker, LiveScoreWorker,
     MatchSchedulerService, LineupWorker, ResultCheckWorker,
-    LockBettingWorker, ControlWorker,
+    LockBettingWorker, ControlWorker, FdSyncWorker,
   ],
 })
 export class AppModule {}
