@@ -196,6 +196,11 @@ export const vi: Dict = {
     previewUnavailable: 'Bản phân tích hiện chưa có.', generatingPreview: 'Đang tạo phân tích…',
     inplayNextGoal: 'Trực tiếp · Bàn kế tiếp', placeInplay: 'Đặt dự đoán trực tiếp', error: 'Lỗi',
     nextGoalHome: 'Nhà', nextGoalAway: 'Khách', nextGoalNone: 'Không',
+    statusScheduled: 'Chưa đá',
+    statusLive: 'Đang đá',
+    statusFinished: 'Kết thúc',
+    statusPostponed: 'Hoãn',
+    statusCancelled: 'Hủy',
   },
   leaderboard: {
     title: 'Bảng xếp hạng', sub: 'Xếp theo ROI% trên các dự đoán đã quyết toán',
@@ -315,6 +320,11 @@ export const vi: Dict = {
     // groups
     groupsTitle: 'Bảng xếp hạng', groupsSub: '12 bảng · 2 đội đầu cùng các đội hạng ba xuất sắc đi tiếp', loadingStandings: 'Đang tải bảng xếp hạng…',
     matchday: 'Lượt 1–3', colRank: '#', colTeam: 'Đội', colP: 'Tr', colGD: 'HS', colPts: 'Đ',
+    colW: 'T',
+    colD: 'H',
+    colL: 'B',
+    colGF: 'BT',
+    colGA: 'BB',
     // bracket
     bracketTitle: 'Nhánh đấu loại trực tiếp', bracketSub: 'Vòng 32 đội → Chung kết · dự đoán từ bảng xếp hạng hiện tại', champion: 'Vô địch',
     predictWhole: 'Dự đoán toàn bộ nhánh đấu', predictSub: 'Điền mọi cặp đấu loại trực tiếp và nhận điểm thưởng cho mỗi vòng đoán đúng.',

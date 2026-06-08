@@ -194,6 +194,11 @@ export const en = {
     previewUnavailable: 'Preview unavailable right now.', generatingPreview: 'Generating preview…',
     inplayNextGoal: 'In-play · Next Goal', placeInplay: 'Place in-play bet', error: 'Error',
     nextGoalHome: 'Home', nextGoalAway: 'Away', nextGoalNone: 'None',
+    statusScheduled: 'Scheduled',
+    statusLive: 'Live',
+    statusFinished: 'Finished',
+    statusPostponed: 'Postponed',
+    statusCancelled: 'Cancelled',
   },
   leaderboard: {
     title: 'Leaderboard', sub: 'Ranked by ROI% on settled bets',
@@ -324,6 +329,11 @@ export const en = {
     // groups
     groupsTitle: 'Group standings', groupsSub: '12 groups · top 2 plus best thirds advance', loadingStandings: 'Loading standings…',
     matchday: 'Matchday 1–3', colRank: '#', colTeam: 'Team', colP: 'P', colGD: 'GD', colPts: 'Pts',
+    colW: 'W',
+    colD: 'D',
+    colL: 'L',
+    colGF: 'GF',
+    colGA: 'GA',
     // bracket
     bracketTitle: 'Knockout bracket', bracketSub: 'Round of 32 → Final · projected from current standings', champion: 'Champion',
     predictWhole: 'Predict the whole bracket', predictSub: 'Fill every knockout tie and earn bonus points for each correct round.',
