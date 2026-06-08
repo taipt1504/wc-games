@@ -123,3 +123,73 @@ export function mapFdMatch(m: FdMatch, resolveTeamId: ResolveTeamId): MappedFdMa
     result90: score.result90,
   };
 }
+
+// ─────────────────────────── Rate-limited client ───────────────────────────
+
+export interface FdClientOpts {
+  apiKey: string;
+  baseUrl: string;
+  minSpacingMs?: number;                 // default 7500 → ≤8 req/min (margin under the 10/min cap)
+  maxRetries?: number;                   // default 2 (for 429)
+  fetchFn?: typeof fetch;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/** Single funnel for all football-data.org traffic. Serialized min-interval gate + 429 backoff.
+ *  Time is injected so the limiter is unit-tested without real waiting. */
+export class FdClient {
+  private readonly key: string;
+  private readonly base: string;
+  private readonly spacing: number;
+  private readonly maxRetries: number;
+  private readonly fetchFn: typeof fetch;
+  private readonly now: () => number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private last = -Infinity;
+  private chain: Promise<unknown> = Promise.resolve();
+
+  constructor(opts: FdClientOpts) {
+    if (!opts.apiKey) throw new Error('FdClient: missing SPORTS_API_KEY');
+    if (!opts.baseUrl) throw new Error('FdClient: missing SPORTS_API_BASE_URL');
+    this.key = opts.apiKey;
+    this.base = opts.baseUrl.replace(/\/$/, '');
+    this.spacing = opts.minSpacingMs ?? 7500;
+    this.maxRetries = opts.maxRetries ?? 2;
+    this.fetchFn = opts.fetchFn ?? fetch;
+    this.now = opts.now ?? Date.now;
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  }
+
+  /** GET `path` (relative to baseUrl), rate-limited + retried. Returns parsed JSON. */
+  get<T = unknown>(path: string): Promise<T> {
+    const run = this.chain.then(() => this.spacedRequest<T>(path));
+    this.chain = run.then(() => undefined, () => undefined); // keep the queue moving on error
+    return run;
+  }
+
+  private async spacedRequest<T>(path: string, attempt = 0): Promise<T> {
+    const wait = this.spacing - (this.now() - this.last);
+    if (wait > 0) await this.sleep(wait);
+    this.last = this.now();
+
+    const res = await this.fetchFn(`${this.base}${path}`, { headers: { 'X-Auth-Token': this.key } } as RequestInit);
+    if (res.status === 429 && attempt < this.maxRetries) {
+      const retryAfter = Number(this.header(res, 'retry-after')) || 60;
+      await this.sleep(retryAfter * 1000);
+      return this.spacedRequest<T>(path, attempt + 1);
+    }
+    if (!res.ok) throw new Error(`football-data ${path} → ${res.status}`);
+
+    // If we're about to exhaust the per-minute budget, pause one window before the next call.
+    const remaining = Number(this.header(res, 'x-requests-available-minute'));
+    if (Number.isFinite(remaining) && remaining <= 1) this.last = this.now() + 60_000;
+
+    return (await res.json()) as T;
+  }
+
+  private header(res: Response, name: string): string | null {
+    const h = res.headers as unknown as { get?: (k: string) => string | null };
+    return h.get ? h.get(name) : null;
+  }
+}

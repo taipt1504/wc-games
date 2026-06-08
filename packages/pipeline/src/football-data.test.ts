@@ -104,3 +104,60 @@ describe('football-data entity mappers', () => {
     expect(m.awayTeamId).toBe(0n);
   });
 });
+
+import { FdClient } from './football-data';
+
+describe('FdClient rate limiter', () => {
+  function fakeClock() {
+    let t = 0;
+    return { now: () => t, sleep: async (ms: number) => { t += ms; }, at: () => t };
+  }
+
+  it('spaces sequential requests by at least minSpacingMs', async () => {
+    const clock = fakeClock();
+    const starts: number[] = [];
+    const fetchFn = (async () => {
+      starts.push(clock.at());
+      return { ok: true, status: 200, headers: new Map([['x-requests-available-minute', '9']]) as any, json: async () => ({ ok: 1 }) };
+    }) as unknown as typeof fetch;
+    const c = new FdClient({ apiKey: 'k', baseUrl: 'http://x/v4', minSpacingMs: 7500, fetchFn, now: clock.now, sleep: clock.sleep });
+    await c.get('/competitions/WC');
+    await c.get('/competitions/WC/teams');
+    await c.get('/competitions/WC/matches');
+    expect(starts[0]).toBe(0);
+    expect(starts[1]).toBeGreaterThanOrEqual(7500);
+    expect(starts[2]).toBeGreaterThanOrEqual(15000);
+  });
+
+  it('sends X-Auth-Token and builds the URL from baseUrl', async () => {
+    const clock = fakeClock();
+    let seenUrl = ''; let seenKey = '';
+    const fetchFn = (async (url: string, init: any) => {
+      seenUrl = url; seenKey = init.headers['X-Auth-Token'];
+      return { ok: true, status: 200, headers: new Map() as any, json: async () => ({ count: 0 }) };
+    }) as unknown as typeof fetch;
+    const c = new FdClient({ apiKey: 'secret', baseUrl: 'http://x/v4', fetchFn, now: clock.now, sleep: clock.sleep });
+    await c.get('/competitions/WC/scorers');
+    expect(seenUrl).toBe('http://x/v4/competitions/WC/scorers');
+    expect(seenKey).toBe('secret');
+  });
+
+  it('honors Retry-After on 429 then retries', async () => {
+    const clock = fakeClock();
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls++;
+      if (calls === 1) return { ok: false, status: 429, headers: new Map([['retry-after', '12']]) as any, json: async () => ({}) };
+      return { ok: true, status: 200, headers: new Map() as any, json: async () => ({ done: true }) };
+    }) as unknown as typeof fetch;
+    const c = new FdClient({ apiKey: 'k', baseUrl: 'http://x/v4', fetchFn, now: clock.now, sleep: clock.sleep });
+    const out = await c.get('/competitions/WC');
+    expect(out).toEqual({ done: true });
+    expect(calls).toBe(2);
+    expect(clock.at()).toBeGreaterThanOrEqual(12000);
+  });
+
+  it('throws a clear error when apiKey is missing', () => {
+    expect(() => new FdClient({ apiKey: '', baseUrl: 'http://x/v4' })).toThrow(/SPORTS_API_KEY/);
+  });
+});
