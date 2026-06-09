@@ -95,9 +95,13 @@ export async function recordJobRun(
   prisma: PrismaClient, key: JobKey, status: 'OK' | 'ERROR' | 'SKIPPED', note?: string,
 ): Promise<void> {
   try {
-    await prisma.scheduleJob.update({
+    const data = { lastRunAt: new Date(), lastRunStatus: status, lastRunNote: note?.slice(0, 300) ?? null };
+    // Upsert: the ScheduleJob row may not exist yet for newer keys (fd_sync/enrich_lineups) — create it
+    // on first run with its registry defaults rather than failing the update.
+    await prisma.scheduleJob.upsert({
       where: { key },
-      data: { lastRunAt: new Date(), lastRunStatus: status, lastRunNote: note?.slice(0, 300) ?? null },
+      update: data,
+      create: { key, label: JOB_LABELS[key], enabled: true, config: JOB_DEFAULTS[key] as object, ...data },
     });
   } catch { /* best-effort */ }
 }
