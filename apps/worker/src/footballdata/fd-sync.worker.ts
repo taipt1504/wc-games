@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { prisma } from '@wc/db';
 import {
-  fdClientFromEnv, syncMatches, syncTeamsAndSquads,
+  fdClientFromEnv, syncMatches, syncTeamsAndSquads, syncScorers,
   getJobConfig, isJobEnabled, recordJobRun,
 } from '@wc/pipeline';
 
@@ -45,6 +45,8 @@ export class FdSyncWorker implements OnModuleInit, OnModuleDestroy {
       }
       const m = await syncMatches(prisma, client);
       note += `matches matched ${m.matched}, skippedAdmin ${m.skippedAdmin}, unresolved ${m.unresolved}`;
+      const sc = await syncScorers(prisma, client);
+      note += `; scorers ${sc.scorers}`;
       this.runs++;
       await recordJobRun(prisma, 'fd_sync', 'OK', note);
       this.log.log(`fd_sync: ${note}`);
