@@ -432,6 +432,13 @@ function AdmTeams({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind, i
     finally { setSyncingAll(false); }
   }
 
+  async function enrichAllLineups() {
+    try {
+      await fetch('/api/v1/admin/schedule-jobs/enrich_lineups/trigger', { method: 'POST' });
+      s.toastMsg('Lineup enrichment started (runs in the worker)', 'refresh', 'var(--green)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  }
+
   const groupCount = new Set(teams.map((t) => t.group).filter(Boolean)).size;
   const squadsLoaded = teams.filter((t) => t.playerCount > 0).length;
   const totalPlayers = teams.reduce((n, t) => n + t.playerCount, 0);
@@ -443,7 +450,7 @@ function AdmTeams({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind, i
 
   return (
     <div>
-      <SecHead title="Teams & groups" sub="48 teams · squads AI-crawled · tap a team to edit info or re-crawl its squad" action={<Btn variant="primary" size="sm" icon="refresh" onClick={syncAllSquads} disabled={syncingAll}>{syncingAll ? 'Syncing…' : 'Sync all squads (API)'}</Btn>} />
+      <SecHead title="Teams & groups" sub="48 teams · squads AI-crawled · tap a team to edit info or re-crawl its squad" action={<div className="row gap-8"><Btn variant="primary" size="sm" icon="refresh" onClick={syncAllSquads} disabled={syncingAll}>{syncingAll ? 'Syncing…' : 'Sync all squads (API)'}</Btn><Btn variant="ghost" size="sm" onClick={enrichAllLineups}>Assign roles & XI — all teams</Btn></div>} />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', marginBottom: 18 }}>
         <KPI v={teams.length} l="Teams" c="var(--text)" />
         <KPI v={groupCount} l="Groups" c="var(--sky)" />
@@ -1449,6 +1456,7 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
   const [saving, setSaving] = useState(false);
   const [recrawling, setRecrawling] = useState(false);
   const [syncingFd, setSyncingFd] = useState(false);
+  const [enriching, setEnriching] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1494,6 +1502,21 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
     finally { setSyncingFd(false); }
   }
 
+  async function enrichLineup() {
+    setEnriching(true);
+    try {
+      const res = await fetch(`/api/v1/admin/teams/${id}/enrich-lineup`, { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (j.data?.status === 'no-roster') { s.toastMsg('Sync squad (API) first', 'alert', 'var(--danger)'); }
+        else { s.toastMsg(`Lineup enriched · ${j.data?.matched ?? 0} matched / ${j.data?.starters ?? 0} starters`, 'refresh', 'var(--green)'); load(); }
+      } else {
+        s.toastMsg(j?.error?.code === 'LLM_NOT_CONFIGURED' ? 'LLM gateway not configured' : 'Enrich failed', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    finally { setEnriching(false); }
+  }
+
   if (loading) return <div><button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to teams</button><p className="small muted">Loading…</p></div>;
   if (!t) return <div><button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to teams</button><p className="small muted">Team not found.</p></div>;
 
@@ -1526,6 +1549,7 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
           <Btn variant="primary" size="sm" icon="check" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save changes'}</Btn>
           <Btn variant="primary" size="sm" icon="refresh" disabled={syncingFd} onClick={syncFd}>{syncingFd ? 'Syncing…' : 'Sync squad (API)'}</Btn>
           <Btn variant="ghost" size="sm" icon="refresh" disabled={recrawling} onClick={recrawl}>{recrawling ? 'Re-crawling…' : 'Re-crawl squad (AI)'}</Btn>
+          <Btn variant="ghost" size="sm" icon="refresh" disabled={enriching} onClick={enrichLineup}>{enriching ? 'Enriching…' : 'Assign roles & XI (AI)'}</Btn>
         </div>
       </div>
 
