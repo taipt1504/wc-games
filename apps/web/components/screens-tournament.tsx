@@ -199,10 +199,12 @@ export function Bracket({ s }: ScreenProps) {
   const { data: groups } = useJson<ApiGroup[]>('/api/v1/groups');
   const { data: allTeams } = useJson<ApiTeam[]>('/api/v1/teams');
 
-  // Projected qualifiers (top 2 of each group) from current standings — pre-tournament these
-  // tie at 0 and fall back to group order. Honest "projected" view; real draw fills in later.
-  const winners = (groups ?? []).map((g) => g.teams[0]).filter(Boolean) as ApiStanding[];
-  const seconds = (groups ?? []).map((g) => g.teams[1]).filter(Boolean) as ApiStanding[];
+  // Projected qualifiers (top 2 of each group) from current standings — but ONLY once group
+  // matches have actually been played. Pre-tournament every standing ties at 0 and "top 2" is just
+  // arbitrary group order, so we show TBD slots instead of a misleading default-filled bracket.
+  const hasResults = (groups ?? []).some((g) => (g.teams ?? []).some((tm) => (tm.played ?? 0) > 0));
+  const winners = hasResults ? ((groups ?? []).map((g) => g.teams[0]).filter(Boolean) as ApiStanding[]) : [];
+  const seconds = hasResults ? ((groups ?? []).map((g) => g.teams[1]).filter(Boolean) as ApiStanding[]) : [];
   const pool = [...winners, ...seconds];
   const pick = (i: number): ApiStanding | null => (pool.length ? pool[i % pool.length] : null);
 
