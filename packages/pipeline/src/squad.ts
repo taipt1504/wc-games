@@ -81,6 +81,76 @@ export async function crawlLineup(
   return parseLineupJson(raw);
 }
 
+/** Enrich a team's REAL roster: the LLM annotates the given names with a best projected XI
+ *  (specific position + 11 starters + formation + numbers). Roster names are an INPUT (never invented). */
+export async function enrichLineup(
+  gateway: LlmGateway,
+  team: { name: string; players: string[]; model?: string },
+): Promise<CrawledLineup> {
+  const roster = team.players.join(', ');
+  const messages = [
+    { role: 'system' as const, content: 'You are a football data assistant. Output ONLY a JSON object — no prose, no code fences.' },
+    {
+      role: 'user' as const,
+      content:
+        `Here is ${team.name}'s squad for the 2026 World Cup: ${roster}. ` +
+        `Using ONLY these exact players (do not add, drop, or rename anyone), pick the team's strongest projected ` +
+        `starting XI and assign EVERY squad member a specific position. ` +
+        `Return JSON: {"manager":"<head coach full name>","formation":"<e.g. 4-2-3-1>","players":[` +
+        `{"number":<shirt number or null>,"name":"<exact name from the list>","position":"<specific: GK,RB,CB,LB,RWB,LWB,CDM,CM,CAM,RM,LM,RW,LW,ST,CF>","starter":<boolean>}]}. ` +
+        `Set starter:true for exactly 11 forming the formation; starter:false for the rest. Include every listed player exactly once.`,
+    },
+  ];
+  const raw = await gateway.complete({ messages, model: team.model });
+  return parseLineupJson(raw);
+}
+
+/** Enrich + store ONE team's lineup. Loads the FD-synced roster; if empty → 'no-roster' (no LLM call).
+ *  Resets starters, applies name-matched assignments, sets Team.formation/manager. Never adds/removes players. */
+export async function enrichAndStoreLineup(
+  prisma: PrismaClient,
+  gateway: LlmGateway,
+  teamId: bigint,
+): Promise<{ team: string; matched: number; starters: number; status: string }> {
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, name: true } });
+  if (!team) throw new Error('TEAM_NOT_FOUND');
+  const roster = await prisma.player.findMany({ where: { teamId }, select: { id: true, name: true } });
+  if (roster.length === 0) return { team: team.name, matched: 0, starters: 0, status: 'no-roster' };
+
+  const t0 = Date.now();
+  let lineup: CrawledLineup = { manager: '', formation: '', players: [] };
+  let status = 'ok';
+  try {
+    lineup = await enrichLineup(gateway, { name: team.name, players: roster.map((p) => p.name) });
+    if (lineup.players.length === 0) status = 'empty';
+  } catch {
+    status = 'error';
+  }
+  await prisma.aiJob.create({ data: { type: 'squad', providerUsed: 'gateway', status, latencyMs: Date.now() - t0 } });
+  if (lineup.players.length === 0) return { team: team.name, matched: 0, starters: 0, status };
+
+  const updates = applyLineupAssignments(roster, lineup.players);
+  await prisma.$transaction([
+    prisma.player.updateMany({ where: { teamId }, data: { isStarter: false } }),
+    ...updates.map((u) =>
+      prisma.player.update({ where: { id: u.id }, data: { position: u.position, number: u.number ?? undefined, isStarter: u.isStarter } }),
+    ),
+    prisma.team.update({ where: { id: teamId }, data: { formation: lineup.formation || null, manager: lineup.manager || null } }),
+  ]);
+  return { team: team.name, matched: updates.length, starters: updates.filter((u) => u.isStarter).length, status };
+}
+
+/** Enrich every team's lineup (bulk). Sequential — each is one LLM call. */
+export async function enrichAllLineups(
+  prisma: PrismaClient,
+  gateway: LlmGateway,
+): Promise<{ team: string; matched: number; starters: number; status: string }[]> {
+  const teams = await prisma.team.findMany({ select: { id: true }, orderBy: { name: 'asc' } });
+  const out: { team: string; matched: number; starters: number; status: string }[] = [];
+  for (const t of teams) out.push(await enrichAndStoreLineup(prisma, gateway, t.id));
+  return out;
+}
+
 export interface SquadTeam { id: bigint; name: string }
 
 /**
