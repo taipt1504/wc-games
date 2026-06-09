@@ -222,6 +222,19 @@ export async function fetchFdMatch(client: FdClientLike, id: number): Promise<Fd
   return client.get<FdMatch>(`/matches/${id}`);
 }
 
+export interface FdScorerEntry {
+  player: { id: number; name: string };
+  team: { id: number | null; name?: string | null };
+  goals: number | null;
+  assists: number | null;
+  penalties: number | null;
+}
+
+export async function fetchFdScorers(client: FdClientLike): Promise<FdScorerEntry[]> {
+  const r = await client.get<{ scorers: FdScorerEntry[] }>(`${COMP}/scorers`);
+  return r.scorers ?? [];
+}
+
 /** Build a client from env (SPORTS_API_KEY + SPORTS_API_BASE_URL). Throws a clear error if unset. */
 export function fdClientFromEnv(): FdClient {
   return new FdClient({
@@ -397,6 +410,39 @@ export async function syncLiveScores(
  * (never FD-synced). Mirrors the legacy worldcup26 syncOneMatchResult so the admin route swap is
  * minimal. Does NOT touch venueId or odds. Publishes match.update.
  */
+/**
+ * Sync the Top Scorers (Golden Boot) from FD into the Scorer table (1 API call). Wipe-and-reload
+ * because it's a leaderboard whose rows/positions change. Resolves teamId via Team.externalId.
+ * Empty until the tournament starts — inserting 0 rows is expected, not an error.
+ */
+export async function syncScorers(
+  prisma: PrismaClient,
+  client: FdClientLike,
+): Promise<{ scorers: number }> {
+  const fd = await fetchFdScorers(client);
+  const teamRows = await prisma.team.findMany({ where: { externalId: { not: null } }, select: { id: true, externalId: true } });
+  const teamByExt = new Map<number, bigint>();
+  for (const t of teamRows) teamByExt.set(t.externalId as number, t.id);
+
+  await prisma.$transaction([
+    prisma.scorer.deleteMany(),
+    ...fd.map((s) =>
+      prisma.scorer.create({
+        data: {
+          externalId: s.player.id,
+          teamId: s.team?.id != null ? (teamByExt.get(s.team.id) ?? null) : null,
+          name: s.player.name,
+          teamName: s.team?.name ?? null,
+          goals: s.goals ?? 0,
+          assists: s.assists ?? 0,
+          penalties: s.penalties ?? 0,
+        },
+      }),
+    ),
+  ]);
+  return { scorers: fd.length };
+}
+
 export async function syncOneMatchFromFd(
   prisma: PrismaClient,
   client: FdClientLike,

@@ -183,3 +183,14 @@ describe('football-data typed fetchers', () => {
     expect(seen).toBe('/competitions/WC/matches');
   });
 });
+
+import { fetchFdScorers } from './football-data';
+
+describe('football-data scorers fetcher', () => {
+  it('returns the scorers array (empty-safe)', async () => {
+    const withData = { get: async () => ({ scorers: [{ player: { id: 1, name: 'A' }, team: { id: 2, name: 'X' }, goals: 3, assists: 1, penalties: 0 }] }) };
+    expect(await fetchFdScorers(withData as any)).toHaveLength(1);
+    const empty = { get: async () => ({}) };
+    expect(await fetchFdScorers(empty as any)).toEqual([]);
+  });
+});
