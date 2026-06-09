@@ -124,7 +124,7 @@ export const vi: Dict = {
   },
   nav: {
     home: 'Trang chủ', matches: 'Trận đấu', leaderboard: 'Xếp hạng', lobbies: 'Sảnh',
-    teams: 'Đội tuyển', groups: 'Bảng đấu', bracket: 'Nhánh đấu', news: 'Tin tức',
+    teams: 'Đội tuyển', groups: 'Bảng đấu', bracket: 'Nhánh đấu', scorers: 'Vua phá lưới', news: 'Tin tức',
     mybets: 'Dự đoán của tôi', wallet: 'Ví', profile: 'Hồ sơ', admin: 'Quản trị',
     match: 'Trận đấu', team: 'Đội', lobby: 'Sảnh', lobbyCreate: 'Sảnh mới', article: 'Bài viết',
     secTournament: 'Giải đấu', secAccount: 'Tài khoản',
@@ -332,6 +332,16 @@ export const vi: Dict = {
     championSub: 'Chọn 1 đội', finalists: 'Vào chung kết', finalistsSub: 'Chọn tối đa 2 đội', semis: 'Vào bán kết', semisSub: 'Chọn tối đa 4 đội',
     savePicks: 'Lưu lựa chọn', saving: 'Đang lưu…',
     bracketSaved: 'Đã lưu nhánh đấu!', bracketLocked: 'Nhánh đấu đã khóa', bracketSaveFail: 'Không thể lưu nhánh đấu',
+  },
+  scorers: {
+    title: 'Vua phá lưới',
+    empty: 'Chưa có cầu thủ ghi bàn — giải đấu chưa bắt đầu.',
+    colRank: '#',
+    colPlayer: 'Cầu thủ',
+    colTeam: 'Đội',
+    colGoals: 'Bàn thắng',
+    colAssists: 'Kiến tạo',
+    colPens: 'Phạt đền',
   },
   news: {
     wireTitle: 'Bản tin World Cup', wireSub: 'Nội dung hỗ trợ bởi AI, được biên tập viên duyệt trước khi đăng',
