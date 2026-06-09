@@ -28,6 +28,20 @@ export class LiveScoreWorker implements OnModuleInit, OnModuleDestroy {
         await recordJobRun(prisma, 'livescore', 'SKIPPED', 'disabled');
         return 'disabled';
       }
+      // Window gate: only hit football-data when a match is live or near kickoff (save requests).
+      const now = Date.now();
+      const inWindow = await prisma.match.count({
+        where: {
+          OR: [
+            { status: 'LIVE' },
+            { status: 'SCHEDULED', kickoffAt: { gte: new Date(now - 3 * 3_600_000), lte: new Date(now + 15 * 60_000) } },
+          ],
+        },
+      });
+      if (inWindow === 0) {
+        await recordJobRun(prisma, 'livescore', 'SKIPPED', 'no live window');
+        return 'idle';
+      }
       let client;
       try { client = fdClientFromEnv(); }
       catch (e) {
