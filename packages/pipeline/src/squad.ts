@@ -273,8 +273,6 @@ export async function enrichAllLineups(
     status: string;
   }[] = [];
   for (const t of teams) {
-    // eslint-disable-next-line no-console
-    console.log(`enrich lineup: team ${t.id}`);
     out.push(await enrichAndStoreLineup(prisma, gateway, t.id));
   }
   return out;
