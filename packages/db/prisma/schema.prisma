@@ -413,6 +413,19 @@ model LobbyMatchOdds {
   @@unique([lobbyId, matchId])
 }
 
+// Top scorers (Golden Boot) — competition-wide, synced from football-data.org /scorers.
+model Scorer {
+  id         BigInt   @id @default(autoincrement())
+  externalId Int      @unique // football-data.org player id
+  teamId     BigInt? // DB team id (via Team.externalId); null if team unresolved
+  name       String
+  teamName   String?
+  goals      Int      @default(0)
+  assists    Int      @default(0)
+  penalties  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}
+
 // ─────────────────────────── NEWS & AI ───────────────────────────
 model NewsArticle {
   id          BigInt     @id @default(autoincrement())
