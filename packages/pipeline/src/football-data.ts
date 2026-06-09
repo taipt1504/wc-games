@@ -390,3 +390,27 @@ export async function syncLiveScores(
   }
   return { updated, newlyFinished };
 }
+
+/**
+ * Admin on-demand "sync result" for ONE match from FD. Resolves the match's externalId, fetches
+ * the single FD match, writes score/status. Throws MATCH_NOT_LINKED if the match has no externalId
+ * (never FD-synced). Mirrors the legacy worldcup26 syncOneMatchResult so the admin route swap is
+ * minimal. Does NOT touch venueId or odds. Publishes match.update.
+ */
+export async function syncOneMatchFromFd(
+  prisma: PrismaClient,
+  client: FdClientLike,
+  dbMatchId: bigint,
+): Promise<{ updated: boolean; status: MatchStatus; scoreHome90: number | null; scoreAway90: number | null }> {
+  const row = await prisma.match.findUnique({ where: { id: dbMatchId }, select: { externalId: true } });
+  if (!row?.externalId) throw new Error('MATCH_NOT_LINKED');
+  const raw = await fetchFdMatch(client, row.externalId);
+  const status = mapFdStatus(raw.status);
+  const score = mapFdScore(raw.score);
+  await prisma.match.update({
+    where: { id: dbMatchId },
+    data: { status, scoreHome90: score.scoreHome90, scoreAway90: score.scoreAway90, result90: score.result90, source: 'API' },
+  });
+  await publishEvent(channels.matches, { type: 'match.update', matchId: Number(dbMatchId) });
+  return { updated: true, status, scoreHome90: score.scoreHome90, scoreAway90: score.scoreAway90 };
+}
