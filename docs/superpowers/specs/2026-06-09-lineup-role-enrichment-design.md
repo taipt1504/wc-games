@@ -1,7 +1,9 @@
 # Lineup Role Enrichment — Design
 
 **Date:** 2026-06-09
-**Goal:** Make the lineup diagram role-accurate. Take a team's **real roster (fetched from the football-data API integration)**, feed those exact players into an **LLM prompt**, and have the model return the team's **best projected XI** — specific positions, the 11 starters, formation, shirt numbers — then map it back onto the existing player rows. The diagram's existing render then places everyone correctly.
+**Goal:** Make the lineup diagram role-accurate. The data flow is explicit: **football-data.org `/v4/competitions/WC/teams` → the team's real player roster → fed into the LLM prompt → model returns the team's best projected XI** (specific positions, the 11 starters, formation, shirt numbers) → mapped back onto the team's player rows. The diagram's existing render then places everyone correctly.
+
+**Roster source (important):** the roster fed to the LLM is the team's **football-data-sourced `Player` rows** — the rows `syncTeamsAndSquads`/`syncOneTeamSquadFromFd` wrote from `api.football-data.org` (they carry `Player.externalId`). So the squad in the prompt is the official FD player list, not LLM-invented and not the synthetic seed. **Prerequisite:** the team's FD squad must already be synced (admin "Sync squad (API)" / `ingest:fd`); enrichment only annotates that roster. The two-step chain is **Sync squad (API)** [FD fetch] → **Assign roles & XI (AI)** [LLM enrich].
 
 **Scope:** `packages/pipeline` (enrichment), `apps/worker` (bulk job), `apps/web` (admin route + buttons; `formation-pitch.tsx` projected label). Does NOT change the FD roster source or the pitch placement logic.
 
@@ -38,8 +40,8 @@ The render is **not** at fault: `bandOf`/`sideRank` already place *specific* rol
   - Differs from the existing `crawlLineup` only in that the roster is an **input** (annotate given names) rather than the model inventing the roster.
 
 - **`enrichAndStoreLineup(prisma, gateway, teamId): Promise<{ team; matched; starters; status }>`**
-  - Load the team + its players (names).
-  - `enrichLineup(gateway, { name, players: existingNames })`.
+  - Load the team + its players (the FD-synced roster). If the team has **no players** → return `status: 'no-roster'` without an LLM call (caller surfaces "run Sync squad (API) first").
+  - `enrichLineup(gateway, { name, players: existingNames })` — the FD roster names go into the prompt.
   - In a transaction: reset the team's players to `isStarter:false`; for each assignment, find the team's `Player` by **normalized name** (lowercased, diacritics stripped, punctuation/space-collapsed) and update `position` (specific), `isStarter`, `number`; set `Team.formation`+`manager`.
   - **No player rows added or removed** — FD's official roster is preserved; an LLM name with no match is skipped; a roster player the LLM omits stays `isStarter:false` (a substitute).
   - Log an `AiJob` (type `squad`), like `crawlAndStoreSquads`. A failed/empty crawl leaves the team untouched.
