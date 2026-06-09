@@ -10,6 +10,28 @@ import type { LlmGateway } from '@wc/ai';
 export interface CrawledPlayer { number: number | null; name: string; position: string; starter: boolean }
 export interface CrawledLineup { manager: string; formation: string; players: CrawledPlayer[] }
 
+/** Normalize an LLM position label to a short code `bandOf` understands. Tolerates full words
+ *  ("Goalkeeper", "Centre-Back", "Defensive Midfielder", "Right Winger") AND existing codes
+ *  (GK/CB/ST + coarse GK/DEF/MID/FWD). Unknown → truncated so a row is never silently dropped. */
+export function normalizePosition(raw: string): string {
+  const p = raw.trim().toUpperCase();
+  if (!p) return '';
+  if (p.length <= 4 && /^[A-Z]+$/.test(p)) return p; // already a code (GK, CB, ST, FWD, DEF, MID…)
+  const left = p.includes('LEFT'), right = p.includes('RIGHT');
+  if (p.includes('KEEP') || p.includes('GOAL')) return 'GK';
+  if (p.includes('WING') && p.includes('BACK')) return left ? 'LWB' : 'RWB';
+  if (p.includes('BACK')) return left ? 'LB' : right ? 'RB' : 'CB';
+  if (p.includes('FORWARD') || p.includes('STRIK')) return p.includes('CENTR') ? 'CF' : 'ST';
+  if (p.includes('WING')) return left ? 'LW' : 'RW';
+  if (p.includes('MID')) {
+    if (p.includes('DEFEN')) return 'CDM';
+    if (p.includes('ATTACK')) return 'CAM';
+    return left ? 'LM' : right ? 'RM' : 'CM';
+  }
+  if (p.includes('DEFEN')) return 'CB';
+  return p.slice(0, 4);
+}
+
 /** Parse + validate an LLM lineup response (object). Tolerates fences/wrappers; drops bad rows. */
 export function parseLineupJson(raw: string): CrawledLineup {
   const start = raw.indexOf('{');
@@ -24,11 +46,11 @@ export function parseLineupJson(raw: string): CrawledLineup {
   const players: CrawledPlayer[] = [];
   for (const p of arr) {
     const name = typeof p?.name === 'string' ? p.name.trim() : '';
-    const position = typeof p?.position === 'string' ? p.position.trim().toUpperCase() : '';
+    const position = typeof p?.position === 'string' ? normalizePosition(p.position) : '';
     const rawNum = p?.number;
     const num = typeof rawNum === 'number' ? Math.trunc(rawNum)
       : typeof rawNum === 'string' && /^\d+$/.test(rawNum) ? parseInt(rawNum, 10) : null;
-    if (!name || !position || position.length > 4 || seen.has(name.toLowerCase())) continue;
+    if (!name || !position || seen.has(name.toLowerCase())) continue;
     seen.add(name.toLowerCase());
     players.push({ name, position, number: num != null && num >= 1 && num <= 99 ? num : null, starter: p?.starter === true });
   }
