@@ -325,7 +325,6 @@ export const vi: Dict = {
     colL: 'B',
     colGF: 'BT',
     colGA: 'BB',
-    projectedXI: 'Đội hình dự kiến',
     // bracket
     bracketTitle: 'Nhánh đấu loại trực tiếp', bracketSub: 'Vòng 32 đội → Chung kết · dự đoán từ bảng xếp hạng hiện tại', champion: 'Vô địch',
     predictWhole: 'Dự đoán toàn bộ nhánh đấu', predictSub: 'Điền mọi cặp đấu loại trực tiếp và nhận điểm thưởng cho mỗi vòng đoán đúng.',
@@ -333,6 +332,7 @@ export const vi: Dict = {
     championSub: 'Chọn 1 đội', finalists: 'Vào chung kết', finalistsSub: 'Chọn tối đa 2 đội', semis: 'Vào bán kết', semisSub: 'Chọn tối đa 4 đội',
     savePicks: 'Lưu lựa chọn', saving: 'Đang lưu…',
     bracketSaved: 'Đã lưu nhánh đấu!', bracketLocked: 'Nhánh đấu đã khóa', bracketSaveFail: 'Không thể lưu nhánh đấu',
+    projected: 'tạm tính',
   },
   scorers: {
     title: 'Vua phá lưới',

@@ -334,7 +334,6 @@ export const en = {
     colL: 'L',
     colGF: 'GF',
     colGA: 'GA',
-    projectedXI: 'Projected XI',
     // bracket
     bracketTitle: 'Knockout bracket', bracketSub: 'Round of 32 → Final · projected from current standings', champion: 'Champion',
     predictWhole: 'Predict the whole bracket', predictSub: 'Fill every knockout tie and earn bonus points for each correct round.',
@@ -342,6 +341,7 @@ export const en = {
     championSub: 'Pick 1 team', finalists: 'Finalists', finalistsSub: 'Pick up to 2 teams', semis: 'Semi-finalists', semisSub: 'Pick up to 4 teams',
     savePicks: 'Save picks', saving: 'Saving…',
     bracketSaved: 'Bracket saved!', bracketLocked: 'Bracket is locked', bracketSaveFail: 'Could not save bracket',
+    projected: 'projected',
   },
   scorers: {
     title: 'Top Scorers',

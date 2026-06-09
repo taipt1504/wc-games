@@ -43,6 +43,13 @@ describe('deriveLineup', () => {
   });
 
   it('empty roster → empty result', () => {
-    expect(deriveLineup([])).toEqual({ lines: [], subs: [], formationLabel: '' });
+    expect(deriveLineup([])).toEqual({ lines: [], subs: [], formationLabel: '', projected: false });
+  });
+
+  it('projected flag: false for real XI, true for default 4-3-3', () => {
+    const real = deriveLineup([P('GK1', 'GK', { starter: true }), P('ST1', 'ST', { starter: true })], '4-2-3-1');
+    expect(real.projected).toBe(false);
+    const fd = deriveLineup([...band('GK', 1), ...band('DEF', 4), ...band('MID', 3), ...band('FWD', 3)]);
+    expect(fd.projected).toBe(true);
   });
 });

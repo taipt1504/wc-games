@@ -28,20 +28,20 @@ function sideRank(pos: string | null): number {
   return c === 'L' ? -1 : c === 'R' ? 1 : 0;
 }
 
-export interface DerivedLineup { lines: LineupPlayer[][]; subs: LineupPlayer[]; formationLabel: string }
+export interface DerivedLineup { lines: LineupPlayer[][]; subs: LineupPlayer[]; formationLabel: string; projected: boolean }
 
 /** Build pitch lines (top→bottom = attack→goal) + substitutes. Real XI (any `starter`) → the 5-band
  *  split of starters with the passed formation. No XI → a default 4-3-3 (1 GK / 4 DEF / 3 MID / 3 FWD)
  *  picked by position bucket; short buckets show fewer (never fabricated), everyone unplaced → subs. */
 export function deriveLineup(players: LineupPlayer[], formation?: string | null): DerivedLineup {
-  if (players.length === 0) return { lines: [], subs: [], formationLabel: '' };
+  if (players.length === 0) return { lines: [], subs: [], formationLabel: '', projected: false };
 
   const starters = players.filter((p) => p.starter);
   if (starters.length > 0) {
     const lines = BANDS
       .map((b) => starters.filter((p) => bandOf(p.position) === b).sort((x, y) => sideRank(x.position) - sideRank(y.position)))
       .filter((row) => row.length > 0);
-    return { lines, subs: players.filter((p) => !p.starter), formationLabel: formation ?? '' };
+    return { lines, subs: players.filter((p) => !p.starter), formationLabel: formation ?? '', projected: false };
   }
 
   // No starting XI: arrange a common 4-3-3 from the squad's coarse buckets.
@@ -52,7 +52,7 @@ export function deriveLineup(players: LineupPlayer[], formation?: string | null)
   const fwd = inBands(['FWD']).slice(0, 3);
   const onPitch = new Set<LineupPlayer>([...gk, ...def, ...mid, ...fwd]);
   const lines = [fwd, mid, def, gk].filter((row) => row.length > 0); // top→bottom
-  return { lines, subs: players.filter((p) => !onPitch.has(p)), formationLabel: '4-3-3' };
+  return { lines, subs: players.filter((p) => !onPitch.has(p)), formationLabel: '4-3-3', projected: true };
 }
 
 function Chip({ p }: { p: LineupPlayer }) {
@@ -67,14 +67,14 @@ function Chip({ p }: { p: LineupPlayer }) {
 
 export function FormationPitch({ players, formation, manager }: { players: LineupPlayer[]; formation?: string | null; manager?: string | null }) {
   const { t } = useT();
-  const { lines, subs, formationLabel } = deriveLineup(players, formation);
+  const { lines, subs, formationLabel, projected } = deriveLineup(players, formation);
 
   return (
     <div className="stack gap-12">
       {(manager || formationLabel) && (
         <div className="row between card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
           <div className="row gap-8">{manager && <><Icon name="user" size={16} className="muted" /><span className="small" style={{ fontWeight: 700 }}>{manager}</span></>}</div>
-          {formationLabel && <span className="badge badge-sky">{formationLabel}</span>}
+          {formationLabel && <span className="badge badge-sky">{projected ? `${formationLabel} · ${t('tournament.projected')}` : formationLabel}</span>}
         </div>
       )}
 
