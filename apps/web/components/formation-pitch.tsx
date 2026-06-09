@@ -1,5 +1,6 @@
 'use client';
-/* World Cup Games — FormationPitch: starting XI on a pitch (manager + bench), shared by user + admin. */
+/* World Cup Games — FormationPitch: always a pitch diagram (real XI formation or a default 4-3-3)
+   + substitutes list, shared by user + admin. */
 import React from 'react';
 import { Icon } from '@/components/ui';
 import { useT } from '@/lib/i18n/hooks';
@@ -57,97 +58,60 @@ export function deriveLineup(players: LineupPlayer[], formation?: string | null)
 function Chip({ p }: { p: LineupPlayer }) {
   return (
     <div style={{ textAlign: 'center', width: 'clamp(52px, 16vw, 84px)', minWidth: 0 }}>
-      <div style={{ width: 32, height: 32, margin: '0 auto', borderRadius: '50%', background: 'linear-gradient(135deg, var(--green), var(--sky))', border: '2px solid rgba(255,255,255,.9)', display: 'grid', placeItems: 'center', fontFamily: 'var(--f-display)', fontWeight: 800, fontSize: 12, color: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,.55)' }}>{p.number ?? ''}</div>
+      <div style={{ width: 32, height: 32, margin: '0 auto', borderRadius: '50%', background: 'linear-gradient(135deg, var(--green), var(--sky))', border: '2px solid rgba(255,255,255,.9)', display: 'grid', placeItems: 'center', fontFamily: 'var(--f-display)', fontWeight: 800, fontSize: 12, color: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,.55)' }}>{p.number ?? p.position ?? ''}</div>
       <div className="tiny" style={{ marginTop: 3, color: '#fff', fontWeight: 700, textShadow: '0 1px 3px rgba(0,0,0,.95)', fontSize: 10, lineHeight: 1.15, wordBreak: 'break-word' }} title={p.name}>{p.name}</div>
       {p.position && <div className="tiny" style={{ color: 'rgba(255,255,255,.65)', fontSize: 8.5, fontWeight: 600 }}>{p.position}</div>}
     </div>
   );
 }
 
-const BAND_LABELS: Record<Band, string> = { GK: 'Goalkeepers', DEF: 'Defenders', DM: 'Midfielders', AM: 'Midfielders', FWD: 'Forwards' };
-
-function RosterGroup({ band, players }: { band: Band; players: LineupPlayer[] }) {
-  return (
-    <div>
-      <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{BAND_LABELS[band]}</div>
-      <div className="grid-fill" style={{ '--col-min': '170px', '--gap': '8px' } as React.CSSProperties}>
-        {players.map((p, i) => (
-          <div key={i} className="card-2" style={{ borderRadius: 'var(--r-xs)', padding: '8px 12px', textAlign: 'center' }}>
-            <div className="row center gap-8 small" style={{ minWidth: 0 }}>
-              <span className="tnum muted" style={{ flex: 'none' }}>{p.number ?? ''}</span>
-              <span className="t2" style={{ fontWeight: 600 }}>{p.name}</span>
-            </div>
-            {p.position && <span className="tiny muted" style={{ display: 'block', marginTop: 2 }}>{p.position}</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function FormationPitch({ players, formation, manager }: { players: LineupPlayer[]; formation?: string | null; manager?: string | null }) {
   const { t } = useT();
-  const starters = players.filter((p) => p.starter);
-  const hasXI = starters.length > 0;
-  const bench = hasXI ? players.filter((p) => !p.starter) : [];
+  const { lines, subs, formationLabel } = deriveLineup(players, formation);
 
   return (
     <div className="stack gap-12">
-      {(manager || (hasXI && formation)) && (
+      {(manager || formationLabel) && (
         <div className="row between card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
           <div className="row gap-8">{manager && <><Icon name="user" size={16} className="muted" /><span className="small" style={{ fontWeight: 700 }}>{manager}</span></>}</div>
-          {hasXI && formation && <span className="badge badge-sky">{formation}</span>}
+          {formationLabel && <span className="badge badge-sky">{formationLabel}</span>}
         </div>
       )}
 
-      {hasXI ? (
-        <>
-          <div className="card" style={{ position: 'relative', aspectRatio: '3 / 4', maxWidth: 560, margin: '0 auto', width: '100%', overflow: 'hidden', background: 'repeating-linear-gradient(0deg, #0f3a26 0 10%, #11402b 10% 20%)', border: '1px solid var(--line-strong)' }}>
-            <svg viewBox="0 0 300 400" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.5 }}>
-              <g fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="1.5">
-                <rect x="8" y="8" width="284" height="384" rx="2" />
-                <line x1="8" y1="200" x2="292" y2="200" />
-                <circle cx="150" cy="200" r="40" />
-                <rect x="90" y="8" width="120" height="50" /><rect x="90" y="342" width="120" height="50" />
-              </g>
-            </svg>
-            <div className="stack" style={{ position: 'relative', height: '100%', padding: '12px 4px', justifyContent: 'space-around' }}>
-              {BANDS.map((b) => {
-                const row = starters.filter((p) => bandOf(p.position) === b).sort((x, y) => sideRank(x.position) - sideRank(y.position));
-                if (row.length === 0) return null;
-                return (
-                  <div key={b} className="row" style={{ justifyContent: 'space-around', alignItems: 'center', gap: 2 }}>
-                    {row.map((p, i) => <Chip key={i} p={p} />)}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {bench.length > 0 && (
-            <div>
-              <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{t('tournament.bench')}</div>
-              <div className="grid-fill" style={{ '--col-min': '170px', '--gap': '8px' } as React.CSSProperties}>
-                {bench.map((p, i) => (
-                  <div key={i} className="card-2" style={{ borderRadius: 'var(--r-xs)', padding: '8px 12px', textAlign: 'center' }}>
-                    <div className="row center gap-8 small" style={{ minWidth: 0 }}>
-                      <span className="tnum muted" style={{ flex: 'none' }}>{p.number ?? ''}</span>
-                      <span className="t2" style={{ fontWeight: 600 }}>{p.name}</span>
-                    </div>
-                    {p.position && <span className="tiny muted" style={{ display: 'block', marginTop: 2 }}>{p.position}</span>}
-                  </div>
-                ))}
+      {lines.length > 0 && (
+        <div className="card" style={{ position: 'relative', aspectRatio: '3 / 4', maxWidth: 560, margin: '0 auto', width: '100%', overflow: 'hidden', background: 'repeating-linear-gradient(0deg, #0f3a26 0 10%, #11402b 10% 20%)', border: '1px solid var(--line-strong)' }}>
+          <svg viewBox="0 0 300 400" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.5 }}>
+            <g fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="1.5">
+              <rect x="8" y="8" width="284" height="384" rx="2" />
+              <line x1="8" y1="200" x2="292" y2="200" />
+              <circle cx="150" cy="200" r="40" />
+              <rect x="90" y="8" width="120" height="50" /><rect x="90" y="342" width="120" height="50" />
+            </g>
+          </svg>
+          <div className="stack" style={{ position: 'relative', height: '100%', padding: '12px 4px', justifyContent: 'space-around' }}>
+            {lines.map((row, i) => (
+              <div key={i} className="row" style={{ justifyContent: 'space-around', alignItems: 'center', gap: 2 }}>
+                {row.map((p, j) => <Chip key={j} p={p} />)}
               </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="stack gap-16">
-          {BANDS.map((b) => {
-            const group = players.filter((p) => bandOf(p.position) === b);
-            if (group.length === 0) return null;
-            return <RosterGroup key={b} band={b} players={group} />;
-          })}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {subs.length > 0 && (
+        <div>
+          <div className="tiny muted" style={{ fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>{t('tournament.bench')}</div>
+          <div className="grid-fill" style={{ '--col-min': '170px', '--gap': '8px' } as React.CSSProperties}>
+            {subs.map((p, i) => (
+              <div key={i} className="card-2" style={{ borderRadius: 'var(--r-xs)', padding: '8px 12px', textAlign: 'center' }}>
+                <div className="row center gap-8 small" style={{ minWidth: 0 }}>
+                  <span className="tnum muted" style={{ flex: 'none' }}>{p.number ?? ''}</span>
+                  <span className="t2" style={{ fontWeight: 600 }}>{p.name}</span>
+                </div>
+                {p.position && <span className="tiny muted" style={{ display: 'block', marginTop: 2 }}>{p.position}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
