@@ -35,6 +35,31 @@ export function parseLineupJson(raw: string): CrawledLineup {
   return { manager, formation, players };
 }
 
+/** Normalize a player name for matching: strip diacritics, lowercase, collapse non-alphanumerics. */
+function normName(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export interface RosterPlayer { id: bigint; name: string }
+export interface PlayerUpdate { id: bigint; position: string; number: number | null; isStarter: boolean }
+
+/** Map LLM lineup assignments onto an existing roster by normalized name. Pure. Each roster player
+ *  matched at most once; assignments with no roster match are dropped (never invent rows); roster
+ *  players with no assignment produce no update (they stay non-starters after the caller's reset). */
+export function applyLineupAssignments(roster: RosterPlayer[], assignments: CrawledPlayer[]): PlayerUpdate[] {
+  const byNorm = new Map<string, RosterPlayer>();
+  for (const p of roster) byNorm.set(normName(p.name), p);
+  const used = new Set<bigint>();
+  const updates: PlayerUpdate[] = [];
+  for (const a of assignments) {
+    const match = byNorm.get(normName(a.name));
+    if (!match || used.has(match.id)) continue;
+    used.add(match.id);
+    updates.push({ id: match.id, position: a.position, number: a.number, isStarter: a.starter });
+  }
+  return updates;
+}
+
 /** Crawl one team's lineup via the gateway. Grounded prompt; JSON-object output. */
 export async function crawlLineup(
   gateway: LlmGateway,
