@@ -325,6 +325,7 @@ export const vi: Dict = {
     colL: 'B',
     colGF: 'BT',
     colGA: 'BB',
+    projectedXI: 'Đội hình dự kiến',
     // bracket
     bracketTitle: 'Nhánh đấu loại trực tiếp', bracketSub: 'Vòng 32 đội → Chung kết · dự đoán từ bảng xếp hạng hiện tại', champion: 'Vô địch',
     predictWhole: 'Dự đoán toàn bộ nhánh đấu', predictSub: 'Điền mọi cặp đấu loại trực tiếp và nhận điểm thưởng cho mỗi vòng đoán đúng.',

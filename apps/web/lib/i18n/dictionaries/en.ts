@@ -334,6 +334,7 @@ export const en = {
     colL: 'L',
     colGF: 'GF',
     colGA: 'GA',
+    projectedXI: 'Projected XI',
     // bracket
     bracketTitle: 'Knockout bracket', bracketSub: 'Round of 32 → Final · projected from current standings', champion: 'Champion',
     predictWhole: 'Predict the whole bracket', predictSub: 'Fill every knockout tie and earn bonus points for each correct round.',
