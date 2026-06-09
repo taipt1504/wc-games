@@ -126,7 +126,7 @@ export function TeamDetail({ s }: ScreenProps) {
               <span className="small ellip">{m.home?.code ?? m.home?.name ?? t('match.tbd')} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny muted">
-              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : fmt.date(m.kickoffAt)}
+              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : fmt.date(m.kickoffAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
         ))}

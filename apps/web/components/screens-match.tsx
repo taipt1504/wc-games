@@ -123,7 +123,7 @@ export function MatchBetCard({ m, s }: { m: RealMatch; s: ScreenProps['s'] }) {
         {m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
           : m.status === 'FINISHED' ? <span className="badge badge-muted">{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
             : m.bettingLocked ? <span className="badge badge-danger"><Icon name="lock" size={11} /> {t('match.bettingClosedBadge')}</span>
-              : <span className="tiny muted">{fmt.date(m.kickoffAt)}</span>}
+              : <span className="tiny muted">{fmt.date(m.kickoffAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
       </div>
       <div className="row between gap-12" style={{ marginBottom: 10 }} onClick={() => s.go('match', { id: m.id })}>
         {[m.home, m.away].map((tm, i) => (
