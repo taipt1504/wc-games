@@ -7,7 +7,7 @@
 import type { PrismaClient } from '@wc/db';
 import { LINEUP_LEAD_MS, FIRST_RESULT_CHECK_MS, RESULT_RECHECK_MS, MAX_RESULT_ATTEMPTS } from './schedule';
 
-export type JobKey = 'lock_betting' | 'lineup' | 'result_check' | 'livescore' | 'scheduler_scan' | 'news' | 'fd_sync';
+export type JobKey = 'lock_betting' | 'lineup' | 'result_check' | 'livescore' | 'scheduler_scan' | 'news' | 'fd_sync' | 'enrich_lineups';
 
 export interface JobConfigs {
   lock_betting: { leadMinutes: number };
@@ -17,6 +17,7 @@ export interface JobConfigs {
   scheduler_scan: { rescanMinutes: number; scanAheadHours: number; scanBehindHours: number };
   news: { publishIntervalSeconds: number };
   fd_sync: { intervalMinutes: number; teamsEveryRuns: number };
+  enrich_lineups: Record<string, never>;
 }
 
 export const JOB_DEFAULTS: JobConfigs = {
@@ -31,12 +32,14 @@ export const JOB_DEFAULTS: JobConfigs = {
   scheduler_scan: { rescanMinutes: 60, scanAheadHours: 36, scanBehindHours: 6 },
   news: { publishIntervalSeconds: 60 },
   fd_sync: { intervalMinutes: 45, teamsEveryRuns: 16 },
+  enrich_lineups: {},
 };
 
 export const JOB_LABELS: Record<JobKey, string> = {
   lock_betting: 'Lock betting', lineup: 'Lineup crawl', result_check: 'Result check',
   livescore: 'Live score poll', scheduler_scan: 'Scheduler scan', news: 'News publish',
   fd_sync: 'Football-data sync',
+  enrich_lineups: 'Lineup enrichment',
 };
 
 export const JOB_KEYS = Object.keys(JOB_DEFAULTS) as JobKey[];
