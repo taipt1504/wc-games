@@ -460,3 +460,49 @@ export async function syncOneMatchFromFd(
   await publishEvent(channels.matches, { type: 'match.update', matchId: Number(dbMatchId) });
   return { updated: true, status, scoreHome90: score.scoreHome90, scoreAway90: score.scoreAway90 };
 }
+
+/**
+ * Sync ONE team's squad from FD (admin on-demand). FD has no per-team squad endpoint, so this
+ * fetches all teams (1 call) and picks the match by externalId/code/name. Replaces that team's
+ * players with the real FD roster + updates manager/flag/externalId. Mirrors syncTeamsAndSquads
+ * for a single team. Throws TEAM_NOT_FOUND / TEAM_NOT_IN_FD.
+ */
+export async function syncOneTeamSquadFromFd(
+  prisma: PrismaClient,
+  client: FdClientLike,
+  dbTeamId: bigint,
+): Promise<{ updated: boolean; players: number }> {
+  const dbTeam = await prisma.team.findUnique({
+    where: { id: dbTeamId },
+    select: { id: true, externalId: true, code: true, name: true },
+  });
+  if (!dbTeam) throw new Error('TEAM_NOT_FOUND');
+
+  const fdTeams = (await fetchFdTeams(client)).map(mapFdTeam);
+  const fd = fdTeams.find(
+    (t) =>
+      (dbTeam.externalId != null && t.externalId === dbTeam.externalId) ||
+      t.code === dbTeam.code ||
+      t.name === dbTeam.name,
+  );
+  if (!fd) throw new Error('TEAM_NOT_IN_FD');
+
+  await prisma.team.update({
+    where: { id: dbTeam.id },
+    data: { externalId: fd.externalId, manager: fd.manager ?? undefined, flagUrl: fd.flagUrl ?? undefined },
+  });
+
+  let players = 0;
+  if (fd.squad.length > 0) {
+    await prisma.$transaction([
+      prisma.player.deleteMany({ where: { teamId: dbTeam.id } }),
+      ...fd.squad.map((p) =>
+        prisma.player.create({
+          data: { teamId: dbTeam.id, name: p.name, position: p.position, externalId: p.externalId, isStarter: false },
+        }),
+      ),
+    ]);
+    players = fd.squad.length;
+  }
+  return { updated: true, players };
+}
