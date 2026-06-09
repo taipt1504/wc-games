@@ -407,6 +407,22 @@ function LobbyMatches({ ownerName, matches, isHost, odds, onEdit, onBet }: {
   onBet: (m: LobbyMatch, pick: Pick1X2, oddsVal: number) => void;
 }) {
   const { t, fmt } = useT();
+  const [filter, setFilter] = useState<'open' | 'live' | 'finished' | 'all'>('open');
+
+  const chips: { k: typeof filter; label: string }[] = [
+    { k: 'open', label: t('schedule.filterOpen') },
+    { k: 'live', label: t('schedule.filterLive') },
+    { k: 'finished', label: t('schedule.filterFinished') },
+    { k: 'all', label: t('schedule.filterAll') },
+  ];
+
+  let visible = matches.slice();
+  if (filter === 'open') visible = visible.filter(m => m.status === 'SCHEDULED');
+  else if (filter === 'live') visible = visible.filter(m => m.status === 'LIVE');
+  else if (filter === 'finished') visible = visible.filter(m => m.status === 'FINISHED');
+
+  const kickoffFmt: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' };
+
   return (
     <div>
       <div className="card card-pad row between wrap wrap-w gap-12" style={{ marginBottom: 14, background: isHost ? 'linear-gradient(120deg,var(--sky-soft),transparent)' : 'transparent' }}>
@@ -419,52 +435,62 @@ function LobbyMatches({ ownerName, matches, isHost, odds, onEdit, onBet }: {
         </div>
       </div>
 
-      <div className="stack gap-12">
-        {matches.map(m => {
+      <div className="row gap-8 wrap-w" style={{ marginBottom: 12 }}>
+        {chips.map(f => <button key={f.k} className={`chip ${filter === f.k ? 'active' : ''}`} onClick={() => setFilter(f.k)}>{f.label}</button>)}
+      </div>
+
+      <div className="stack gap-8">
+        {visible.map(m => {
           const o = odds[m.id] || (m.odds ? { mh: m.odds.mHome, md: m.odds.mDraw, ma: m.odds.mAway } : { mh: 0, md: 0, ma: 0 });
           const open = m.status === 'SCHEDULED';
           const live = m.status === 'LIVE', fin = m.status === 'FINISHED';
           const betFor = (k: Pick1X2) => m.bets.find(b => b.outcome === k);
           const cells: [Pick1X2, string, number][] = [['1', m.home?.code ?? 'H', o.mh], ['X', t('betslip.draw'), o.md], ['2', m.away?.code ?? 'A', o.ma]];
           return (
-            <div key={m.id} className="card card-pad">
-              <div className="row between" style={{ marginBottom: 12 }}>
-                <div className="row gap-8"><span className="badge badge-muted">{m.round}</span>
-                  {live ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
-                    : fin ? <span className="badge badge-muted">{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
-                      : <span className="small muted">{fmt.date(m.kickoffAt)}</span>}
+            <div key={m.id} className="card" style={{ padding: '8px 12px' }}>
+              {/* Row 1: round badge + status/time + host edit button */}
+              <div className="row between" style={{ marginBottom: 6 }}>
+                <div className="row gap-6">
+                  <span className="badge badge-muted" style={{ fontSize: 10 }}>{m.round}</span>
+                  {live ? <span className="badge badge-magenta" style={{ fontSize: 10 }}><span className="live-dot"></span>{t('match.live')}</span>
+                    : fin ? <span className="badge badge-muted" style={{ fontSize: 10 }}>{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
+                      : <span className="tiny muted">{fmt.date(m.kickoffAt, kickoffFmt)}</span>}
                 </div>
                 {isHost && <Btn variant="ghost" size="sm" icon="trending" onClick={() => onEdit(m)}>{t('lobby.oddsBtn')}</Btn>}
               </div>
-              <div className="row between gap-12" style={{ marginBottom: 12 }}>
-                {[m.home, m.away].map((tm, i) => (
-                  <div key={i} className="row gap-8" style={{ flex: 1, minWidth: 0, justifyContent: i ? 'flex-end' : 'flex-start' }}>
-                    {i === 0 && tm && <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={26} />}
-                    <span className="ellip small" style={{ fontWeight: 600 }}>{tm?.name ?? t('match.tbd')}</span>
-                    {i === 1 && tm && <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={26} />}
-                  </div>
-                ))}
-              </div>
-              <div className="row gap-8 full">
-                {cells.map(([k, lbl, v]) => {
-                  const bet = betFor(k);
-                  return (
-                    <button key={k} className={`odds ${bet ? 'sel' : ''}`} disabled={!open || !!bet}
-                      onClick={() => open && !bet && onBet(m, k, v)}
-                      style={(!open) ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
-                      <span className="o-label">{k} · {lbl}</span><span className="o-val">{v.toFixed(2)}</span>
-                    </button>
-                  );
-                })}
+              {/* Row 2: teams + odds buttons */}
+              <div className="row gap-8 wrap-w" style={{ alignItems: 'center' }}>
+                <div className="row gap-6" style={{ flex: '1 1 auto', minWidth: 0 }}>
+                  {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={18} />}
+                  <span className="tiny ellip" style={{ fontWeight: 700 }}>{m.home?.code ?? t('match.tbd')}</span>
+                  <span className="tiny muted">v</span>
+                  <span className="tiny ellip" style={{ fontWeight: 700 }}>{m.away?.code ?? t('match.tbd')}</span>
+                  {m.away && <Flag flagUrl={m.away.flagUrl ?? undefined} name={m.away.name} code={m.away.code ?? undefined} size={18} />}
+                </div>
+                <div className="row gap-6" style={{ flexShrink: 0 }}>
+                  {cells.map(([k, lbl, v]) => {
+                    const bet = betFor(k);
+                    return (
+                      <button key={k} className={`odds ${bet ? 'sel' : ''}`} disabled={!open || !!bet}
+                        onClick={() => open && !bet && onBet(m, k, v)}
+                        style={{ padding: '4px 8px', minWidth: 0, ...(!open ? { opacity: 0.5, cursor: 'not-allowed' } : undefined) }}>
+                        <span className="o-label" style={{ fontSize: 10 }}>{k} · {lbl}</span><span className="o-val" style={{ fontSize: 12 }}>{v.toFixed(2)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               {m.bets.length > 0 && (
-                <div className="tiny text-green mt-8 row gap-8 wrap-w">
-                  {m.bets.map((b, i) => <span key={i} className="row gap-4"><Icon name="check" size={13} /> {b.outcome} · {b.stake} pts{b.status !== 'OPEN' ? ` (${b.status})` : ''}</span>)}
+                <div className="tiny text-green mt-4 row gap-6 wrap-w">
+                  {m.bets.map((b, i) => <span key={i} className="row gap-4"><Icon name="check" size={12} /> {b.outcome} · {b.stake} pts{b.status !== 'OPEN' ? ` (${b.status})` : ''}</span>)}
                 </div>
               )}
             </div>
           );
         })}
+        {visible.length === 0 && matches.length > 0 && (
+          <div className="card card-pad" style={{ textAlign: 'center' }}><p className="tiny muted">{t('schedule.empty')}</p></div>
+        )}
         {!matches.length && <div className="card card-pad-lg" style={{ textAlign: 'center' }}><p className="muted">{t('lobby.noMatchesYet')}</p></div>}
       </div>
     </div>
