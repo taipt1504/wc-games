@@ -16,7 +16,8 @@
     "seed": "dotenv -e ../../.env -- tsx src/seed-cli.ts",
     "ingest": "dotenv -e ../../.env -- tsx src/ingest-cli.ts",
     "crawl-players": "dotenv -e ../../.env -- tsx src/crawl-players-cli.ts",
-    "ingest:fd": "dotenv -e ../../.env -- tsx src/ingest-fd-cli.ts"
+    "ingest:fd": "dotenv -e ../../.env -- tsx src/ingest-fd-cli.ts",
+    "enrich-lineups": "dotenv -e ../../.env -- tsx src/enrich-lineups-cli.ts"
   },
   "dependencies": {
     "@wc/ai": "workspace:*",
