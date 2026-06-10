@@ -124,7 +124,7 @@ export const vi: Dict = {
   },
   nav: {
     home: 'Trang chủ', matches: 'Trận đấu', leaderboard: 'Xếp hạng', lobbies: 'Sảnh',
-    teams: 'Đội tuyển', groups: 'Bảng đấu', bracket: 'Nhánh đấu', news: 'Tin tức',
+    teams: 'Đội tuyển', groups: 'Bảng đấu', bracket: 'Nhánh đấu', scorers: 'Vua phá lưới', news: 'Tin tức',
     mybets: 'Dự đoán của tôi', wallet: 'Ví', profile: 'Hồ sơ', admin: 'Quản trị',
     match: 'Trận đấu', team: 'Đội', lobby: 'Sảnh', lobbyCreate: 'Sảnh mới', article: 'Bài viết',
     secTournament: 'Giải đấu', secAccount: 'Tài khoản',
@@ -196,6 +196,11 @@ export const vi: Dict = {
     previewUnavailable: 'Bản phân tích hiện chưa có.', generatingPreview: 'Đang tạo phân tích…',
     inplayNextGoal: 'Trực tiếp · Bàn kế tiếp', placeInplay: 'Đặt dự đoán trực tiếp', error: 'Lỗi',
     nextGoalHome: 'Nhà', nextGoalAway: 'Khách', nextGoalNone: 'Không',
+    statusScheduled: 'Chưa đá',
+    statusLive: 'Đang đá',
+    statusFinished: 'Kết thúc',
+    statusPostponed: 'Hoãn',
+    statusCancelled: 'Hủy',
   },
   leaderboard: {
     title: 'Bảng xếp hạng', sub: 'Xếp theo ROI% trên các dự đoán đã quyết toán',
@@ -315,6 +320,11 @@ export const vi: Dict = {
     // groups
     groupsTitle: 'Bảng xếp hạng', groupsSub: '12 bảng · 2 đội đầu cùng các đội hạng ba xuất sắc đi tiếp', loadingStandings: 'Đang tải bảng xếp hạng…',
     matchday: 'Lượt 1–3', colRank: '#', colTeam: 'Đội', colP: 'Tr', colGD: 'HS', colPts: 'Đ',
+    colW: 'T',
+    colD: 'H',
+    colL: 'B',
+    colGF: 'BT',
+    colGA: 'BB',
     // bracket
     bracketTitle: 'Nhánh đấu loại trực tiếp', bracketSub: 'Vòng 32 đội → Chung kết · dự đoán từ bảng xếp hạng hiện tại', champion: 'Vô địch',
     predictWhole: 'Dự đoán toàn bộ nhánh đấu', predictSub: 'Điền mọi cặp đấu loại trực tiếp và nhận điểm thưởng cho mỗi vòng đoán đúng.',
@@ -322,6 +332,17 @@ export const vi: Dict = {
     championSub: 'Chọn 1 đội', finalists: 'Vào chung kết', finalistsSub: 'Chọn tối đa 2 đội', semis: 'Vào bán kết', semisSub: 'Chọn tối đa 4 đội',
     savePicks: 'Lưu lựa chọn', saving: 'Đang lưu…',
     bracketSaved: 'Đã lưu nhánh đấu!', bracketLocked: 'Nhánh đấu đã khóa', bracketSaveFail: 'Không thể lưu nhánh đấu',
+    projected: 'tạm tính',
+  },
+  scorers: {
+    title: 'Vua phá lưới',
+    empty: 'Chưa có cầu thủ ghi bàn — giải đấu chưa bắt đầu.',
+    colRank: '#',
+    colPlayer: 'Cầu thủ',
+    colTeam: 'Đội',
+    colGoals: 'Bàn thắng',
+    colAssists: 'Kiến tạo',
+    colPens: 'Phạt đền',
   },
   news: {
     wireTitle: 'Bản tin World Cup', wireSub: 'Nội dung hỗ trợ bởi AI, được biên tập viên duyệt trước khi đăng',

@@ -1,7 +1,7 @@
 'use client';
 /* World Cup Games — Schedule · Match Detail · Bet Slip (ported from docs/design/predict-wc-2026/project/screens-match.jsx) */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { WC, type Pick1X2 } from '@/lib/wc';
+import { type Pick1X2 } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, Portal, SecHead } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
@@ -123,7 +123,7 @@ export function MatchBetCard({ m, s }: { m: RealMatch; s: ScreenProps['s'] }) {
         {m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
           : m.status === 'FINISHED' ? <span className="badge badge-muted">{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
             : m.bettingLocked ? <span className="badge badge-danger"><Icon name="lock" size={11} /> {t('match.bettingClosedBadge')}</span>
-              : <span className="tiny muted">{fmt.date(m.kickoffAt)}</span>}
+              : <span className="tiny muted">{fmt.date(m.kickoffAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
       </div>
       <div className="row between gap-12" style={{ marginBottom: 10 }} onClick={() => s.go('match', { id: m.id })}>
         {[m.home, m.away].map((tm, i) => (
@@ -393,6 +393,13 @@ export function MatchDetail({ s }: ScreenProps) {
     setSlip(null);
   };
 
+  const statusLabel = (s: string) =>
+    s === 'LIVE' ? t('match.statusLive')
+    : s === 'FINISHED' ? t('match.statusFinished')
+    : s === 'POSTPONED' ? t('match.statusPostponed')
+    : s === 'CANCELLED' ? t('match.statusCancelled')
+    : t('match.statusScheduled');
+
   const lineupTeams = [teams.home, teams.away].filter((t): t is TeamDetail => !!t && Array.isArray(t.players) && t.players.length > 0);
   const homeForm = teams.home ? formFor(teams.home.id, teams.home.matches ?? []) : [];
   const awayForm = teams.away ? formFor(teams.away.id, teams.away.matches ?? []) : [];
@@ -429,7 +436,7 @@ export function MatchDetail({ s }: ScreenProps) {
           <InfoCell label={t('match.kickoff')} value={fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })} />
           <InfoCell label={t('match.roundLabel')} value={roundShort(m.round, m.group, t('round.groupPrefix'))} />
           <InfoCell label={t('match.venue')} value={m.venue?.name ? `${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ''}${m.venue.country ? `, ${m.venue.country}` : ''}` : '—'} />
-          <InfoCell label={t('match.status')} value={m.status} />
+          <InfoCell label={t('match.status')} value={statusLabel(m.status)} />
         </div>
       </div>
 

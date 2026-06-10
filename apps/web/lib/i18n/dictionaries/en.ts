@@ -122,7 +122,7 @@ export const en = {
   },
   nav: {
     home: 'Home', matches: 'Matches', leaderboard: 'Leaderboard', lobbies: 'Lobbies',
-    teams: 'Teams', groups: 'Groups', bracket: 'Bracket', news: 'News',
+    teams: 'Teams', groups: 'Groups', bracket: 'Bracket', scorers: 'Top Scorers', news: 'News',
     mybets: 'My bets', wallet: 'Wallet', profile: 'Profile', admin: 'Admin',
     match: 'Match', team: 'Team', lobby: 'Lobby', lobbyCreate: 'New lobby', article: 'Article',
     secTournament: 'Tournament', secAccount: 'Account',
@@ -194,6 +194,11 @@ export const en = {
     previewUnavailable: 'Preview unavailable right now.', generatingPreview: 'Generating preview…',
     inplayNextGoal: 'In-play · Next Goal', placeInplay: 'Place in-play bet', error: 'Error',
     nextGoalHome: 'Home', nextGoalAway: 'Away', nextGoalNone: 'None',
+    statusScheduled: 'Scheduled',
+    statusLive: 'Live',
+    statusFinished: 'Finished',
+    statusPostponed: 'Postponed',
+    statusCancelled: 'Cancelled',
   },
   leaderboard: {
     title: 'Leaderboard', sub: 'Ranked by ROI% on settled bets',
@@ -324,6 +329,11 @@ export const en = {
     // groups
     groupsTitle: 'Group standings', groupsSub: '12 groups · top 2 plus best thirds advance', loadingStandings: 'Loading standings…',
     matchday: 'Matchday 1–3', colRank: '#', colTeam: 'Team', colP: 'P', colGD: 'GD', colPts: 'Pts',
+    colW: 'W',
+    colD: 'D',
+    colL: 'L',
+    colGF: 'GF',
+    colGA: 'GA',
     // bracket
     bracketTitle: 'Knockout bracket', bracketSub: 'Round of 32 → Final · projected from current standings', champion: 'Champion',
     predictWhole: 'Predict the whole bracket', predictSub: 'Fill every knockout tie and earn bonus points for each correct round.',
@@ -331,6 +341,17 @@ export const en = {
     championSub: 'Pick 1 team', finalists: 'Finalists', finalistsSub: 'Pick up to 2 teams', semis: 'Semi-finalists', semisSub: 'Pick up to 4 teams',
     savePicks: 'Save picks', saving: 'Saving…',
     bracketSaved: 'Bracket saved!', bracketLocked: 'Bracket is locked', bracketSaveFail: 'Could not save bracket',
+    projected: 'projected',
+  },
+  scorers: {
+    title: 'Top Scorers',
+    empty: 'No scorers yet — the tournament has not started.',
+    colRank: '#',
+    colPlayer: 'Player',
+    colTeam: 'Team',
+    colGoals: 'Goals',
+    colAssists: 'Assists',
+    colPens: 'Pens',
   },
   news: {
     wireTitle: 'World Cup wire', wireSub: 'AI-assisted coverage, reviewed by editors before publishing',

@@ -7,7 +7,7 @@
 import type { PrismaClient } from '@wc/db';
 import { LINEUP_LEAD_MS, FIRST_RESULT_CHECK_MS, RESULT_RECHECK_MS, MAX_RESULT_ATTEMPTS } from './schedule';
 
-export type JobKey = 'lock_betting' | 'lineup' | 'result_check' | 'livescore' | 'scheduler_scan' | 'news';
+export type JobKey = 'lock_betting' | 'lineup' | 'result_check' | 'livescore' | 'scheduler_scan' | 'news' | 'fd_sync' | 'enrich_lineups';
 
 export interface JobConfigs {
   lock_betting: { leadMinutes: number };
@@ -16,6 +16,8 @@ export interface JobConfigs {
   livescore: { intervalSeconds: number };
   scheduler_scan: { rescanMinutes: number; scanAheadHours: number; scanBehindHours: number };
   news: { publishIntervalSeconds: number };
+  fd_sync: { intervalMinutes: number; teamsEveryRuns: number };
+  enrich_lineups: Record<string, never>;
 }
 
 export const JOB_DEFAULTS: JobConfigs = {
@@ -29,11 +31,15 @@ export const JOB_DEFAULTS: JobConfigs = {
   livescore: { intervalSeconds: 45 },
   scheduler_scan: { rescanMinutes: 60, scanAheadHours: 36, scanBehindHours: 6 },
   news: { publishIntervalSeconds: 60 },
+  fd_sync: { intervalMinutes: 45, teamsEveryRuns: 16 },
+  enrich_lineups: {},
 };
 
 export const JOB_LABELS: Record<JobKey, string> = {
   lock_betting: 'Lock betting', lineup: 'Lineup crawl', result_check: 'Result check',
   livescore: 'Live score poll', scheduler_scan: 'Scheduler scan', news: 'News publish',
+  fd_sync: 'Football-data sync',
+  enrich_lineups: 'Lineup enrichment',
 };
 
 export const JOB_KEYS = Object.keys(JOB_DEFAULTS) as JobKey[];
@@ -41,7 +47,7 @@ export const JOB_KEYS = Object.keys(JOB_DEFAULTS) as JobKey[];
 const BOUNDS: Record<string, [number, number]> = {
   leadMinutes: [0, 240], firstDelayMinutes: [0, 600], recheckMinutes: [1, 240], maxAttempts: [0, 50],
   intervalSeconds: [10, 3600], rescanMinutes: [1, 1440], scanAheadHours: [1, 168], scanBehindHours: [0, 72],
-  publishIntervalSeconds: [10, 3600],
+  publishIntervalSeconds: [10, 3600], intervalMinutes: [5, 1440], teamsEveryRuns: [1, 1000],
 };
 
 function clampField(name: string, val: number): number {
@@ -89,9 +95,13 @@ export async function recordJobRun(
   prisma: PrismaClient, key: JobKey, status: 'OK' | 'ERROR' | 'SKIPPED', note?: string,
 ): Promise<void> {
   try {
-    await prisma.scheduleJob.update({
+    const data = { lastRunAt: new Date(), lastRunStatus: status, lastRunNote: note?.slice(0, 300) ?? null };
+    // Upsert: the ScheduleJob row may not exist yet for newer keys (fd_sync/enrich_lineups) — create it
+    // on first run with its registry defaults rather than failing the update.
+    await prisma.scheduleJob.upsert({
       where: { key },
-      data: { lastRunAt: new Date(), lastRunStatus: status, lastRunNote: note?.slice(0, 300) ?? null },
+      update: data,
+      create: { key, label: JOB_LABELS[key], enabled: true, config: JOB_DEFAULTS[key] as object, ...data },
     });
   } catch { /* best-effort */ }
 }

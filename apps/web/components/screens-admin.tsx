@@ -294,6 +294,7 @@ function AdmTourney({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind,
         {statusBadge(m)}
       </div>
       <div className="row center mt-8"><span className="tnum h3">{m.scoreHome ?? '–'} : {m.scoreAway ?? '–'}</span></div>
+      {m.status === 'SCHEDULED' && <div className="row center tiny muted mt-4">{new Date(m.kickoffAt).toLocaleString()}</div>}
       <div className="row center tiny t2 tnum mt-4">{m.odds ? `${m.odds.mHome.toFixed(2)} · ${m.odds.mDraw.toFixed(2)} · ${m.odds.mAway.toFixed(2)}` : '—'}</div>
       <div className="row between mt-12" onClick={e => e.stopPropagation()}>
         <button className="chip chip-sm" onClick={() => toggleLock(m)} style={{ gap: 5 }}>
@@ -407,12 +408,36 @@ function ScoreEditModal({ id, homeLabel, awayLabel, sub, hs: hs0, as: as0, onClo
   );
 }
 
-function AdmTeams({ open }: { s: ScreenProps['s']; open: (kind: DetailKind, id: number) => void }) {
+function AdmTeams({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind, id: number) => void }) {
   const [teams, setTeams] = useState<AdmTeamRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncingAll, setSyncingAll] = useState(false);
   useEffect(() => {
     fetch('/api/v1/teams').then((r) => (r.ok ? r.json() : null)).then((j) => setTeams(j?.data ?? [])).catch(() => { /* keep [] */ }).finally(() => setLoading(false));
   }, []);
+
+  async function syncAllSquads() {
+    setSyncingAll(true);
+    try {
+      const res = await fetch('/api/v1/admin/teams/sync-all', { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const { teams: t, players: p, unmatched: u } = j.data ?? {};
+        const note = u?.length ? ` · ${u.length} unmatched` : '';
+        s.toastMsg(`Squads synced · teams ${t ?? 0} / players ${p ?? 0}${note}`, 'refresh', 'var(--green)');
+      } else {
+        s.toastMsg(j?.error?.code === 'NO_API_KEY' ? 'Football-data API key not configured' : 'Sync failed', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    finally { setSyncingAll(false); }
+  }
+
+  async function enrichAllLineups() {
+    try {
+      await fetch('/api/v1/admin/schedule-jobs/enrich_lineups/trigger', { method: 'POST' });
+      s.toastMsg('Lineup enrichment started (runs in the worker)', 'refresh', 'var(--green)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  }
 
   const groupCount = new Set(teams.map((t) => t.group).filter(Boolean)).size;
   const squadsLoaded = teams.filter((t) => t.playerCount > 0).length;
@@ -425,7 +450,7 @@ function AdmTeams({ open }: { s: ScreenProps['s']; open: (kind: DetailKind, id: 
 
   return (
     <div>
-      <SecHead title="Teams & groups" sub="48 teams · squads AI-crawled · tap a team to edit info or re-crawl its squad" />
+      <SecHead title="Teams & groups" sub="48 teams · squads AI-crawled · tap a team to edit info or re-crawl its squad" action={<div className="row gap-8"><Btn variant="primary" size="sm" icon="refresh" onClick={syncAllSquads} disabled={syncingAll}>{syncingAll ? 'Syncing…' : 'Sync all squads (API)'}</Btn><Btn variant="ghost" size="sm" onClick={enrichAllLineups}>Assign roles & XI — all teams</Btn></div>} />
       <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', marginBottom: 18 }}>
         <KPI v={teams.length} l="Teams" c="var(--text)" />
         <KPI v={groupCount} l="Groups" c="var(--sky)" />
@@ -1430,6 +1455,8 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
   const [form, setForm] = useState({ name: '', code: '', flagUrl: '' });
   const [saving, setSaving] = useState(false);
   const [recrawling, setRecrawling] = useState(false);
+  const [syncingFd, setSyncingFd] = useState(false);
+  const [enriching, setEnriching] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1464,6 +1491,32 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
     finally { setRecrawling(false); }
   }
 
+  async function syncFd() {
+    setSyncingFd(true);
+    try {
+      const res = await fetch(`/api/v1/admin/teams/${id}/sync-fd`, { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) { s.toastMsg(`Squad synced · ${j.data?.players?.length ?? 0} players`, 'refresh', 'var(--green)'); load(); }
+      else { s.toastMsg(j?.error?.code === 'NO_API_KEY' ? 'Football-data API key not configured' : 'Sync failed', 'alert', 'var(--danger)'); }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    finally { setSyncingFd(false); }
+  }
+
+  async function enrichLineup() {
+    setEnriching(true);
+    try {
+      const res = await fetch(`/api/v1/admin/teams/${id}/enrich-lineup`, { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (j.data?.status === 'no-roster') { s.toastMsg('Sync squad (API) first', 'alert', 'var(--danger)'); }
+        else { s.toastMsg(`Lineup enriched · ${j.data?.matched ?? 0} matched / ${j.data?.starters ?? 0} starters`, 'refresh', 'var(--green)'); load(); }
+      } else {
+        s.toastMsg(j?.error?.code === 'LLM_NOT_CONFIGURED' ? 'LLM gateway not configured' : 'Enrich failed', 'alert', 'var(--danger)');
+      }
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+    finally { setEnriching(false); }
+  }
+
   if (loading) return <div><button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to teams</button><p className="small muted">Loading…</p></div>;
   if (!t) return <div><button className="chip" onClick={onBack} style={{ marginBottom: 16 }}><Icon name="chevL" size={14} /> Back to teams</button><p className="small muted">Team not found.</p></div>;
 
@@ -1494,7 +1547,9 @@ function AdmTeamDetail({ id, onBack, s }: { id: number; onBack: () => void; s: S
         </div>
         <div className="row gap-8">
           <Btn variant="primary" size="sm" icon="check" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save changes'}</Btn>
+          <Btn variant="primary" size="sm" icon="refresh" disabled={syncingFd} onClick={syncFd}>{syncingFd ? 'Syncing…' : 'Sync squad (API)'}</Btn>
           <Btn variant="ghost" size="sm" icon="refresh" disabled={recrawling} onClick={recrawl}>{recrawling ? 'Re-crawling…' : 'Re-crawl squad (AI)'}</Btn>
+          <Btn variant="ghost" size="sm" icon="refresh" disabled={enriching} onClick={enrichLineup}>{enriching ? 'Enriching…' : 'Assign roles & XI (AI)'}</Btn>
         </div>
       </div>
 

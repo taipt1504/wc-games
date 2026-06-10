@@ -122,11 +122,11 @@ export function TeamDetail({ s }: ScreenProps) {
         {fixtures.length === 0 ? <p className="muted small">{t('tournament.noFixtures')}</p> : fixtures.map((m) => (
           <div key={m.id} className="card card-pad row between" style={{ padding: '10px 14px' }}>
             <div className="row gap-10" style={{ minWidth: 0 }}>
-              <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? t('round.groupPrefix') : m.round}</span>
+              <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? t('round.groupPrefix') : t(`round.${m.round}`)}</span>
               <span className="small ellip">{m.home?.code ?? m.home?.name ?? t('match.tbd')} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny muted">
-              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : fmt.date(m.kickoffAt)}
+              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : fmt.date(m.kickoffAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
         ))}
@@ -160,9 +160,10 @@ export function Groups({ s }: ScreenProps) {
                 <span className="h3">{t('tournament.group', { g: g.name })}</span>
                 <span className="tiny muted">{t('tournament.matchday')}</span>
               </div>
+              <div className="scroll-x">
               <table className="tbl">
                 <thead>
-                  <tr><th>{t('tournament.colRank')}</th><th>{t('tournament.colTeam')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colP')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colPts')}</th></tr>
+                  <tr><th>{t('tournament.colRank')}</th><th>{t('tournament.colTeam')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colP')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colW')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colL')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGF')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGA')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colGD')}</th><th style={{ textAlign: 'center' }}>{t('tournament.colPts')}</th></tr>
                 </thead>
                 <tbody>
                   {g.teams.map((tm, i) => (
@@ -170,12 +171,18 @@ export function Groups({ s }: ScreenProps) {
                       <td className="tnum" style={{ color: i < 2 ? 'var(--green)' : 'var(--muted)' }}>{i + 1}</td>
                       <td><div className="row gap-8"><Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={22} /><span className="small ellip" style={{ fontWeight: 600 }}>{tm.code ?? tm.name}</span></div></td>
                       <td className="tnum t2" style={{ textAlign: 'center' }}>{tm.played}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.won}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.drawn}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.lost}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.gf}</td>
+                      <td className="tnum" style={{ textAlign: 'center' }}>{tm.ga}</td>
                       <td className="tnum t2" style={{ textAlign: 'center' }}>{tm.gd > 0 ? '+' : ''}{tm.gd}</td>
                       <td className="tnum" style={{ textAlign: 'center', fontWeight: 700 }}>{tm.pts}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           ))}
         </div>
@@ -192,10 +199,12 @@ export function Bracket({ s }: ScreenProps) {
   const { data: groups } = useJson<ApiGroup[]>('/api/v1/groups');
   const { data: allTeams } = useJson<ApiTeam[]>('/api/v1/teams');
 
-  // Projected qualifiers (top 2 of each group) from current standings — pre-tournament these
-  // tie at 0 and fall back to group order. Honest "projected" view; real draw fills in later.
-  const winners = (groups ?? []).map((g) => g.teams[0]).filter(Boolean) as ApiStanding[];
-  const seconds = (groups ?? []).map((g) => g.teams[1]).filter(Boolean) as ApiStanding[];
+  // Projected qualifiers (top 2 of each group) from current standings — but ONLY once group
+  // matches have actually been played. Pre-tournament every standing ties at 0 and "top 2" is just
+  // arbitrary group order, so we show TBD slots instead of a misleading default-filled bracket.
+  const hasResults = (groups ?? []).some((g) => (g.teams ?? []).some((tm) => (tm.played ?? 0) > 0));
+  const winners = hasResults ? ((groups ?? []).map((g) => g.teams[0]).filter(Boolean) as ApiStanding[]) : [];
+  const seconds = hasResults ? ((groups ?? []).map((g) => g.teams[1]).filter(Boolean) as ApiStanding[]) : [];
   const pool = [...winners, ...seconds];
   const pick = (i: number): ApiStanding | null => (pool.length ? pool[i % pool.length] : null);
 

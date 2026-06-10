@@ -12,6 +12,7 @@ import { Landing, Auth, Home } from '@/components/screens-core';
 import { Schedule, MatchDetail } from '@/components/screens-match';
 import { Leaderboard, MyBets, Wallet, Profile } from '@/components/screens-compete';
 import { Teams, TeamDetail, Groups, Bracket } from '@/components/screens-tournament';
+import { Scorers } from '@/components/screens-scorers';
 import { Lobbies, LobbyCreate, LobbyView, BorrowModal } from '@/components/screens-lobby';
 import { News, Article } from '@/components/screens-news';
 import { Admin } from '@/components/screens-admin';
@@ -23,22 +24,22 @@ import { useT } from '@/lib/i18n/hooks';
 const ROUTES: Record<string, React.ComponentType<{ s: Store }>> = {
   landing: Landing, auth: Auth, home: Home, schedule: Schedule, match: MatchDetail,
   leaderboard: Leaderboard, mybets: MyBets, wallet: Wallet, profile: Profile,
-  teams: Teams, team: TeamDetail, groups: Groups, bracket: Bracket,
+  teams: Teams, team: TeamDetail, groups: Groups, bracket: Bracket, scorers: Scorers,
   lobbies: Lobbies, 'lobby-create': LobbyCreate, lobby: LobbyView,
   news: News, article: Article, admin: Admin,
 };
 const FULLBLEED = ['auth', 'admin'];
 const GATED = ['home', 'mybets', 'wallet', 'profile', 'lobbies', 'lobby', 'lobby-create', 'admin'];
 // nav arrays store i18n KEYS for labels (resolved via t() at render).
-const PUB_NAV: [string, string][] = [['schedule', 'nav.matches'], ['leaderboard', 'nav.leaderboard'], ['teams', 'nav.teams'], ['groups', 'nav.groups'], ['bracket', 'nav.bracket'], ['news', 'nav.news']];
+const PUB_NAV: [string, string][] = [['schedule', 'nav.matches'], ['leaderboard', 'nav.leaderboard'], ['teams', 'nav.teams'], ['groups', 'nav.groups'], ['bracket', 'nav.bracket'], ['scorers', 'nav.scorers'], ['news', 'nav.news']];
 const RAIL: { sec: string | null; items: [string, string, string][] }[] = [
   { sec: null, items: [['home', 'nav.home', 'home'], ['schedule', 'nav.matches', 'calendar'], ['leaderboard', 'nav.leaderboard', 'trophy'], ['lobbies', 'nav.lobbies', 'users']] },
-  { sec: 'nav.secTournament', items: [['teams', 'nav.teams', 'flag'], ['groups', 'nav.groups', 'grid'], ['bracket', 'nav.bracket', 'bracket'], ['news', 'nav.news', 'news']] },
+  { sec: 'nav.secTournament', items: [['teams', 'nav.teams', 'flag'], ['groups', 'nav.groups', 'grid'], ['bracket', 'nav.bracket', 'bracket'], ['scorers', 'nav.scorers', 'target'], ['news', 'nav.news', 'news']] },
   { sec: 'nav.secAccount', items: [['mybets', 'nav.mybets', 'target'], ['wallet', 'nav.wallet', 'wallet'], ['profile', 'nav.profile', 'user']] },
 ];
 const TABS: [string, string, string][] = [['home', 'nav.home', 'home'], ['schedule', 'nav.matches', 'calendar'], ['leaderboard', 'nav.leaderboard', 'trophy'], ['lobbies', 'nav.lobbies', 'users'], ['more', 'nav.more', 'grid']];
 const PRIMARY_TABS = new Set(['home', 'schedule', 'leaderboard', 'lobbies']);
-const TITLE_KEYS: Record<string, string> = { home: 'nav.home', schedule: 'nav.matches', match: 'nav.match', leaderboard: 'nav.leaderboard', mybets: 'nav.mybets', wallet: 'nav.wallet', profile: 'nav.profile', teams: 'nav.teams', team: 'nav.team', groups: 'nav.groups', bracket: 'nav.bracket', lobbies: 'nav.lobbies', lobby: 'nav.lobby', 'lobby-create': 'nav.lobbyCreate', news: 'nav.news', article: 'nav.article' };
+const TITLE_KEYS: Record<string, string> = { home: 'nav.home', schedule: 'nav.matches', match: 'nav.match', leaderboard: 'nav.leaderboard', mybets: 'nav.mybets', wallet: 'nav.wallet', profile: 'nav.profile', teams: 'nav.teams', team: 'nav.team', groups: 'nav.groups', bracket: 'nav.bracket', scorers: 'nav.scorers', lobbies: 'nav.lobbies', lobby: 'nav.lobby', 'lobby-create': 'nav.lobbyCreate', news: 'nav.news', article: 'nav.article' };
 
 function navKey(r: string): string {
   if (['schedule', 'match'].includes(r)) return 'schedule';

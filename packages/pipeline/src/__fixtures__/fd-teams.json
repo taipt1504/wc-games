@@ -1,0 +1,29 @@
+{
+  "count": 2,
+  "teams": [
+    {
+      "id": 758,
+      "name": "Uruguay",
+      "shortName": "Uruguay",
+      "tla": "URY",
+      "crest": "https://crests.football-data.org/758.svg",
+      "coach": { "id": 56079, "name": "Marcelo Bielsa", "nationality": "Argentina" },
+      "squad": [
+        { "id": 3160, "name": "Fernando Muslera", "position": "Goalkeeper", "dateOfBirth": "1986-06-16", "nationality": "Uruguay" },
+        { "id": 30210, "name": "Santiago Mele", "position": "Goalkeeper", "dateOfBirth": "1997-09-06", "nationality": "Uruguay" }
+      ]
+    },
+    {
+      "id": 769,
+      "name": "Mexico",
+      "shortName": "Mexico",
+      "tla": "MEX",
+      "crest": "https://crests.football-data.org/769.svg",
+      "coach": { "id": 11111, "name": "Javier Aguirre", "nationality": "Mexico" },
+      "squad": [
+        { "id": 40001, "name": "Guillermo Ochoa", "position": "Goalkeeper", "dateOfBirth": "1985-07-13", "nationality": "Mexico" },
+        { "id": 40002, "name": "Edson Alvarez", "position": "Midfield", "dateOfBirth": "1997-10-24", "nationality": "Mexico" }
+      ]
+    }
+  ]
+}
