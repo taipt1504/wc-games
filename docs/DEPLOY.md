@@ -130,17 +130,21 @@ Migration chỉ tạo **bảng rỗng**. Cần nạp dữ liệu giải. Các CL
 | `pnpm seed` | `@wc/fixtures` (tổng hợp) | 12 group, 48 đội, 72 trận group + odds | — (không mạng) |
 | `pnpm --filter @wc/pipeline ingest` | worldcup26.ir (keyless) | 48 đội, **104 trận** (cả vòng knock-out), venue | mạng |
 | `pnpm --filter @wc/pipeline ingest:fd` | **football-data.org** | squad thật (26 cầu thủ/đội) + HLV + giờ thi đấu thật + `externalId`; cập nhật tỉ số/trạng thái | `SPORTS_API_KEY` + `SPORTS_API_BASE_URL` |
-| `pnpm --filter @wc/pipeline crawl-players [CODE…]` | LLM (9router) | đội hình AI: sơ đồ + XI đá chính + vị trí cụ thể + số áo | `LLM_GATEWAY_*` |
+| `pnpm --filter @wc/pipeline enrich-lineups` | **roster FD → LLM (9router)** | gán vai trò cụ thể (ST/RW/CB…) + chọn **XI đá chính** + sơ đồ + số áo cho roster FD có sẵn (annotate, KHÔNG thay roster) | `LLM_GATEWAY_*` (+ roster FD đã sync) |
+| `pnpm --filter @wc/pipeline crawl-players [CODE…]` | LLM (9router) | *(legacy)* AI tự sinh cả roster + XI — dùng `enrich-lineups` thay thế (giữ tên thật từ FD) | `LLM_GATEWAY_*` |
 
 ### Thứ tự khuyến nghị (dữ liệu thật)
 
 ```bash
 pnpm db:deploy
-pnpm --filter @wc/pipeline ingest        # 1) cấu trúc nền: đội + 104 trận (worldcup26)
-pnpm --filter @wc/pipeline ingest:fd     # 2) overlay football-data (squad/giờ/externalId)
+pnpm --filter @wc/pipeline ingest          # 1) cấu trúc nền: đội + 104 trận (worldcup26)
+pnpm --filter @wc/pipeline ingest:fd       # 2) overlay football-data (squad/giờ/externalId)
+pnpm --filter @wc/pipeline enrich-lineups  # 3) LLM gán vai trò + XI đá chính lên roster FD (cần LLM_GATEWAY_*)
 ```
 
 > **Vì sao theo thứ tự này:** `ingest:fd` **không tạo** trận mới — nó khớp dữ liệu FD vào hàng có sẵn theo `externalId`/natural-key (đội theo TLA/tên, trận GROUP theo cặp đội, knock-out theo thứ tự thời gian). Nên cần lớp nền (`seed` hoặc `ingest`) trước. `ingest:fd` chạy **teams trước** (set `Team.externalId`) rồi **matches** (resolve đội theo externalId) — CLI đã đảm bảo thứ tự này.
+>
+> **`enrich-lineups` chạy SAU `ingest:fd`:** nó đọc **roster FD** (`Player` rows do `ingest:fd` ghi) làm input cho LLM → trả về XI tốt nhất (vai trò cụ thể + 11 đá chính + số áo) → map lại theo tên. Roster trống → `no-roster` (chạy `ingest:fd` trước). Đội chưa enrich → sơ đồ hiển thị **4-3-3 "tạm tính"** (badge `· projected`).
 
 Nếu offline / chỉ demo: chỉ cần `pnpm seed` (không mạng, không key).
 
@@ -148,7 +152,8 @@ Nếu offline / chỉ demo: chỉ cần `pnpm seed` (không mạng, không key).
 
 - **Worker `fd_sync` job** tự sync teams/squads + matches + scorers theo cadence (config trong bảng `ScheduleJob`; mặc định mỗi 45 phút, teams mỗi 16 lần chạy).
 - **Worker `livescore` job** poll `?status=LIVE` của football-data — **có window-gate**: chỉ gọi API khi có trận LIVE hoặc sắp đá (≤15 phút tới / đã đá ≤3h), tiết kiệm request ngoài khung giờ.
-- **Admin UI** (đăng nhập ADMIN): nút **"Sync all squads (API)"** (đồng bộ toàn bộ squad từ FD), **"Sync squad (API)"** ở trang chi tiết đội, **"Sync matches"** (bulk match sync từ FD), và **"Sync result"** từng trận.
+- **Worker `enrich_lineups` job** (admin-trigger, async) — chạy LLM enrich XI cho cả 48 đội ở nền.
+- **Admin UI** (đăng nhập ADMIN): nút **"Sync all squads (API)"** (toàn bộ squad từ FD), **"Sync squad (API)"** (1 đội), **"Assign roles & XI (AI)"** (1 đội) + **"Assign roles & XI — all teams"** (LLM enrich XI), **"Sync matches"** (bulk match từ FD), **"Sync result"** (1 trận). Chuỗi đúng: **Sync squad (API)** [FD] → **Assign roles & XI (AI)** [LLM].
 
 > **Thứ tự sau RESET_TOURNAMENT:** reset tạo lại đội **không có** `externalId`. Phải chạy **"Sync all squads (API)" trước**, rồi **"Sync matches"** — nếu không match sẽ không resolve được (không mất dữ liệu, chỉ là chưa khớp cho tới khi sync squad).
 
@@ -200,6 +205,7 @@ Thư mục `packages/db/prisma/migrations/` (áp theo thứ tự bởi `pnpm db:
 4. Worker log: `WC2026 worker started`. Nếu có `SPORTS_API_KEY`, `fd_sync` log `matches matched … scorers …`; nếu không, log `SKIPPED no-key`.
 5. Sau khi set `SPORTS_API_KEY`: chạy `pnpm --filter @wc/pipeline ingest:fd` → `teams 48, players ~1248, matches matched ~98`.
 6. Đăng nhập admin → "Sync all squads (API)" trả `teams X / players Y`.
+7. Sau khi set `LLM_GATEWAY_*`: chạy `pnpm --filter @wc/pipeline enrich-lineups` → mỗi đội `~26 matched, 11 starters (ok)`; sơ đồ đội hình hiện XI thật (không còn badge `· projected`). Nếu `0/48` → xem Troubleshooting (403 WAF / restart worker).
 
 ---
 
@@ -223,9 +229,12 @@ Worker chạy các job (registry: bảng `ScheduleJob`, chỉnh cadence/enable q
 | `livescore` | poll tỉ số LIVE (có window-gate) | football-data.org `?status=LIVE` |
 | `result_check` → `settle` | phát hiện FINISHED → settle điểm | DB (đã được livescore ghi) |
 | `lineup` | crawl XI đá chính + sơ đồ (kickoff −15') | LLM (9router) — FD không có XI/số áo gần giờ đá |
+| `enrich_lineups` | gán vai trò + XI tốt nhất cho roster FD (48 đội) | LLM (9router), trigger thủ công |
 | `news` | gen + auto-publish tin (EN/VI) | LLM + RSS |
 
 Admin "Run now" trigger từng job qua `POST /api/v1/admin/schedule-jobs/[key]/trigger` (Redis pub/sub → worker).
+
+> **LLM gateway (9router) dùng plain `fetch`, KHÔNG dùng OpenAI SDK.** SDK gắn header `User-Agent`/`x-stainless-*` → WAF trước 9router chặn **403 "request blocked"** (làm hỏng toàn bộ LLM ở worker: enrich/news/lineup). Worker `LlmGateway` (`apps/worker/src/llm/llm-gateway.ts`) gọi `POST {LLM_GATEWAY_BASE_URL}/chat/completions` với đúng 2 header `Content-Type` + `Authorization: Bearer`. Nếu đổi gateway, giữ nguyên cách gọi tối giản này.
 
 > **Trong giải (từ 2026-06-11):** kiểm tra lại luồng live — chuyển trạng thái IN_PLAY → FINISHED + bảng Top Scorers đầy dần. Trước đó mọi trận là `TIMED` nên các luồng này chưa test được thực tế.
 
@@ -241,6 +250,9 @@ Admin "Run now" trigger từng job qua `POST /api/v1/admin/schedule-jobs/[key]/t
 | Worker không xử lý gì | Thiếu/kết nối sai Redis (`REDIS_URL` không khớp password). |
 | `ingest:fd` matches `unresolved > 0` hoặc team `unmatched` | TLA/tên DB ≠ FD (vd Uruguay `URU` vs `URY`). Đã có fallback theo tên; nếu vẫn lệch, ghi chú đội đó, không đoán. |
 | Bracket play-off trống (TBD) | Đúng — chỉ điền khi có trận vòng bảng FINISHED. |
+| `enrich_lineups` báo `enriched 0/48`, proxy LLM không thấy request | 403 WAF (gateway dùng OpenAI SDK) — đã fix bằng plain `fetch`. **Restart worker** để nạp dist mới. Hoặc gateway thật trả 403 → kiểm tra `LLM_GATEWAY_*`. |
+| Đổi code trong `packages/*` nhưng worker không nhận | `nest start --watch` KHÔNG rebuild dist của package phụ thuộc. Phải `pnpm --filter @wc/<pkg> build` **rồi restart worker**. |
+| Sơ đồ đội hình hiện "· projected" (4-3-3) | Đội chưa enrich. Chạy **"Assign roles & XI"** / `enrich-lineups` (cần `LLM_GATEWAY_*` + roster FD). |
 
 ---
 
@@ -249,4 +261,5 @@ Admin "Run now" trigger từng job qua `POST /api/v1/admin/schedule-jobs/[key]/t
 - `README.md` — quickstart + ghi chú migration.
 - `docs/solution-design/2026-05-30-wc-game-solution-design.md` — kiến trúc hạ tầng (Dev/Staging/Prod).
 - `docs/superpowers/specs/2026-06-09-football-data-integration-design.md` — thiết kế tích hợp football-data.org.
+- `docs/superpowers/specs/2026-06-09-lineup-role-enrichment-design.md` — thiết kế LLM enrich XI (roster FD → đội hình tốt nhất).
 - `.env.example` — hợp đồng biến môi trường đầy đủ.
