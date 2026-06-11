@@ -8,6 +8,7 @@ import { type RealMatch } from '@/components/screens-match';
 import { useRealtime } from '@/lib/realtime';
 import { useT } from '@/lib/i18n/hooks';
 import { pctSigned } from '@/lib/format';
+import { LocalTime } from '@/components/local-time';
 
 /* ---- Scope preset type ---- */
 interface Scope {
@@ -291,7 +292,7 @@ export function LobbyCreate({ s }: ScreenProps) {
                         {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={20} />}<span className="small nowrap" style={{ fontWeight: 600 }}>{m.home?.code ?? 'TBD'} v {m.away?.code ?? 'TBD'}</span>
                         <span className="tiny muted hide-mobile">{m.round === 'GROUP' ? `${t('round.groupPrefix')} ${m.group ?? ''}` : m.round}</span>
                       </div>
-                      <span className="tiny muted nowrap">{m.status === 'LIVE' ? <span className="text-magenta">● {t('match.live')}</span> : fmt.date(m.kickoffAt)}</span>
+                      <span className="tiny muted nowrap">{m.status === 'LIVE' ? <span className="text-magenta">● {t('match.live')}</span> : <LocalTime value={m.kickoffAt} withTz />}</span>
                     </button>
                   );
                 })}
@@ -456,7 +457,7 @@ function LobbyMatches({ ownerName, matches, isHost, odds, onEdit, onBet }: {
                   <span className="badge badge-muted" style={{ fontSize: 10 }}>{m.round}</span>
                   {live ? <span className="badge badge-magenta" style={{ fontSize: 10 }}><span className="live-dot"></span>{t('match.live')}</span>
                     : fin ? <span className="badge badge-muted" style={{ fontSize: 10 }}>{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
-                      : <span className="tiny muted">{fmt.date(m.kickoffAt, kickoffFmt)}</span>}
+                      : <span className="tiny muted"><LocalTime value={m.kickoffAt} opts={kickoffFmt} withTz /></span>}
                 </div>
                 {isHost && <Btn variant="ghost" size="sm" icon="trending" onClick={() => onEdit(m)}>{t('lobby.oddsBtn')}</Btn>}
               </div>

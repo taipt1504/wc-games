@@ -7,6 +7,7 @@ import { MatchBetCard, type RealMatch } from '@/components/screens-match';
 import { BRAND } from '@/lib/i18n/locales';
 import { useT } from '@/lib/i18n/hooks';
 import { pctSigned } from '@/lib/format';
+import { LocalTime } from '@/components/local-time';
 import { checkinReward } from '@wc/core';
 
 /* ===================== LANDING ===================== */
@@ -282,7 +283,7 @@ export function Home({ s }: ScreenProps) {
     <div className="page fade-up">
       <div className="row between wrap wrap-w gap-16" style={{ marginBottom: 22 }}>
         <div>
-          <div className="eyebrow">{t('home.matchday')}{today[0] ? ` · ${fmt.date(today[0].kickoffAt)}` : ''}</div>
+          <div className="eyebrow">{t('home.matchday')}{today[0] && <> · <LocalTime value={today[0].kickoffAt} /></>}</div>
           <h1 className="h1" style={{ marginTop: 6 }}>{t('home.greeting', { name: me.name.split(' ')[0] })}</h1>
         </div>
         <CheckinCard s={s} />
