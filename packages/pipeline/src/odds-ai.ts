@@ -1,8 +1,9 @@
 /**
  * @wc/pipeline — AI odds proposal (admin "Suggest with AI"). The free fixture API has no odds and
- * the LLM gateway has no live-market access, so this is an AI ESTIMATE from team strength, not real
- * bookmaker odds — the admin reviews + publishes it (source=ADMIN). Values are profit multipliers
- * (payout = stake × (1 + value)), matching the house-line convention.
+ * the LLM gateway has no live web/market access, so this is an AI ESTIMATE — the model is asked to
+ * price the line the way a major regulated bookmaker (Pinnacle / Bet365 / William Hill consensus)
+ * would, from its training knowledge, NOT a live scrape — the admin reviews + publishes it
+ * (source=ADMIN). Values are profit multipliers (payout = stake × (1 + value)), house-line convention.
  */
 import type { LlmGateway } from '@wc/ai';
 
@@ -26,13 +27,23 @@ export function parseOddsJson(raw: string): ProposedOdds {
 /** Ask the gateway to estimate a fair 1X2 line for a fixture. Grounded prompt; JSON-object output. */
 export async function proposeOdds(gateway: LlmGateway, teams: { home: string; away: string }): Promise<ProposedOdds> {
   const messages = [
-    { role: 'system' as const, content: 'You are a football odds modeler. Output ONLY a JSON object — no prose, no code fences.' },
+    {
+      role: 'system' as const,
+      content:
+        'You are a senior odds compiler at a major regulated sportsbook. Price 1X2 markets the way the ' +
+        'sharp bookmaker consensus does — Pinnacle, Bet365, William Hill — reflecting how those books ' +
+        'would currently quote this match. Base it on the most reliable public information you know: each ' +
+        'team\'s real strength, recent form, squad quality, FIFA ranking, and World Cup history. Apply a ' +
+        'realistic bookmaker margin (overround ~105–108%) and never output arbitrage-free or inverted lines. ' +
+        'Output ONLY a JSON object — no prose, no code fences.',
+    },
     {
       role: 'user' as const,
       content:
-        `Estimate fair 1X2 odds for ${teams.home} (home) vs ${teams.away} (away) at the 2026 World Cup, ` +
-        `as PROFIT MULTIPLIERS where payout = stake × (1 + value). The stronger side gets the lower value. ` +
-        `Typical ranges: favourite 1.3–2.0, draw 2.0–3.0, underdog 1.8–4.0. ` +
+        `Quote the current bookmaker-consensus 1X2 line for ${teams.home} (home) vs ${teams.away} (away) ` +
+        `at the 2026 FIFA World Cup, as PROFIT MULTIPLIERS where payout = stake × (1 + value) ` +
+        `(i.e. decimal odds − 1). The stronger side gets the lower value. ` +
+        `Sanity ranges: clear favourite 0.25–1.0, even match 1.5–2.5, draw 1.9–3.2, big underdog 2.5–8.0. ` +
         `Return JSON: {"mHome":<number>,"mDraw":<number>,"mAway":<number>}.`,
     },
   ];
