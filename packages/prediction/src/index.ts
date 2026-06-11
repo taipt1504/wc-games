@@ -1,4 +1,5 @@
 export * from './prediction-service';
+export * from './special-market';
 export * from './powerups';
 export * from './leaderboard';
 export * from './missions';
