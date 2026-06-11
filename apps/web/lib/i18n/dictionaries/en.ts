@@ -127,6 +127,7 @@ export const en = {
     match: 'Match', team: 'Team', lobby: 'Lobby', lobbyCreate: 'New lobby', article: 'Article',
     secTournament: 'Tournament', secAccount: 'Account',
     tabBoard: 'Board', tabYou: 'You', more: 'More',
+    specials: 'Special',
   },
   shell: {
     login: 'Log in', signupFree: 'Sign up free',
@@ -342,6 +343,12 @@ export const en = {
     savePicks: 'Save picks', saving: 'Saving…',
     bracketSaved: 'Bracket saved!', bracketLocked: 'Bracket is locked', bracketSaveFail: 'Could not save bracket',
     projected: 'projected',
+  },
+  special: {
+    title: 'Special prediction', tagline: 'Just for fun',
+    yes: 'Yes · cries', no: 'No · stays cool',
+    place: 'Place prediction', yourPick: 'Your prediction', resolved: 'Resolved',
+    won: 'Won', lost: 'Lost', open: 'Open', empty: 'No special markets yet.',
   },
   scorers: {
     title: 'Top Scorers',

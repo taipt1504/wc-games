@@ -129,6 +129,7 @@ export const vi: Dict = {
     match: 'Trận đấu', team: 'Đội', lobby: 'Sảnh', lobbyCreate: 'Sảnh mới', article: 'Bài viết',
     secTournament: 'Giải đấu', secAccount: 'Tài khoản',
     tabBoard: 'Bảng', tabYou: 'Bạn', more: 'Thêm',
+    specials: 'Đặc biệt',
   },
   shell: {
     login: 'Đăng nhập', signupFree: 'Đăng ký miễn phí',
@@ -333,6 +334,12 @@ export const vi: Dict = {
     savePicks: 'Lưu lựa chọn', saving: 'Đang lưu…',
     bracketSaved: 'Đã lưu nhánh đấu!', bracketLocked: 'Nhánh đấu đã khóa', bracketSaveFail: 'Không thể lưu nhánh đấu',
     projected: 'tạm tính',
+  },
+  special: {
+    title: 'Dự đoán đặc biệt', tagline: 'Chỉ để vui',
+    yes: 'Có khóc', no: 'Không khóc',
+    place: 'Đặt dự đoán', yourPick: 'Dự đoán của bạn', resolved: 'Đã có kết quả',
+    won: 'Thắng', lost: 'Thua', open: 'Đang mở', empty: 'Chưa có thị trường đặc biệt.',
   },
   scorers: {
     title: 'Vua phá lưới',

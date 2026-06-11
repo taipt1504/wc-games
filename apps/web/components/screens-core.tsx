@@ -9,6 +9,7 @@ import { useT } from '@/lib/i18n/hooks';
 import { pctSigned } from '@/lib/format';
 import { LocalTime } from '@/components/local-time';
 import { checkinReward } from '@wc/core';
+import { SpecialBanner } from '@/components/special-banner';
 
 /* ===================== LANDING ===================== */
 export function Landing({ s }: ScreenProps) {
@@ -305,6 +306,7 @@ export function Home({ s }: ScreenProps) {
           </div>
         </div>
         <div className="stack gap-20">
+          <SpecialBanner s={s} />
           <Missions s={s} />
           <MiniBoard s={s} />
           <PunditPromo s={s} />

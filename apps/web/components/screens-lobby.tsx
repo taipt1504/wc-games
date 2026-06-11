@@ -9,6 +9,7 @@ import { useRealtime } from '@/lib/realtime';
 import { useT } from '@/lib/i18n/hooks';
 import { pctSigned } from '@/lib/format';
 import { LocalTime } from '@/components/local-time';
+import { SpecialBanner } from '@/components/special-banner';
 
 /* ---- Scope preset type ---- */
 interface Scope {
@@ -945,6 +946,8 @@ export function LobbyView({ s }: ScreenProps) {
               <span className="badge badge-gold" style={{ padding: '1px 7px', marginLeft: 2 }}>{pendingCount}</span>}
           </button>)}
       </div>
+
+      <SpecialBanner s={s} lobbyId={lid} />
 
       <div className="mt-16">
         {tab === 'matches' && <LobbyMatches ownerName={l.owner} matches={matches} isHost={isHost} odds={odds} onEdit={setEditM} onBet={openSlip} />}
