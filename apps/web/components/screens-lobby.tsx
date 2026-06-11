@@ -530,10 +530,14 @@ function LobbyBoard({ board }: { board: BoardRow[] }) {
   );
 }
 
-function LobbyChat({ lobbyId }: { lobbyId: number }) {
+const QUICK_EMOJI = ['👍', '😂', '😮', '💀', '🔥', '⚽', '🎉', '😭'];
+const PICKER_EMOJI = ['👍', '👎', '😂', '😅', '😮', '😎', '🤔', '😤', '😢', '😭', '😡', '🥳', '🔥', '💪', '🙏', '👏', '🤝', '⚽', '🥅', '🏆', '🐐', '🚀', '💀', '❤️'];
+
+function LobbyChat({ lobbyId, myName }: { lobbyId: number; myName: string }) {
   const { t } = useT();
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [text, setText] = useState('');
+  const [picker, setPicker] = useState(false);
 
   useEffect(() => {
     fetch(`/api/v1/lobbies/${lobbyId}/messages`)
@@ -549,10 +553,12 @@ function LobbyChat({ lobbyId }: { lobbyId: number }) {
     setMsgs(m => (msg.id != null && m.some(x => x.id === msg.id) ? m : [...m, msg]));
   });
 
-  const send = async () => {
-    if (!text.trim()) return;
-    const body = text.trim();
-    setText('');
+  // Send `override` (emoji quick-react) or the composed text. Both POST so everyone in the lobby sees it.
+  const send = async (override?: string) => {
+    const body = (override ?? text).trim();
+    if (!body) return;
+    if (override == null) setText('');
+    const now = () => new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     try {
       const res = await fetch(`/api/v1/lobbies/${lobbyId}/messages`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -562,11 +568,11 @@ function LobbyChat({ lobbyId }: { lobbyId: number }) {
         const j = await res.json();
         if (j?.data) setMsgs(m => [...m, j.data]);
       } else {
-        // optimistic local append on failure
-        setMsgs(m => [...m, { who: 'You', text: body, t: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) }]);
+        // optimistic local append on failure (tagged as mine so it renders on the right)
+        setMsgs(m => [...m, { who: myName, text: body, t: now() }]);
       }
     } catch {
-      setMsgs(m => [...m, { who: 'You', text: body, t: '--:--' }]);
+      setMsgs(m => [...m, { who: myName, text: body, t: '--:--' }]);
     }
   };
 
@@ -574,22 +580,36 @@ function LobbyChat({ lobbyId }: { lobbyId: number }) {
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 460 }}>
       <div className="stack gap-12" style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
         {msgs.length === 0 && <div className="row center"><span className="badge badge-muted" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{t('lobby.noMessages')}</span></div>}
-        {msgs.map((m, i) => m.who === 'sys'
-          ? <div key={i} className="row center"><span className="badge badge-muted" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{m.text}</span></div>
-          : (
-            <div key={i} className="row gap-10" style={{ flexDirection: m.who === 'You' ? 'row-reverse' : 'row', textAlign: m.who === 'You' ? 'right' : 'left' }}>
-              <Avatar initials={m.who.slice(0, 2).toUpperCase()} size={30} color={m.who === 'You' ? 'var(--gold)' : 'var(--sky)'} />
+        {msgs.map((m, i) => {
+          if (m.who === 'sys') return <div key={i} className="row center"><span className="badge badge-muted" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{m.text}</span></div>;
+          const mine = m.who === myName;
+          return (
+            <div key={i} className="row gap-10" style={{ flexDirection: mine ? 'row-reverse' : 'row', textAlign: mine ? 'right' : 'left' }}>
+              <Avatar initials={m.who.slice(0, 2).toUpperCase()} size={30} color={mine ? 'var(--gold)' : 'var(--sky)'} />
               <div style={{ maxWidth: '74%' }}>
-                <div className="tiny muted" style={{ marginBottom: 3 }}>{m.who} · {m.t}</div>
-                <div className="card-pad" style={{ background: m.who === 'You' ? 'var(--green-soft)' : 'var(--surface-2)', borderRadius: 'var(--r-md)', padding: '9px 13px', display: 'inline-block', fontSize: 14 }}>{m.text}</div>
+                <div className="tiny muted" style={{ marginBottom: 3 }}>{mine ? t('home.you') : m.who} · {m.t}</div>
+                <div className="card-pad" style={{ background: mine ? 'var(--green-soft)' : 'var(--surface-2)', borderRadius: 'var(--r-md)', padding: '9px 13px', display: 'inline-block', fontSize: 14 }}>{m.text}</div>
               </div>
             </div>
-          ))}
+          );
+        })}
       </div>
-      <div className="row gap-8" style={{ padding: 12, borderTop: '1px solid var(--line)' }}>
-        <div className="row gap-6">{['👍', '😂', '😮', '💀'].map(e => <button key={e} className="chip chip-sm" onClick={() => { const t2 = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); setMsgs(m => [...m, { who: 'You', text: e, t: t2 }]); }} style={{ fontSize: 16, padding: '4px 8px' }}>{e}</button>)}</div>
+      <div className="row gap-8 wrap-w" style={{ padding: 12, borderTop: '1px solid var(--line)', position: 'relative' }}>
+        {/* quick-react — POSTs as a message so the whole lobby sees it */}
+        <div className="row gap-6 wrap-w">{QUICK_EMOJI.map(e => <button key={e} className="chip chip-sm" onClick={() => void send(e)} style={{ fontSize: 16, padding: '4px 8px' }}>{e}</button>)}</div>
+        {/* emoji picker popover — inserts into the compose box */}
+        {picker && (
+          <div className="overlay" style={{ zIndex: 60 }} onClick={() => setPicker(false)}>
+            <div className="card card-pad scale-in" style={{ position: 'absolute', bottom: 64, left: 12, width: 'min(300px, calc(100vw - 24px))' }} onClick={e => e.stopPropagation()}>
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)', gap: 4 }}>
+                {PICKER_EMOJI.map(e => <button key={e} className="chip chip-sm" onClick={() => { setText(v => v + e); setPicker(false); }} style={{ fontSize: 18, padding: '6px 0', textAlign: 'center' }}>{e}</button>)}
+              </div>
+            </div>
+          </div>
+        )}
+        <button className="chip chip-sm" onClick={() => setPicker(p => !p)} aria-label="emoji" style={{ fontSize: 16, padding: '4px 8px' }}>😀</button>
         <input className="input grow" placeholder={t('lobby.talkTrash')} value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
-        <Btn variant="primary" className="btn-icon" onClick={send}><Icon name="send" size={18} /></Btn>
+        <Btn variant="primary" className="btn-icon" onClick={() => send()}><Icon name="send" size={18} /></Btn>
       </div>
     </div>
   );
@@ -929,7 +949,7 @@ export function LobbyView({ s }: ScreenProps) {
       <div className="mt-16">
         {tab === 'matches' && <LobbyMatches ownerName={l.owner} matches={matches} isHost={isHost} odds={odds} onEdit={setEditM} onBet={openSlip} />}
         {tab === 'board' && <LobbyBoard board={board} />}
-        {tab === 'chat' && <LobbyChat lobbyId={lid} />}
+        {tab === 'chat' && <LobbyChat lobbyId={lid} myName={s.me.name} />}
         {tab === 'requests' && <LobbyRequests s={s} l={l} isHost={isHost} reqs={reqs} onRefetch={fetchReqs} />}
         {tab === 'members' && <LobbyMembers l={l} isHost={isHost} s={s} board={board} onChanged={fetchDetail} />}
       </div>
