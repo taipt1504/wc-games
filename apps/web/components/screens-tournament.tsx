@@ -124,7 +124,7 @@ export function TeamDetail({ s }: ScreenProps) {
           <div key={m.id} className="card card-pad row between" style={{ padding: '10px 14px' }}>
             <div className="row gap-10" style={{ minWidth: 0 }}>
               <span className="badge badge-muted" style={{ minWidth: 52, justifyContent: 'center' }}>{m.round === 'GROUP' ? t('round.groupPrefix') : t(`round.${m.round}`)}</span>
-              <span className="small ellip">{m.home?.code ?? m.home?.name ?? t('match.tbd')} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? t('match.tbd')}</span>
+              <span className="small ellip">{m.home?.name ?? m.home?.code ?? t('match.tbd')} <span className="muted">v</span> {m.away?.name ?? m.away?.code ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny muted">
               {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : <LocalTime value={m.kickoffAt} opts={{ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }} withTz />}
@@ -253,7 +253,7 @@ export function Bracket({ s }: ScreenProps) {
           <div key={i} className="row between" style={{ padding: '3px 0' }}>
             <div className="row gap-8" style={{ minWidth: 0 }}>
               {tm ? <Flag flagUrl={tm.flagUrl ?? undefined} name={tm.name} code={tm.code ?? undefined} size={20} /> : <span style={{ width: 20 }} />}
-              <span className="small ellip" style={{ fontWeight: i === 0 ? 700 : 500 }}>{tm?.code ?? t('match.tbd')}</span>
+              <span className="small ellip" style={{ fontWeight: i === 0 ? 700 : 500 }}>{tm?.name ?? tm?.code ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny" style={{ color: 'var(--muted)' }}>–</span>
           </div>

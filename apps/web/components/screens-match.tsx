@@ -64,7 +64,7 @@ function MatchBetSlip({ match, pick, oddsVal, balance, busy, onClose, onConfirm 
         <div className="card-pad-lg">
           <div className="row between"><span className="eyebrow">{t('betslip.title')}</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
           <div className="row between mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
-            <span className="small ellip">{match.home?.code ?? '?'} v {match.away?.code ?? '?'}</span>
+            <span className="small ellip">{match.home?.name ?? '?'} v {match.away?.name ?? '?'}</span>
             <span className="badge badge-sky">{pick} · {label}</span>
           </div>
           <div className="field mt-16">

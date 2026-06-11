@@ -343,25 +343,38 @@ export async function syncMatches(
       });
     }
     if (!target) { unresolved++; continue; }
-    if (target.source === 'ADMIN') { skippedAdmin++; continue; }
 
-    // Typed literal (assignable to MatchUpdateInput). `undefined` fields are skipped by Prisma —
-    // so teams are only written when FD actually provides them (never clobber a known pair with 0n).
-    const data = {
+    // Schedule fields — always synced from FD (kickoff/round/group/teams + externalId). `undefined`
+    // team fields are skipped by Prisma (never clobber a known pair with 0n).
+    const schedule = {
       externalId: m.externalId,
       round: m.round,
       groupId: m.groupLetter ? (groupId[m.groupLetter] ?? null) : null,
       kickoffAt: m.kickoffAt,
-      status: m.status,
-      scoreHome90: m.scoreHome90,
-      scoreAway90: m.scoreAway90,
-      result90: m.result90,
-      source: 'API' as const,
       homeTeamId: m.homeTeamId !== 0n ? m.homeTeamId : undefined,
       awayTeamId: m.awayTeamId !== 0n ? m.awayTeamId : undefined,
     };
 
-    await prisma.match.update({ where: { id: target.id }, data });
+    if (target.source === 'ADMIN') {
+      // An admin confirmed the RESULT — preserve score/result/status/source, but still track FD's
+      // SCHEDULE. A result confirmation must NOT freeze the kickoff time/round (the deploy-opener bug).
+      await prisma.match.update({ where: { id: target.id }, data: schedule });
+      skippedAdmin++;
+      await publishEvent(channels.matches, { type: 'match.update', matchId: Number(target.id) });
+      continue;
+    }
+
+    await prisma.match.update({
+      where: { id: target.id },
+      data: {
+        ...schedule,
+        status: m.status,
+        scoreHome90: m.scoreHome90,
+        scoreAway90: m.scoreAway90,
+        result90: m.result90,
+        source: 'API' as const,
+      },
+    });
     matched++; updated++;
     await publishEvent(channels.matches, { type: 'match.update', matchId: Number(target.id) });
   }

@@ -57,6 +57,24 @@ export async function seedTournament(prisma: PrismaClient): Promise<{ teams: num
   return { teams: teams.length, matches: matches.length };
 }
 
+/** Seed the novelty special markets (idempotent). Currently just the Ronaldo-cry prop. */
+export async function seedSpecialMarkets(prisma: PrismaClient): Promise<{ markets: number }> {
+  await prisma.specialMarket.upsert({
+    where: { key: 'RONALDO_CRY' },
+    update: {},
+    create: {
+      key: 'RONALDO_CRY',
+      title: 'Will Cristiano Ronaldo cry?',
+      titleVi: 'Ronaldo có khóc không?',
+      subtitle: 'Portugal · the whole tournament',
+      subtitleVi: 'Bồ Đào Nha · cả giải đấu',
+      oddsYes: 1.80,
+      oddsNo: 1.90,
+    },
+  });
+  return { markets: 1 };
+}
+
 // Deterministic AI-draft news for the review queue (ADMIN-05). In production these rows
 // are written by the worker's LlmGateway/news job; here they stand in as PENDING drafts so
 // the human-in-the-loop approve→PUBLISHED flow is exercisable. Idempotent: skips if any exist.

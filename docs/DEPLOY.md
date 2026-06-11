@@ -90,7 +90,7 @@ pnpm db:generate              # = prisma generate
 pnpm build                    # @wc/db build TRƯỚC, rồi build toàn bộ workspace (web + worker + packages)
 
 # 2. Áp migration (tạo schema)
-pnpm db:deploy                # = prisma migrate deploy — áp 9 migration theo thứ tự (0_init → … → add_scorer)
+pnpm db:deploy                # = prisma migrate deploy — áp 10 migration theo thứ tự (0_init → … → special_markets)
 
 # 3. Nạp dữ liệu (xem Mục 5)
 pnpm --filter @wc/pipeline ingest      # cấu trúc giải thật (worldcup26, keyless) — 48 đội, 104 trận
@@ -127,7 +127,7 @@ Migration chỉ tạo **bảng rỗng**. Cần nạp dữ liệu giải. Các CL
 
 | Lệnh | Nguồn | Tạo gì | Cần |
 |---|---|---|---|
-| `pnpm seed` | `@wc/fixtures` (tổng hợp) | 12 group, 48 đội, 72 trận group + odds | — (không mạng) |
+| `pnpm seed` | `@wc/fixtures` (tổng hợp) | 12 group, 48 đội, 72 trận group + odds; **+ kèo đặc biệt `RONALDO_CRY`** (`seedSpecialMarkets`, idempotent) | — (không mạng) |
 | `pnpm --filter @wc/pipeline ingest` | worldcup26.ir (keyless) | 48 đội, **104 trận** (cả vòng knock-out), venue | mạng |
 | `pnpm --filter @wc/pipeline ingest:fd` | **football-data.org** | squad thật (26 cầu thủ/đội) + HLV + giờ thi đấu thật + `externalId`; cập nhật tỉ số/trạng thái | `SPORTS_API_KEY` + `SPORTS_API_BASE_URL` |
 | `pnpm --filter @wc/pipeline enrich-lineups` | **roster FD → LLM (9router)** | gán vai trò cụ thể (ST/RW/CB…) + chọn **XI đá chính** + sơ đồ + số áo cho roster FD có sẵn (annotate, KHÔNG thay roster) | `LLM_GATEWAY_*` (+ roster FD đã sync) |
@@ -189,6 +189,7 @@ Thư mục `packages/db/prisma/migrations/` (áp theo thứ tự bởi `pnpm db:
 20260607130000_news_i18n
 20260609000000_add_external_ids # football-data id mapping (Team/Match/Player.externalId)
 20260609010000_add_scorer       # bảng Scorer (Top Scorers / Golden Boot)
+20260611000000_special_markets  # SpecialMarket/SpecialLobbyOdds/SpecialPrediction (kèo "Ronaldo khóc")
 ```
 
 - **Prod luôn dùng `pnpm db:deploy`** (`prisma migrate deploy`) — chỉ áp migration pending, **không reset**, an toàn với dữ liệu thật.
@@ -200,12 +201,13 @@ Thư mục `packages/db/prisma/migrations/` (áp theo thứ tự bởi `pnpm db:
 ## 8. Checklist sau deploy (smoke test)
 
 1. `pnpm db:deploy` in `All migrations have been successfully applied.`
-2. DB có dữ liệu: `Team`=48, `Match`=104 (sau `ingest`), `Scorer`=0 (rỗng tới khi giải bắt đầu — bình thường).
+2. DB có dữ liệu: `Team`=48, `Match`=104 (sau `ingest`), `Scorer`=0 (rỗng tới khi giải bắt đầu — bình thường), `SpecialMarket`=1 (`RONALDO_CRY`, sau `pnpm seed`).
 3. Web lên: mở `APP_BASE_URL` → trang chủ/lịch/bảng xếp hạng/top scorers render.
 4. Worker log: `WC2026 worker started`. Nếu có `SPORTS_API_KEY`, `fd_sync` log `matches matched … scorers …`; nếu không, log `SKIPPED no-key`.
 5. Sau khi set `SPORTS_API_KEY`: chạy `pnpm --filter @wc/pipeline ingest:fd` → `teams 48, players ~1248, matches matched ~98`.
 6. Đăng nhập admin → "Sync all squads (API)" trả `teams X / players Y`.
 7. Sau khi set `LLM_GATEWAY_*`: chạy `pnpm --filter @wc/pipeline enrich-lineups` → mỗi đội `~26 matched, 11 starters (ok)`; sơ đồ đội hình hiện XI thật (không còn badge `· projected`). Nếu `0/48` → xem Troubleshooting (403 WAF / restart worker).
+8. Kèo đặc biệt: sidebar **"Đặc biệt"** + banner Home/sảnh hiện kèo `RONALDO_CRY`; đặt 1 dự đoán → admin **Resolve YES** → ví người thắng được cộng `stake×(1+odds)`.
 
 ---
 
@@ -234,6 +236,14 @@ Worker chạy các job (registry: bảng `ScheduleJob`, chỉnh cadence/enable q
 
 Admin "Run now" trigger từng job qua `POST /api/v1/admin/schedule-jobs/[key]/trigger` (Redis pub/sub → worker).
 
+### Kèo đặc biệt (Special markets — "Ronaldo có khóc không?")
+
+Tính năng **không có worker job** — hoàn toàn do admin/host điều khiển theo yêu cầu:
+- **Seed**: `pnpm seed` tạo kèo `RONALDO_CRY` (status `OPEN`, odds mặc định). Surface: banner ở Home + trong mỗi sảnh, mục sidebar **"Đặc biệt"** → màn dự đoán (Có khóc / Không khóc + nhập điểm tùy chọn).
+- **Odds**: ADMIN đặt odds toàn cục (`POST /api/v1/admin/special-markets/[key]/odds`); CHỦ SẢNH đặt odds riêng cho sảnh (`POST /api/v1/lobbies/[id]/special-odds`, host-only) — lobby override → global, y như odds trận đấu.
+- **Đặt dự đoán**: `POST /api/v1/special-predictions` `{marketKey,pick,stake,lobbyId?}` — global trừ điểm ví GLOBAL, lobby trừ ví sảnh đó.
+- **Resolve**: ADMIN bấm **"Resolve: Cried (YES) / Didn't (NO)"** (`POST /api/v1/admin/special-markets/[key]/resolve`) → khóa kèo + settle mọi dự đoán OPEN (thắng = `stake×(1+odds)` vào đúng ví global/sảnh). **Một chiều, không re-resolve** (khác trận đấu có resettle) — bấm nhầm là chốt.
+
 > **LLM gateway (9router) dùng plain `fetch`, KHÔNG dùng OpenAI SDK.** SDK gắn header `User-Agent`/`x-stainless-*` → WAF trước 9router chặn **403 "request blocked"** (làm hỏng toàn bộ LLM ở worker: enrich/news/lineup). Worker `LlmGateway` (`apps/worker/src/llm/llm-gateway.ts`) gọi `POST {LLM_GATEWAY_BASE_URL}/chat/completions` với đúng 2 header `Content-Type` + `Authorization: Bearer`. Nếu đổi gateway, giữ nguyên cách gọi tối giản này.
 
 > **Trong giải (từ 2026-06-11):** kiểm tra lại luồng live — chuyển trạng thái IN_PLAY → FINISHED + bảng Top Scorers đầy dần. Trước đó mọi trận là `TIMED` nên các luồng này chưa test được thực tế.
@@ -253,6 +263,8 @@ Admin "Run now" trigger từng job qua `POST /api/v1/admin/schedule-jobs/[key]/t
 | `enrich_lineups` báo `enriched 0/48`, proxy LLM không thấy request | 403 WAF (gateway dùng OpenAI SDK) — đã fix bằng plain `fetch`. **Restart worker** để nạp dist mới. Hoặc gateway thật trả 403 → kiểm tra `LLM_GATEWAY_*`. |
 | Đổi code trong `packages/*` nhưng worker không nhận | `nest start --watch` KHÔNG rebuild dist của package phụ thuộc. Phải `pnpm --filter @wc/<pkg> build` **rồi restart worker**. |
 | Sơ đồ đội hình hiện "· projected" (4-3-3) | Đội chưa enrich. Chạy **"Assign roles & XI"** / `enrich-lineups` (cần `LLM_GATEWAY_*` + roster FD). |
+| Giờ thi đấu 1 trận sai (vd trận khai mạc lệch 3h) trong khi các trận khác đúng | Trận đó là `source=ADMIN` (admin đã confirm kết quả) + giờ seed cũ. `syncMatches` nay **luôn cập nhật lịch (kickoff/round/đội) kể cả cho hàng ADMIN**, chỉ giữ tỉ số — chạy lại "Sync matches" / `ingest:fd` (hoặc đợi `fd_sync`) để khớp giờ FD. |
+| Giờ thi đấu hiện sai múi giờ | Render theo múi giờ trình duyệt (`<LocalTime>` + nhãn `· GMT+7`). Nếu vẫn lệch → kiểm tra múi giờ máy/VM đang chạy trình duyệt (nhãn GMT cho biết múi đang áp dụng). |
 
 ---
 
@@ -262,4 +274,6 @@ Admin "Run now" trigger từng job qua `POST /api/v1/admin/schedule-jobs/[key]/t
 - `docs/solution-design/2026-05-30-wc-game-solution-design.md` — kiến trúc hạ tầng (Dev/Staging/Prod).
 - `docs/superpowers/specs/2026-06-09-football-data-integration-design.md` — thiết kế tích hợp football-data.org.
 - `docs/superpowers/specs/2026-06-09-lineup-role-enrichment-design.md` — thiết kế LLM enrich XI (roster FD → đội hình tốt nhất).
+- `docs/superpowers/specs/2026-06-11-special-markets-design.md` — thiết kế kèo đặc biệt (Ronaldo khóc).
+- `docs/superpowers/specs/2026-06-11-match-time-client-timezone-design.md` — render giờ thi đấu theo múi giờ client.
 - `.env.example` — hợp đồng biến môi trường đầy đủ.
