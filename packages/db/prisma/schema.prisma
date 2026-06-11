@@ -32,6 +32,23 @@ enum ContextType {
   LOBBY
 }
 
+enum SpecialOutcome {
+  YES
+  NO
+}
+
+enum SpecialStatus {
+  OPEN
+  LOCKED
+  RESOLVED
+}
+
+enum SpecialPredStatus {
+  OPEN
+  WON
+  LOST
+}
+
 enum LedgerType {
   SIGNUP
   DAILY
@@ -411,6 +428,55 @@ model LobbyMatchOdds {
   updatedAt DateTime @updatedAt
 
   @@unique([lobbyId, matchId])
+}
+
+// ─────────────────────────── SPECIAL (NOVELTY) MARKETS ───────────────────────────
+// Novelty prop market (e.g. "Will Ronaldo cry?"). Global odds live here (admin-set). Isolated from Match.
+model SpecialMarket {
+  id              BigInt          @id @default(autoincrement())
+  key             String          @unique
+  title           String
+  titleVi         String?
+  subtitle        String?
+  subtitleVi      String?
+  status          SpecialStatus   @default(OPEN)
+  resolvedOutcome SpecialOutcome?
+  oddsYes         Decimal         @default(1.50) @db.Decimal(6, 2)
+  oddsNo          Decimal         @default(1.50) @db.Decimal(6, 2)
+  resolvedAt      DateTime?
+  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime        @default(now())
+}
+
+// Per-lobby host odds override (mirrors LobbyMatchOdds). Falls back to SpecialMarket global odds.
+model SpecialLobbyOdds {
+  id        BigInt   @id @default(autoincrement())
+  lobbyId   BigInt
+  marketId  BigInt
+  oddsYes   Decimal  @db.Decimal(6, 2)
+  oddsNo    Decimal  @db.Decimal(6, 2)
+  updatedAt DateTime @updatedAt
+
+  @@unique([lobbyId, marketId])
+}
+
+// A user's stake on a special market (mirrors Prediction context model). GLOBAL → global wallet; LOBBY → lobby wallet.
+model SpecialPrediction {
+  id           BigInt            @id @default(autoincrement())
+  userId       BigInt
+  contextType  ContextType
+  contextId    BigInt?
+  marketId     BigInt
+  pick         SpecialOutcome
+  stake        BigInt
+  oddsSnapshot Decimal           @db.Decimal(6, 2)
+  status       SpecialPredStatus @default(OPEN)
+  payout       BigInt            @default(0)
+  settledAt    DateTime?
+  createdAt    DateTime          @default(now())
+
+  @@index([marketId, status])
+  @@index([userId, contextType, contextId])
 }
 
 // Top scorers (Golden Boot) — competition-wide, synced from football-data.org /scorers.
