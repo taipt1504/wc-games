@@ -794,6 +794,62 @@ function LobbyRequests({ s, l, isHost, reqs, onRefetch }: { s: ScreenProps['s'];
   );
 }
 
+/* ---- Host: set lobby-specific special-market odds ---- */
+function HostSpecialOdds({ lid, s }: { lid: number; s: ScreenProps['s'] }) {
+  const [marketKey, setMarketKey] = useState<string | null>(null);
+  const [oddsYes, setOddsYes] = useState(1.5);
+  const [oddsNo, setOddsNo] = useState(2.5);
+
+  useEffect(() => {
+    fetch(`/api/v1/special-markets?lobbyId=${lid}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((j: { data?: { key: string; status: string; oddsYes: number; oddsNo: number }[] } | null) => {
+        const list = j?.data ?? [];
+        const open = list.find(m => m.status === 'OPEN');
+        if (open) { setMarketKey(open.key); setOddsYes(open.oddsYes); setOddsNo(open.oddsNo); }
+      })
+      .catch(() => {});
+  }, [lid]);
+
+  if (!marketKey) return null;
+
+  const save = async () => {
+    try {
+      const res = await fetch(`/api/v1/lobbies/${lid}/special-odds`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ marketKey, oddsYes, oddsNo }),
+      });
+      if (res.ok) { s.toastMsg('Lobby special odds updated', 'check', 'var(--sky)'); return; }
+      const j = await res.json().catch(() => ({}));
+      s.toastMsg((j?.error?.code === 'NOT_OWNER' ? 'You are not the host' : 'Could not set odds'), 'alert', 'var(--danger)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  return (
+    <div className="card card-pad mt-12" style={{ background: 'linear-gradient(120deg,var(--sky-soft),transparent)', borderColor: 'rgba(100,180,255,.25)' }}>
+      <div className="row gap-8" style={{ marginBottom: 10 }}>
+        <Icon name="trending" size={16} style={{ color: 'var(--sky)' }} />
+        <span className="small" style={{ fontWeight: 700 }}>Host: set lobby special odds</span>
+      </div>
+      <div className="row gap-12 wrap-w">
+        <div className="field" style={{ minWidth: 110 }}>
+          <label className="label tiny">Odds YES</label>
+          <input className="input input-mono" type="number" step="0.01" min="0.01" value={oddsYes}
+            onChange={e => setOddsYes(Math.max(0.01, +e.target.value || 0.01))} style={{ textAlign: 'center' }} />
+        </div>
+        <div className="field" style={{ minWidth: 110 }}>
+          <label className="label tiny">Odds NO</label>
+          <input className="input input-mono" type="number" step="0.01" min="0.01" value={oddsNo}
+            onChange={e => setOddsNo(Math.max(0.01, +e.target.value || 0.01))} style={{ textAlign: 'center' }} />
+        </div>
+        <div style={{ alignSelf: 'flex-end', paddingBottom: 1 }}>
+          <Btn variant="primary" size="sm" icon="check" onClick={save}>Set lobby odds</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===================== LOBBY DETAIL (isolated workspace) ===================== */
 export function LobbyView({ s }: ScreenProps) {
   const { t } = useT();
@@ -948,6 +1004,8 @@ export function LobbyView({ s }: ScreenProps) {
       </div>
 
       <SpecialBanner s={s} lobbyId={lid} />
+
+      {isHost && <HostSpecialOdds lid={lid} s={s} />}
 
       <div className="mt-16">
         {tab === 'matches' && <LobbyMatches ownerName={l.owner} matches={matches} isHost={isHost} odds={odds} onEdit={setEditM} onBet={openSlip} />}

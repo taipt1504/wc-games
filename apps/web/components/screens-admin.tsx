@@ -69,6 +69,7 @@ export function Admin({ s }: ScreenProps) {
     ['pipeline', 'AI pipeline', 'database'],
     ['jobs', 'Schedule jobs', 'clock'],
     ['audit', 'Audit log', 'lock'],
+    ['special', 'Special markets', 'trophy'],
   ];
   const goTab = (k: string) => { setTab(k); setDetail(null); };
 
@@ -122,6 +123,7 @@ export function Admin({ s }: ScreenProps) {
           {!detail && tab === 'pipeline' && <AdmPipeline />}
           {!detail && tab === 'jobs' && <AdmJobs s={s} />}
           {!detail && tab === 'audit' && <AdmAudit />}
+          {!detail && tab === 'special' && <AdmSpecialMarkets s={s} />}
         </div>
       </div>
     </div>
@@ -1138,6 +1140,96 @@ function AdmJobs({ s }: { s: ScreenProps['s'] }) {
                   <Btn variant="primary" size="sm" disabled={busy === j.key} onClick={() => save(j.key, { config: d })}>Save</Btn>
                 </div>
               </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== SPECIAL MARKETS ===================== */
+interface SpecialMarket { key: string; title: string; status: string; resolvedOutcome: string | null; oddsYes: number; oddsNo: number }
+
+function AdmSpecialMarkets({ s }: { s: ScreenProps['s'] }) {
+  const [markets, setMarkets] = useState<SpecialMarket[]>([]);
+  const [odds, setOdds] = useState<Record<string, { oddsYes: number; oddsNo: number }>>({});
+
+  const load = useCallback(() => {
+    fetch('/api/v1/special-markets').then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        const list: SpecialMarket[] = j?.data ?? [];
+        setMarkets(list);
+        setOdds(Object.fromEntries(list.map(m => [m.key, { oddsYes: m.oddsYes, oddsNo: m.oddsNo }])));
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const saveOdds = async (key: string) => {
+    const o = odds[key];
+    if (!o) return;
+    try {
+      const res = await fetch(`/api/v1/admin/special-markets/${key}/odds`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ oddsYes: o.oddsYes, oddsNo: o.oddsNo }),
+      });
+      if (res.ok) { s.toastMsg('Odds saved', 'check', 'var(--green)'); load(); }
+      else s.toastMsg('Could not save odds', 'alert', 'var(--danger)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  const resolve = async (key: string, title: string, outcome: 'YES' | 'NO') => {
+    if (!window.confirm(`Resolve "${title}" as ${outcome}? This is final and settles all bets.`)) return;
+    try {
+      const res = await fetch(`/api/v1/admin/special-markets/${key}/resolve`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ outcome }),
+      });
+      if (res.ok) { s.toastMsg(`Market resolved as ${outcome}`, 'check', 'var(--green)'); load(); }
+      else s.toastMsg('Could not resolve market', 'alert', 'var(--danger)');
+    } catch { s.toastMsg('Network error', 'alert', 'var(--danger)'); }
+  };
+
+  return (
+    <div>
+      <SecHead title="Special markets" sub="Yes/No prop bets — set odds and resolve outcomes" />
+      {markets.length === 0 && <p className="tiny muted">No special markets found.</p>}
+      <div className="stack gap-12">
+        {markets.map(m => {
+          const o = odds[m.key] ?? { oddsYes: m.oddsYes, oddsNo: m.oddsNo };
+          const resolved = m.status === 'RESOLVED';
+          return (
+            <div key={m.key} className="card card-pad">
+              <div className="row between wrap wrap-w gap-8">
+                <div className="row gap-8">
+                  <span className="small" style={{ fontWeight: 700 }}>{m.title}</span>
+                  <span className={`badge badge-${resolved ? 'green' : 'sky'}`}>{m.status}</span>
+                  {resolved && m.resolvedOutcome && <span className="badge badge-gold">→ {m.resolvedOutcome}</span>}
+                </div>
+                <span className="tiny muted mono">{m.key}</span>
+              </div>
+              <div className="row gap-12 mt-12 wrap-w">
+                <div className="field" style={{ minWidth: 120 }}>
+                  <label className="label tiny">Odds YES</label>
+                  <input className="input input-mono" type="number" step="0.01" min="0.01" value={o.oddsYes}
+                    onChange={e => setOdds(p => ({ ...p, [m.key]: { ...o, oddsYes: Math.max(0.01, +e.target.value || 0.01) } }))} />
+                </div>
+                <div className="field" style={{ minWidth: 120 }}>
+                  <label className="label tiny">Odds NO</label>
+                  <input className="input input-mono" type="number" step="0.01" min="0.01" value={o.oddsNo}
+                    onChange={e => setOdds(p => ({ ...p, [m.key]: { ...o, oddsNo: Math.max(0.01, +e.target.value || 0.01) } }))} />
+                </div>
+                <div style={{ alignSelf: 'flex-end', paddingBottom: 1 }}>
+                  <Btn variant="primary" size="sm" icon="check" onClick={() => saveOdds(m.key)}>Save odds</Btn>
+                </div>
+              </div>
+              {!resolved && (
+                <div className="row gap-8 mt-12">
+                  <Btn variant="gold" size="sm" onClick={() => resolve(m.key, m.title, 'YES')}>Resolve: Cried (YES)</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => resolve(m.key, m.title, 'NO')}>Resolve: Didn&apos;t (NO)</Btn>
+                </div>
+              )}
             </div>
           );
         })}
