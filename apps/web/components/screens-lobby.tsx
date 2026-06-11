@@ -7,6 +7,7 @@ import { Btn, Icon, Flag, Avatar, SecHead, Portal } from '@/components/ui';
 import { type RealMatch } from '@/components/screens-match';
 import { useRealtime } from '@/lib/realtime';
 import { useT } from '@/lib/i18n/hooks';
+import { pctSigned } from '@/lib/format';
 
 /* ---- Scope preset type ---- */
 interface Scope {
@@ -39,6 +40,7 @@ interface BoardRow {
   won: number;
   def: number;
   borrowed: number;
+  roi: number;
   you: boolean;
 }
 
@@ -503,20 +505,21 @@ function LobbyBoard({ board }: { board: BoardRow[] }) {
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="scroll-x">
         <table className="tbl">
-          <thead><tr><th>#</th><th>{t('lobby.colMember')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colDefault')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colWinnings')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colBorrowed')}</th><th style={{ textAlign: 'right' }}>{t('lobby.colScore')}</th></tr></thead>
+          <thead><tr><th>#</th><th>{t('lobby.colMember')}</th><th style={{ textAlign: 'right' }}>{t('lobby.colRoi')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colDefault')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colWinnings')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colBorrowed')}</th><th style={{ textAlign: 'right' }} className="hide-mobile">{t('lobby.colScore')}</th></tr></thead>
           <tbody>
             {board.map(p => (
               <tr key={p.rank} className={p.you ? 'hl' : ''}>
                 <td className="tnum muted">{p.rank}</td>
                 <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={p.you ? 'var(--gold)' : 'var(--sky)'} /><span style={{ fontWeight: p.you ? 700 : 600 }}>{p.name}</span></div></td>
+                <td className="tnum" style={{ textAlign: 'right', fontWeight: 700, color: p.roi >= 0 ? 'var(--green)' : 'var(--danger)' }}>{pctSigned(p.roi)}</td>
                 <td className="tnum t2 hide-mobile" style={{ textAlign: 'right' }}>{p.def}</td>
                 <td className="tnum hide-mobile" style={{ textAlign: 'right', color: p.won >= 0 ? 'var(--green)' : 'var(--danger)' }}>{p.won >= 0 ? '+' : ''}{p.won}</td>
                 <td className="tnum t2 hide-mobile" style={{ textAlign: 'right', color: p.borrowed ? 'var(--gold)' : 'var(--muted)' }}>−{p.borrowed}</td>
-                <td className="tnum" style={{ textAlign: 'right', fontWeight: 700, color: p.score >= 0 ? 'var(--text)' : 'var(--danger)' }}>{p.score}</td>
+                <td className="tnum hide-mobile" style={{ textAlign: 'right', fontWeight: 700, color: p.score >= 0 ? 'var(--text)' : 'var(--danger)' }}>{p.score}</td>
               </tr>
             ))}
             {!board.length && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24 }}><span className="muted">{t('lobby.noMembers')}</span></td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24 }}><span className="muted">{t('lobby.noMembers')}</span></td></tr>
             )}
           </tbody>
         </table>

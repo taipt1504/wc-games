@@ -290,7 +290,7 @@ export const en = {
     betHint: 'Tap 1 · X · 2 to bet (you can back more than one outcome).', oddsHintHost: 'Tap "Odds" to fine-tune.', usesWallet: 'Uses your lobby wallet.',
     oddsBtn: 'Odds', noMatchesYet: 'No matches in this lobby yet.',
     // board
-    colMember: 'Member', colDefault: 'Default', colWinnings: 'Winnings', colBorrowed: 'Borrowed', colScore: 'Score',
+    colMember: 'Member', colRoi: 'ROI', colDefault: 'Default', colWinnings: 'Winnings', colBorrowed: 'Borrowed', colScore: 'Score',
     noMembers: 'No members yet.', boardNote: 'Score = winnings + default − borrowed. Borrowing lets you keep playing but pulls your score down.',
     // chat
     noMessages: 'No messages yet.', talkTrash: 'Talk trash…',

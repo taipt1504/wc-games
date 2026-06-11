@@ -285,7 +285,7 @@ export const vi: Dict = {
     hostBanner: 'Bạn là chủ sảnh — đặt tỷ lệ và dự đoán luôn', hostMatches: 'Trận của chủ {name}',
     betHint: 'Chạm 1 · X · 2 để dự đoán (có thể chọn nhiều kết quả).', oddsHintHost: 'Chạm "Tỷ lệ" để tinh chỉnh.', usesWallet: 'Dùng ví sảnh của bạn.',
     oddsBtn: 'Tỷ lệ', noMatchesYet: 'Sảnh chưa có trận nào.',
-    colMember: 'Thành viên', colDefault: 'Mặc định', colWinnings: 'Điểm thắng', colBorrowed: 'Đã vay', colScore: 'Điểm',
+    colMember: 'Thành viên', colRoi: 'ROI', colDefault: 'Mặc định', colWinnings: 'Điểm thắng', colBorrowed: 'Đã vay', colScore: 'Điểm',
     noMembers: 'Chưa có thành viên.', boardNote: 'Điểm = điểm thắng + mặc định − đã vay. Vay giúp bạn chơi tiếp nhưng kéo điểm xuống.',
     noMessages: 'Chưa có tin nhắn.', talkTrash: 'Khẩu chiến nào…',
     setPoints: 'Đặt điểm', makeHost: 'Trao chủ', you: 'Bạn', owes: 'Nợ {n}', memberScore: 'Điểm {score}', borrowedSuffix: '· đã vay {n}',
