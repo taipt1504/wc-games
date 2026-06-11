@@ -61,13 +61,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         won: Number(standing.winnings),
         def: Number(standing.defaultPoints),
         borrowed: Number(standing.borrowed),
+        roi: standing.defaultPoints > 0n
+          ? Math.round((Number(standing.winnings - standing.borrowed) / Number(standing.defaultPoints)) * 1000) / 10
+          : 0,
         you: m.userId === user.id,
       };
     }),
   );
 
-  // Sort board by score desc, assign rank
-  boardRows.sort((a, b) => b.score - a.score);
+  // Sort board by lobby ROI desc (tie-break score), assign rank
+  boardRows.sort((a, b) => b.roi - a.roi || b.score - a.score);
   const board = boardRows.map((r, i) => ({ ...r, rank: i + 1 }));
 
   const myRank = board.find((r) => r.you)?.rank ?? null;
