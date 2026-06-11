@@ -340,6 +340,7 @@ export const vi: Dict = {
     yes: 'Có khóc', no: 'Không khóc',
     place: 'Đặt dự đoán', yourPick: 'Dự đoán của bạn', resolved: 'Đã có kết quả',
     won: 'Thắng', lost: 'Thua', open: 'Đang mở', empty: 'Chưa có thị trường đặc biệt.',
+    customStake: 'Điểm tùy chọn', toWin: 'Thắng dự kiến',
   },
   scorers: {
     title: 'Vua phá lưới',

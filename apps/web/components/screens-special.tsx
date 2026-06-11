@@ -46,8 +46,16 @@ export function Specials({ s }: ScreenProps) {
                     ))}
                   </div>
                   <div className="row gap-8 mt-12 wrap-w">
-                    {[50, 100, 250, 500].map(v => <button key={v} className="chip" onClick={() => setStake(s2 => ({ ...s2, [m.key]: v }))}>{v}</button>)}
+                    {[50, 100, 250, 500].map(v => <button key={v} className={`chip ${stake[m.key] === v ? 'active' : ''}`} onClick={() => setStake(s2 => ({ ...s2, [m.key]: v }))}>{v}</button>)}
                   </div>
+                  <input
+                    className="input mt-8" type="number" inputMode="numeric" min={1} placeholder={t('special.customStake')}
+                    value={stake[m.key] ?? ''}
+                    onChange={(e) => { const n = Math.floor(Number(e.target.value)); setStake(s2 => ({ ...s2, [m.key]: Number.isFinite(n) && n > 0 ? n : 0 })); }}
+                  />
+                  {pick[m.key] && stake[m.key] > 0 && (
+                    <div className="tiny muted mt-8">{t('special.toWin')}: {stake[m.key] + Math.round(stake[m.key] * (pick[m.key] === 'YES' ? m.oddsYes : m.oddsNo))}</div>
+                  )}
                   <Btn variant="primary" className="mt-12" disabled={!pick[m.key] || !stake[m.key] || !!m.yourBet} onClick={() => place(m)}>{t('special.place')}{stake[m.key] ? ` · ${stake[m.key]}` : ''}</Btn>
                 </>
               )}

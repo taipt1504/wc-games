@@ -349,6 +349,7 @@ export const en = {
     yes: 'Yes · cries', no: 'No · stays cool',
     place: 'Place prediction', yourPick: 'Your prediction', resolved: 'Resolved',
     won: 'Won', lost: 'Lost', open: 'Open', empty: 'No special markets yet.',
+    customStake: 'Custom points', toWin: 'To win',
   },
   scorers: {
     title: 'Top Scorers',
