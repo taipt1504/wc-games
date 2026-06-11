@@ -5,6 +5,7 @@ import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead, Portal } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
+import { LocalTime } from '@/components/local-time';
 
 /* -------- real match shape for tournament admin (GET /api/v1/matches) -------- */
 interface AdmMatchTeam { id: number; name: string; code: string | null; flagUrl: string | null }
@@ -294,7 +295,7 @@ function AdmTourney({ s, open }: { s: ScreenProps['s']; open: (kind: DetailKind,
         {statusBadge(m)}
       </div>
       <div className="row center mt-8"><span className="tnum h3">{m.scoreHome ?? '–'} : {m.scoreAway ?? '–'}</span></div>
-      {m.status === 'SCHEDULED' && <div className="row center tiny muted mt-4">{new Date(m.kickoffAt).toLocaleString()}</div>}
+      {m.status === 'SCHEDULED' && <div className="row center tiny muted mt-4"><LocalTime value={m.kickoffAt} opts={{ dateStyle: 'medium', timeStyle: 'short' }} withTz /></div>}
       <div className="row center tiny t2 tnum mt-4">{m.odds ? `${m.odds.mHome.toFixed(2)} · ${m.odds.mDraw.toFixed(2)} · ${m.odds.mAway.toFixed(2)}` : '—'}</div>
       <div className="row between mt-12" onClick={e => e.stopPropagation()}>
         <button className="chip chip-sm" onClick={() => toggleLock(m)} style={{ gap: 5 }}>
@@ -1335,7 +1336,7 @@ function AdmMatchDetail({ id, onBack, s }: { id: number; onBack: () => void; s: 
           <span className="badge badge-muted">{m.round === 'GROUP' ? `Group ${m.group ?? ''}` : m.round}</span>
           {live ? <span className="badge badge-magenta"><span className="live-dot"></span>LIVE</span>
             : fin ? <span className="badge badge-green">Full time</span>
-              : <span className="badge badge-sky">{new Date(m.kickoffAt).toLocaleString()}</span>}
+              : <span className="badge badge-sky"><LocalTime value={m.kickoffAt} opts={{ dateStyle: 'medium', timeStyle: 'short' }} withTz /></span>}
         </div>
         <div className="row between center" style={{ marginTop: 18 }}>
           <div className="stack center gap-8" style={{ width: 110 }}>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, SecHead } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
+import { LocalTime } from '@/components/local-time';
 import { useT } from '@/lib/i18n/hooks';
 
 /* ---- API shapes (apps/web/app/api/v1) ---- */
@@ -126,7 +127,7 @@ export function TeamDetail({ s }: ScreenProps) {
               <span className="small ellip">{m.home?.code ?? m.home?.name ?? t('match.tbd')} <span className="muted">v</span> {m.away?.code ?? m.away?.name ?? t('match.tbd')}</span>
             </div>
             <span className="tnum tiny muted">
-              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : fmt.date(m.kickoffAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              {m.status === 'FINISHED' ? `${m.scoreHome}–${m.scoreAway}` : <LocalTime value={m.kickoffAt} opts={{ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }} withTz />}
             </span>
           </div>
         ))}

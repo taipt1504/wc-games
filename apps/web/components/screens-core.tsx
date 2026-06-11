@@ -6,6 +6,8 @@ import { Btn, Icon, Pundit, SecHead, Avatar, TIER_C } from '@/components/ui';
 import { MatchBetCard, type RealMatch } from '@/components/screens-match';
 import { BRAND } from '@/lib/i18n/locales';
 import { useT } from '@/lib/i18n/hooks';
+import { pctSigned } from '@/lib/format';
+import { LocalTime } from '@/components/local-time';
 import { checkinReward } from '@wc/core';
 
 /* ===================== LANDING ===================== */
@@ -281,7 +283,7 @@ export function Home({ s }: ScreenProps) {
     <div className="page fade-up">
       <div className="row between wrap wrap-w gap-16" style={{ marginBottom: 22 }}>
         <div>
-          <div className="eyebrow">{t('home.matchday')}{today[0] ? ` · ${fmt.date(today[0].kickoffAt)}` : ''}</div>
+          <div className="eyebrow">{t('home.matchday')}{today[0] && <> · <LocalTime value={today[0].kickoffAt} /></>}</div>
           <h1 className="h1" style={{ marginTop: 6 }}>{t('home.greeting', { name: me.name.split(' ')[0] })}</h1>
         </div>
         <CheckinCard s={s} />
@@ -289,7 +291,7 @@ export function Home({ s }: ScreenProps) {
 
       <div className="grid-auto" style={{ '--col-min': '136px', '--gap': '12px', marginBottom: 26 } as React.CSSProperties}>
         <Stat val={s.points.toLocaleString()} lbl={t('home.statBalance')} c="var(--gold)" i="wallet" onClick={() => s.go('wallet')} />
-        <Stat val={`+${me.roi}%`} lbl={t('home.statRoi')} c="var(--green)" i="trending" onClick={() => s.go('mybets')} />
+        <Stat val={pctSigned(me.roi)} lbl={t('home.statRoi')} c="var(--green)" i="trending" onClick={() => s.go('mybets')} />
         <Stat val={me.rank == null ? '—' : `#${me.rank.toLocaleString()}`} lbl={t('home.statRank')} c="var(--sky)" i="trophy" onClick={() => s.go('leaderboard')} />
         <Stat val={`${me.won}-${me.lost}`} lbl={t('home.statWl')} c="var(--text)" i="target" onClick={() => s.go('mybets')} />
       </div>
@@ -432,13 +434,13 @@ function MiniBoard({ s }: ScreenProps) {
           {top.map((p) => (
             <div key={p.rank} className="row between">
               <div className="row gap-10"><span className="tnum muted" style={{ width: 18 }}>{p.rank}</span><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span className="small" style={{ fontWeight: 600 }}>{p.name}</span></div>
-              <span className="tnum text-green" style={{ fontWeight: 700 }}>+{p.roi}%</span>
+              <span className="tnum" style={{ fontWeight: 700, color: p.roi >= 0 ? 'var(--green)' : 'var(--danger)' }}>{pctSigned(p.roi)}</span>
             </div>
           ))}
           <div className="hr" style={{ margin: '4px 0' }} />
           <div className="row between">
             <div className="row gap-10"><span className="tnum text-gold" style={{ width: 18, fontWeight: 700 }}>{s.me.rank ?? '—'}</span><Avatar initials={s.me.avatar} size={28} color="var(--gold)" /><span className="small" style={{ fontWeight: 700 }}>{t('home.you')}</span></div>
-            <span className="tnum text-green" style={{ fontWeight: 700 }}>+{s.me.roi}%</span>
+            <span className="tnum" style={{ fontWeight: 700, color: s.me.roi >= 0 ? 'var(--green)' : 'var(--danger)' }}>{pctSigned(s.me.roi)}</span>
           </div>
         </div>
       )}
