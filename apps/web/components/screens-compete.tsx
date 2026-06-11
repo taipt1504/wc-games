@@ -5,9 +5,10 @@ import { WC } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Avatar, SecHead, TierPill, TIER_C, Portal } from '@/components/ui';
 import { useT } from '@/lib/i18n/hooks';
+import { pctSigned } from '@/lib/format';
 
-/* Signed formatters — show a real minus for negatives (never "+-6.3%") + sign-aware colour. */
-const sgnPct = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
+/* Signed formatters — show a real minus for negatives (never "+-6.3%") + sign-aware colour.
+   ROI percent uses the shared pctSigned; sgnNum/sgnCol stay local (different concern). */
 const sgnNum = (n: number) => `${n >= 0 ? '+' : ''}${n.toLocaleString()}`;
 const sgnCol = (n: number) => (n >= 0 ? 'var(--green)' : 'var(--danger)');
 
@@ -70,7 +71,7 @@ export function Leaderboard({ s }: ScreenProps) {
               <div><div style={{ fontWeight: 700 }}>{t('leaderboard.yourRank')}</div><div className="tiny muted">{t('leaderboard.topPct', { n: s.me.settled })}</div></div>
             </div>
             <div className="row gap-20">
-              <div className="stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">{t('leaderboard.roi')}</span></div>
+              <div className="stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{pctSigned(s.me.roi)}</span><span className="s-lbl">{t('leaderboard.roi')}</span></div>
               <div className="stat"><span className="s-val tnum">{s.me.won}/{s.me.settled}</span><span className="s-lbl">{t('leaderboard.won')}</span></div>
               <TierPill tier={s.tier || 'Bronze'} />
             </div>
@@ -91,7 +92,7 @@ export function Leaderboard({ s }: ScreenProps) {
                 <div className="display" style={{ fontSize: 22, color: ['#FFC83D', '#AEB8D0', '#c08457'][i] }}>{['🥇', '🥈', '🥉'][i]}</div>
                 <Avatar initials={p.name.slice(0, 2).toUpperCase()} size={48} color={TIER_C[p.tier]} ring={TIER_C[p.tier]} />
                 <div className="small" style={{ fontWeight: 700, marginTop: 8 }}>{p.name}</div>
-                <div className="tnum" style={{ fontWeight: 700, fontSize: 18, color: sgnCol(p.roi) }}>{sgnPct(p.roi)}</div>
+                <div className="tnum" style={{ fontWeight: 700, fontSize: 18, color: sgnCol(p.roi) }}>{pctSigned(p.roi)}</div>
                 <div className="tiny muted">{sgnNum(p.net)} {t('leaderboard.net')}</div>
               </div>
             ))}
@@ -117,7 +118,7 @@ export function Leaderboard({ s }: ScreenProps) {
                       <td className="tnum muted">{p.rank}</td>
                       <td><div className="row gap-10"><Avatar initials={p.name.slice(0, 2).toUpperCase()} size={28} color={TIER_C[p.tier]} /><span style={{ fontWeight: 600 }}>{p.name}</span></div></td>
                       <td><TierPill tier={p.tier} /></td>
-                      <td style={{ textAlign: 'right', color: sgnCol(p.roi) }} className="tnum">{sgnPct(p.roi)}</td>
+                      <td style={{ textAlign: 'right', color: sgnCol(p.roi) }} className="tnum">{pctSigned(p.roi)}</td>
                       <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">{sgnNum(p.net)}</td>
                       <td style={{ textAlign: 'right' }} className="tnum t2 hide-mobile">{p.won}/{p.settled}</td>
                     </tr>
@@ -316,7 +317,7 @@ export function MyBets({ s }: ScreenProps) {
     <div className="page fade-up">
       <SecHead title={t('bets.title')} sub={t('bets.sub')} />
       <div className="grid-auto" style={{ '--col-min': '140px', '--gap': '12px', marginBottom: 18 } as React.CSSProperties}>
-        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{sgnPct(s.me.roi)}</span><span className="s-lbl">{t('bets.roi')}</span></div>
+        <div className="card card-pad stat"><span className="s-val tnum" style={{ color: sgnCol(s.me.roi) }}>{pctSigned(s.me.roi)}</span><span className="s-lbl">{t('bets.roi')}</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{Math.round(won / (settled.length || 1) * 100)}%</span><span className="s-lbl">{t('bets.winRate')}</span></div>
         <div className="card card-pad stat"><span className="s-val tnum">{settled.length}</span><span className="s-lbl">{t('bets.settled')}</span></div>
         <div className="card card-pad stat"><span className="s-val tnum" style={{ color: net >= 0 ? 'var(--green)' : 'var(--danger)' }}>{net >= 0 ? '+' : ''}{net}</span><span className="s-lbl">{t('bets.netPoints')}</span></div>
@@ -711,7 +712,7 @@ export function Profile({ s }: ScreenProps) {
     if (res.ok) {
       const j = await res.json().catch(() => ({}));
       const d = j?.data;
-      if (d) s.toastMsg(t('profile.roiRace', { a: sgnPct(d.challengerRoi ?? 0), b: sgnPct(d.opponentRoi ?? 0) }), 'trophy', 'var(--gold)');
+      if (d) s.toastMsg(t('profile.roiRace', { a: pctSigned(d.challengerRoi ?? 0), b: pctSigned(d.opponentRoi ?? 0) }), 'trophy', 'var(--gold)');
       fetchDuels();
     } else s.toastMsg(t('profile.resolveFailed'), 'alert', 'var(--danger)');
   }
@@ -791,7 +792,7 @@ export function Profile({ s }: ScreenProps) {
 
       {/* stats */}
       <div className="grid-auto mt-16" style={{ '--col-min': '110px', '--gap': '12px' } as React.CSSProperties}>
-        {([[t('profile.statBalance'), s.points.toLocaleString(), 'var(--gold)'], [t('profile.statRoi'), sgnPct(me.roi), sgnCol(me.roi)], [t('profile.statRank'), '#' + (me.rank ?? '—'), 'var(--sky)'], [t('profile.statSettled'), String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
+        {([[t('profile.statBalance'), s.points.toLocaleString(), 'var(--gold)'], [t('profile.statRoi'), pctSigned(me.roi), sgnCol(me.roi)], [t('profile.statRank'), '#' + (me.rank ?? '—'), 'var(--sky)'], [t('profile.statSettled'), String(me.settled), 'var(--text)']] as [string, string, string][]).map(([l, v, c]) => (
           <div key={l} className="card card-pad stat"><span className="s-val tnum" style={{ color: c, fontSize: 22 }}>{v}</span><span className="s-lbl">{l}</span></div>
         ))}
       </div>
@@ -842,7 +843,7 @@ export function Profile({ s }: ScreenProps) {
         </div>
         <div className="card card-pad" style={{ background: 'linear-gradient(120deg,var(--green-soft),transparent)' }}>
           <div className="row gap-8"><Icon name="share" size={18} style={{ color: 'var(--green)' }} /><span style={{ fontFamily: 'var(--f-display)', fontWeight: 800 }}>{t('profile.shareTitle')}</span></div>
-          <p className="tiny t2 mt-8">{t('profile.shareDesc', { roi: sgnPct(me.roi), won: me.won })}</p>
+          <p className="tiny t2 mt-8">{t('profile.shareDesc', { roi: pctSigned(me.roi), won: me.won })}</p>
           <div className="row gap-8 mt-12">
             <Btn variant="ghost" size="sm" icon="share" onClick={() => {
               const params = new URLSearchParams({
