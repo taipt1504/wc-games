@@ -5,6 +5,7 @@ import { type Pick1X2 } from '@/lib/wc';
 import type { ScreenProps } from '@/lib/store';
 import { Btn, Icon, Flag, Pundit, Portal, SecHead } from '@/components/ui';
 import { FormationPitch } from '@/components/formation-pitch';
+import { LocalTime } from '@/components/local-time';
 import { useRealtime } from '@/lib/realtime';
 import { useT } from '@/lib/i18n/hooks';
 
@@ -123,7 +124,7 @@ export function MatchBetCard({ m, s }: { m: RealMatch; s: ScreenProps['s'] }) {
         {m.status === 'LIVE' ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
           : m.status === 'FINISHED' ? <span className="badge badge-muted">{t('match.ft', { score: `${m.scoreHome}-${m.scoreAway}` })}</span>
             : m.bettingLocked ? <span className="badge badge-danger"><Icon name="lock" size={11} /> {t('match.bettingClosedBadge')}</span>
-              : <span className="tiny muted">{fmt.date(m.kickoffAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+              : <span className="tiny muted"><LocalTime value={m.kickoffAt} opts={{ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }} withTz /></span>}
       </div>
       <div className="row between gap-12" style={{ marginBottom: 10 }} onClick={() => s.go('match', { id: m.id })}>
         {[m.home, m.away].map((tm, i) => (
@@ -416,7 +417,7 @@ export function MatchDetail({ s }: ScreenProps) {
           <span className="badge badge-muted">{roundShort(m.round, m.group, t('round.groupPrefix'))}</span>
           {live ? <span className="badge badge-magenta"><span className="live-dot"></span>{t('match.live')}</span>
             : fin ? <span className="badge badge-muted">{t('match.fullTime')}</span>
-              : <span className="badge badge-sky">{fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>}
+              : <span className="badge badge-sky"><LocalTime value={m.kickoffAt} opts={{ dateStyle: 'medium', timeStyle: 'short' }} withTz /></span>}
         </div>
         <div className="row between" style={{ marginTop: 20, alignItems: 'flex-start' }}>
           <TeamHero t={m.home} rank={teams.home?.fifaRank} />
@@ -433,7 +434,7 @@ export function MatchDetail({ s }: ScreenProps) {
       {/* info strip (real) */}
       <div className="card card-pad mt-16">
         <div className="grid-auto" style={{ '--col-min': '150px', '--gap': '12px' } as React.CSSProperties}>
-          <InfoCell label={t('match.kickoff')} value={fmt.date(m.kickoffAt, { dateStyle: 'medium', timeStyle: 'short' })} />
+          <InfoCell label={t('match.kickoff')} value={<LocalTime value={m.kickoffAt} opts={{ dateStyle: 'medium', timeStyle: 'short' }} withTz />} />
           <InfoCell label={t('match.roundLabel')} value={roundShort(m.round, m.group, t('round.groupPrefix'))} />
           <InfoCell label={t('match.venue')} value={m.venue?.name ? `${m.venue.name}${m.venue.city ? `, ${m.venue.city}` : ''}${m.venue.country ? `, ${m.venue.country}` : ''}` : '—'} />
           <InfoCell label={t('match.status')} value={statusLabel(m.status)} />
@@ -555,7 +556,7 @@ function formFor(teamId: number, matches: TeamMatchLite[]): ('W' | 'D' | 'L')[] 
     });
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
+function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <div className="tiny muted">{label}</div>
