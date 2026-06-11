@@ -289,7 +289,7 @@ export function LobbyCreate({ s }: ScreenProps) {
                         <span style={{ width: 20, height: 20, borderRadius: 6, flex: 'none', border: `2px solid ${on ? 'var(--green)' : 'var(--line-strong)'}`, background: on ? 'var(--green)' : 'transparent', display: 'grid', placeItems: 'center' }}>
                           {on && <Icon name="check" size={12} style={{ color: 'var(--on-accent)' }} />}
                         </span>
-                        {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={20} />}<span className="small nowrap" style={{ fontWeight: 600 }}>{m.home?.code ?? 'TBD'} v {m.away?.code ?? 'TBD'}</span>
+                        {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={20} />}<span className="small ellip" style={{ fontWeight: 600, minWidth: 0 }}>{m.home?.name ?? 'TBD'} v {m.away?.name ?? 'TBD'}</span>
                         <span className="tiny muted hide-mobile">{m.round === 'GROUP' ? `${t('round.groupPrefix')} ${m.group ?? ''}` : m.round}</span>
                       </div>
                       <span className="tiny muted nowrap">{m.status === 'LIVE' ? <span className="text-magenta">● {t('match.live')}</span> : <LocalTime value={m.kickoffAt} withTz />}</span>
@@ -350,7 +350,7 @@ function LobbyOddsModal({ m, odds, onClose, onSave }: { m: LobbyMatch; odds: Odd
       <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <div className="card-pad-lg">
           <div className="row between"><span className="eyebrow">{t('lobby.setOdds')}</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
-          <div className="row gap-8 mt-8"><span className="small" style={{ fontWeight: 600 }}>{m.home?.code ?? '?'} v {m.away?.code ?? '?'}</span><span className="tiny muted">· {m.round}</span></div>
+          <div className="row gap-8 mt-8"><span className="small ellip" style={{ fontWeight: 600, minWidth: 0 }}>{m.home?.name ?? '?'} v {m.away?.name ?? '?'}</span><span className="tiny muted nowrap">· {m.round}</span></div>
           <div className="row gap-10 mt-16">
             <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>1 · {m.home?.code ?? 'H'}</label>{numInput(mh, setMh)}</div>
             <div className="field" style={{ flex: 1 }}><label className="label" style={{ textAlign: 'center' }}>X · {t('betslip.draw')}</label>{numInput(md, setMd)}</div>
@@ -380,7 +380,7 @@ function LobbyBetSlip({ match, pick, oddsVal, balance, onClose, onConfirm }: { m
         <div className="card-pad-lg">
           <div className="row between"><span className="eyebrow">{t('lobby.slipTitle')}</span><button className="btn-icon" onClick={onClose}><Icon name="x" size={18} /></button></div>
           <div className="row between mt-12 card-2 card-pad" style={{ borderRadius: 'var(--r-sm)' }}>
-            <span className="small ellip">{match.home?.code ?? '?'} v {match.away?.code ?? '?'}</span>
+            <span className="small ellip">{match.home?.name ?? '?'} v {match.away?.name ?? '?'}</span>
             <span className="badge badge-sky">{pick} · {label}</span>
           </div>
           <div className="field mt-16">
@@ -465,9 +465,9 @@ function LobbyMatches({ ownerName, matches, isHost, odds, onEdit, onBet }: {
               <div className="row gap-8 wrap-w" style={{ alignItems: 'center' }}>
                 <div className="row gap-6" style={{ flex: '1 1 auto', minWidth: 0 }}>
                   {m.home && <Flag flagUrl={m.home.flagUrl ?? undefined} name={m.home.name} code={m.home.code ?? undefined} size={18} />}
-                  <span className="tiny ellip" style={{ fontWeight: 700 }}>{m.home?.code ?? t('match.tbd')}</span>
+                  <span className="tiny ellip" style={{ fontWeight: 700, minWidth: 0 }}>{m.home?.name ?? t('match.tbd')}</span>
                   <span className="tiny muted">v</span>
-                  <span className="tiny ellip" style={{ fontWeight: 700 }}>{m.away?.code ?? t('match.tbd')}</span>
+                  <span className="tiny ellip" style={{ fontWeight: 700, minWidth: 0 }}>{m.away?.name ?? t('match.tbd')}</span>
                   {m.away && <Flag flagUrl={m.away.flagUrl ?? undefined} name={m.away.name} code={m.away.code ?? undefined} size={18} />}
                 </div>
                 <div className="row gap-6" style={{ flexShrink: 0 }}>
